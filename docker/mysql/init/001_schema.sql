@@ -1,0 +1,71 @@
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE quizzes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    description TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE questions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    quiz_id BIGINT UNSIGNED NOT NULL,
+    question_text TEXT NOT NULL,
+    question_type ENUM('TRUE_FALSE', 'SINGLE_CHOICE', 'MULTIPLE_CHOICE') NOT NULL,
+    image_path VARCHAR(255) NULL,
+    time_limit_seconds INT NOT NULL DEFAULT 30,
+    points INT NOT NULL DEFAULT 1000,
+    question_order INT NOT NULL,
+    FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+);
+
+CREATE TABLE question_options (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    question_id BIGINT UNSIGNED NOT NULL,
+    option_text VARCHAR(255) NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    option_order INT NOT NULL,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE quiz_sessions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    quiz_id BIGINT UNSIGNED NOT NULL,
+    session_code VARCHAR(10) NOT NULL UNIQUE,
+    status ENUM('WAITING', 'ACTIVE', 'FINISHED') NOT NULL DEFAULT 'WAITING',
+    started_at TIMESTAMP NULL DEFAULT NULL,
+    ended_at TIMESTAMP NULL DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+);
+
+CREATE TABLE session_players (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id BIGINT UNSIGNED NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    total_score INT NOT NULL DEFAULT 0,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES quiz_sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE player_answers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_player_id BIGINT UNSIGNED NOT NULL,
+    question_id BIGINT UNSIGNED NOT NULL,
+    selected_option_ids JSON NOT NULL,
+    is_correct BOOLEAN NOT NULL,
+    response_time_ms INT NOT NULL,
+    points_awarded INT NOT NULL DEFAULT 0,
+    answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_player_id) REFERENCES session_players(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
