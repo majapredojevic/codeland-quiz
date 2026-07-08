@@ -10,5 +10,8 @@
         "psr-4": {
             "CodeLandQuiz\\": "src/"
         }
+    },
+    "require-dev": {
+        "openswoole/ide-helper": "^26.2"
     }
 }
