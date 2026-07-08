@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ./docker/php
+    container_name: codeland_backend
+    working_dir: /var/www/backend
+    volumes:
+      - ./backend:/var/www/backend
+    ports:
+      - "9501:9501"
+    depends_on:
+      - mysql
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: codeland_quiz
+      DB_USERNAME: codeland
+      DB_PASSWORD: secret
+
+  mysql:
+    image: mysql:8.4
+    container_name: codeland_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: codeland_quiz
+      MYSQL_USER: codeland
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: rootsecret
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./docker/mysql/data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: codeland_phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
