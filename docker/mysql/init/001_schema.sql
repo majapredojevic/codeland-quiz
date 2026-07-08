@@ -3,17 +3,29 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    role ENUM('ADMIN', 'TEACHER') NOT NULL DEFAULT 'TEACHER',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE students (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    username VARCHAR(80) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE quizzes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    teacher_id BIGINT UNSIGNED NOT NULL,
+    created_by BIGINT UNSIGNED NOT NULL,
     title VARCHAR(150) NOT NULL,
     description TEXT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT NULL,
-    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE questions (
@@ -40,21 +52,29 @@ CREATE TABLE question_options (
 CREATE TABLE quiz_sessions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     quiz_id BIGINT UNSIGNED NOT NULL,
-    session_code VARCHAR(10) NOT NULL UNIQUE,
+    host_user_id BIGINT UNSIGNED NOT NULL,
+    game_pin VARCHAR(10) NOT NULL UNIQUE,
     status ENUM('WAITING', 'ACTIVE', 'FINISHED') NOT NULL DEFAULT 'WAITING',
+    current_question_id BIGINT UNSIGNED NULL,
     started_at TIMESTAMP NULL DEFAULT NULL,
     ended_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+    FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
+    FOREIGN KEY (host_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (current_question_id) REFERENCES questions(id) ON DELETE SET NULL
 );
 
 CREATE TABLE session_players (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     session_id BIGINT UNSIGNED NOT NULL,
-    display_name VARCHAR(100) NOT NULL,
+    student_id BIGINT UNSIGNED NOT NULL,
+    nickname VARCHAR(100) NOT NULL,
+    avatar_key VARCHAR(80) NOT NULL,
     total_score INT NOT NULL DEFAULT 0,
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES quiz_sessions(id) ON DELETE CASCADE
+    FOREIGN KEY (session_id) REFERENCES quiz_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    UNIQUE (session_id, student_id)
 );
 
 CREATE TABLE player_answers (
@@ -67,5 +87,6 @@ CREATE TABLE player_answers (
     points_awarded INT NOT NULL DEFAULT 0,
     answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_player_id) REFERENCES session_players(id) ON DELETE CASCADE,
-    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    UNIQUE (session_player_id, question_id)
 );
