@@ -20,8 +20,12 @@ services:
   mysql:
     image: mysql:8.4
     container_name: codeland_mysql
+    command:
+     --character-set-server=utf8mb4
+     --collation-server=utf8mb4_unicode_ci
     restart: unless-stopped
     environment:
+      TZ: Europe/Sarajevo
       MYSQL_DATABASE: codeland_quiz
       MYSQL_USER: codeland
       MYSQL_PASSWORD: secret
@@ -31,6 +35,7 @@ services:
     volumes:
       - ./docker/mysql/data:/var/lib/mysql 
       - ./docker/mysql/init:/docker-entrypoint-initdb.d
+      - /etc/localtime:/etc/localtime:ro
 
   phpmyadmin:
     image: phpmyadmin:latest
