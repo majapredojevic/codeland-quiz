@@ -4,29 +4,67 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Config;
 
+use CodeLandQuiz\Support\Environment;
 use InvalidArgumentException;
 
 final readonly class AppConfig
 {
+    private string $appName;
+
+    private string $appEnv;
+
+    private string $appUrl;
+
+    private int $jwtExpirationMinutes;
+
+    private int $refreshTokenExpirationDays;
+
+    private int $csrfTokenExpirationMinutes;
+
+    private int $loginAttemptLimit;
+
+    private int $loginLockDurationMinutes;
+
+    private bool $cookieSecure;
+
+    private bool $cookieHttpOnly;
+
+    private CookieSameSite $cookieSameSite;
+
+    private int $maximumUploadSizeMb;
+
     /**
-     * @param string[] $allowedImageExtensions
+     * @var string[]
      */
+    private array $allowedImageExtensions;
+
+    private int $defaultQuizQuestionTimeLimitSeconds;
+
+    private int $maximumNicknameLength;
+
     public function __construct(
-        private int $loginAttemptLimit = 5,
-        private int $loginLockDurationMinutes = 15,
-        private int $jwtExpirationMinutes = 60,
-        private int $refreshTokenExpirationDays = 7,
-        private int $csrfTokenExpirationMinutes = 120,
-        private int $maximumUploadSizeMb = 5,
-        private array $allowedImageExtensions = ['jpg', 'jpeg', 'png', 'webp'],
-        private int $defaultQuizQuestionTimeLimitSeconds = 30,
-        private int $maximumNicknameLength = 100,
-        private bool $cookieSecure = true,
-        private bool $cookieHttpOnly = true,
-        private CookieSameSite $cookieSameSite = CookieSameSite::STRICT,
-        private string $appName = 'CodeLand Quiz',
-        private string $appUrl = 'https://localhost',
+        private readonly Environment $environment,
     ) {
+        $this->appName = $this->environment->get('APP_NAME');
+        $this->appEnv = $this->environment->get('APP_ENV');
+        $this->appUrl = $this->environment->get('APP_URL');
+        $this->jwtExpirationMinutes = $this->environment->getInt('JWT_EXPIRATION_MINUTES');
+        $this->refreshTokenExpirationDays = $this->environment->getInt('REFRESH_TOKEN_EXPIRATION_DAYS');
+        $this->csrfTokenExpirationMinutes = $this->environment->getInt('CSRF_TOKEN_EXPIRATION_MINUTES');
+        $this->loginAttemptLimit = $this->environment->getInt('LOGIN_ATTEMPT_LIMIT');
+        $this->loginLockDurationMinutes = $this->environment->getInt('LOGIN_LOCK_DURATION_MINUTES');
+        $this->cookieSecure = $this->environment->getBool('COOKIE_SECURE');
+        $this->cookieHttpOnly = $this->environment->getBool('COOKIE_HTTP_ONLY');
+        $this->cookieSameSite = CookieSameSite::from($this->environment->get('COOKIE_SAME_SITE'));
+        $this->maximumUploadSizeMb = $this->environment->getInt('MAX_UPLOAD_SIZE_MB');
+        $this->allowedImageExtensions = $this->parseAllowedImageExtensions(
+            $this->environment->get('ALLOWED_IMAGE_EXTENSIONS'),
+        );
+        $this->defaultQuizQuestionTimeLimitSeconds = $this->environment->getInt(
+            'DEFAULT_QUIZ_QUESTION_TIME_LIMIT_SECONDS',
+        );
+        $this->maximumNicknameLength = $this->environment->getInt('MAXIMUM_NICKNAME_LENGTH');
+
         $this->ensurePositive($this->loginAttemptLimit, 'Login attempt limit');
         $this->ensurePositive($this->loginLockDurationMinutes, 'Login lock duration');
         $this->ensurePositive($this->jwtExpirationMinutes, 'JWT expiration');
@@ -109,9 +147,28 @@ final readonly class AppConfig
         return $this->appName;
     }
 
+    public function getAppEnv(): string
+    {
+        return $this->appEnv;
+    }
+
     public function getAppUrl(): string
     {
         return $this->appUrl;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function parseAllowedImageExtensions(string $extensions): array
+    {
+        return array_values(array_filter(
+            array_map(
+                static fn (string $extension): string => strtolower(trim($extension)),
+                explode(',', $extensions),
+            ),
+            static fn (string $extension): bool => $extension !== '',
+        ));
     }
 
     private function ensurePositive(int $value, string $label): void
