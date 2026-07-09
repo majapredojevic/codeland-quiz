@@ -7,6 +7,7 @@ namespace CodeLandQuiz\Auth;
 use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
+use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Repository\UserRepository;
 use RuntimeException;
 
@@ -20,18 +21,39 @@ final readonly class AuthService
         private readonly JwtService $jwtService,
         private readonly RefreshTokenService $refreshTokenService,
         private readonly CsrfTokenService $csrfTokenService,
+        private readonly LoginAttemptService $loginAttemptService,
+        private readonly AuditLogService $auditLogService,
         private readonly AppConfig $config,
     ) {}
 
-    public function login(LoginDTO $dto): LoginResult
+    public function login(LoginDTO $dto, ?string $userAgent = null): LoginResult
     {
+        $this->loginAttemptService->ensureLoginAllowed($dto->email);
+
         $user = $this->users->findByEmail($dto->email);
 
         if ($user === null) {
+            $this->loginAttemptService->recordFailure($dto->email, $userAgent);
+            $this->auditLogService->log(
+                action: AuditAction::LOGIN_FAILED,
+                metadata: [
+                    'email' => $dto->email,
+                ],
+            );
+
             throw new RuntimeException('Invalid credentials.');
         }
 
         if (!$this->passwordHasher->verify($dto->password, $user->getPasswordHash())) {
+            $this->loginAttemptService->recordFailure($dto->email, $userAgent);
+            $this->auditLogService->log(
+                action: AuditAction::LOGIN_FAILED,
+                userId: $user->getId(),
+                metadata: [
+                    'email' => $dto->email,
+                ],
+            );
+
             throw new RuntimeException('Invalid credentials.');
         }
 
@@ -39,6 +61,12 @@ final readonly class AuthService
             $user->changePasswordHash($this->passwordHasher->hash($dto->password));
             $this->users->save($user);
         }
+
+        $this->loginAttemptService->recordSuccess($dto->email, $userAgent);
+        $this->auditLogService->log(
+            action: AuditAction::LOGIN_SUCCESS,
+            userId: $user->getId(),
+        );
 
         $accessToken = $this->jwtService->createAccessToken($user);
         $refreshToken = $this->refreshTokenService->create($user);
