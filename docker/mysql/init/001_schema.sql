@@ -188,6 +188,7 @@ CREATE TABLE login_attempts (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(180) NOT NULL,
     successful BOOLEAN NOT NULL DEFAULT FALSE,
+    user_agent VARCHAR(255) NULL,
     attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_login_attempts_email (email),
     KEY idx_login_attempts_attempted_at (attempted_at)
