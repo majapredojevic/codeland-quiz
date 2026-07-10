@@ -25,8 +25,7 @@ final class RefreshController
         private readonly ResponseFactory $responseFactory,
         private readonly CookieReader $cookieReader,
         private readonly AppConfig $config,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request, Response $response): void
     {
@@ -42,6 +41,11 @@ final class RefreshController
                 response: $response,
                 accessToken: $refreshResult->accessToken,
                 refreshToken: $refreshResult->refreshToken,
+            );
+
+            $this->authCookieService->setCsrfCookie(
+                $response,
+                $refreshResult->csrfToken,
             );
 
             $response->header(self::CSRF_HEADER_NAME, $refreshResult->csrfToken);

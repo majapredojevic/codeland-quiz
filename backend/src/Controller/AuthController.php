@@ -24,8 +24,7 @@ final class AuthController
         private readonly AuthService $authService,
         private readonly AuthCookieService $authCookieService,
         private readonly ResponseFactory $responseFactory,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request, Response $response): void
     {
@@ -44,6 +43,11 @@ final class AuthController
                 response: $response,
                 accessToken: $loginResult->accessToken,
                 refreshToken: $loginResult->refreshToken,
+            );
+
+            $this->authCookieService->setCsrfCookie(
+                $response,
+                $loginResult->csrfToken,
             );
 
             $response->header(self::CSRF_HEADER_NAME, $loginResult->csrfToken);

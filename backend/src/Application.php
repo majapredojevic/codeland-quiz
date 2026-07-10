@@ -63,6 +63,11 @@ final class Application
             '/api/auth/refresh',
             $this->applicationFactory->createRefreshController(),
         );
+
+        $this->router->post(
+            '/api/auth/logout',
+            $this->applicationFactory->createLogoutController(),
+        );
     }
 
     private function registerEvents(): void

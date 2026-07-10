@@ -15,6 +15,7 @@ use CodeLandQuiz\Auth\LoginAttemptService;
 use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\Controller\AuthController;
 use CodeLandQuiz\Controller\RefreshController;
+use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
@@ -56,6 +57,23 @@ final class ApplicationFactory
             responseFactory: new ResponseFactory(),
             cookieReader: new CookieReader(),
             config: $this->config,
+        );
+    }
+
+    public function createLogoutController(): LogoutController
+    {
+        $refreshTokenRepository = new MySqlRefreshTokenRepository($this->database);
+
+        return new LogoutController(
+            refreshTokenService: new DatabaseRefreshTokenService(
+                refreshTokens: $refreshTokenRepository,
+                config: $this->config,
+            ),
+            authCookieService: $this->createAuthCookieService(),
+            csrfTokenService: new DefaultCsrfTokenService(),
+            cookieReader: new CookieReader(),
+            config: $this->config,
+            responseFactory: new ResponseFactory(),
         );
     }
 

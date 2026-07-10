@@ -21,6 +21,8 @@ final readonly class AppConfig
 
     private string $cookiePath;
 
+    private string $csrfTokenCookieName;
+
     private int $jwtExpirationMinutes;
 
     private int $refreshTokenExpirationDays;
@@ -57,6 +59,7 @@ final readonly class AppConfig
         $this->accessTokenCookieName = $this->environment->get('ACCESS_TOKEN_COOKIE_NAME');
         $this->refreshTokenCookieName = $this->environment->get('REFRESH_TOKEN_COOKIE_NAME');
         $this->cookiePath = $this->environment->get('COOKIE_PATH');
+        $this->csrfTokenCookieName = $this->environment->get('CSRF_TOKEN_COOKIE_NAME');
         $this->jwtExpirationMinutes = $this->environment->getInt('JWT_EXPIRATION_MINUTES');
         $this->refreshTokenExpirationDays = $this->environment->getInt('REFRESH_TOKEN_EXPIRATION_DAYS');
         $this->csrfTokenExpirationMinutes = $this->environment->getInt('CSRF_TOKEN_EXPIRATION_MINUTES');
@@ -131,6 +134,11 @@ final readonly class AppConfig
     public function getCookiePath(): string
     {
         return $this->cookiePath;
+    }
+
+    public function getCsrfTokenCookieName(): string
+    {
+        return $this->csrfTokenCookieName;
     }
 
     /**

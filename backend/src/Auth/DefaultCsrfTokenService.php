@@ -18,4 +18,13 @@ final class DefaultCsrfTokenService implements CsrfTokenService
             throw new RuntimeException('CSRF token could not be generated.', 0, $exception);
         }
     }
+
+    public function validate(string $headerToken, string $cookieToken): bool
+    {
+        if ($headerToken === '' || $cookieToken === '') {
+            return false;
+        }
+
+        return hash_equals($cookieToken, $headerToken);
+    }
 }

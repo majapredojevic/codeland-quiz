@@ -16,8 +16,7 @@ final readonly class AuthCookieService
 
     public function __construct(
         private AppConfig $config,
-    ) {
-    }
+    ) {}
 
     public function setAuthenticationCookies(
         Response $response,
@@ -43,6 +42,55 @@ final readonly class AuthCookieService
         );
     }
 
+    public function setCsrfCookie(
+        Response $response,
+        string $csrfToken,
+    ): void {
+        $success = $response->cookie(
+            $this->config->getCsrfTokenCookieName(),
+            $csrfToken,
+            time() + (
+                $this->config->getCsrfTokenExpirationMinutes()
+                * self::SECONDS_PER_MINUTE
+            ),
+            $this->config->getCookiePath(),
+            '',
+            $this->config->isCookieSecure(),
+            false,
+            $this->config->getCookieSameSite()->value,
+        );
+
+        if ($success === false) {
+            throw new RuntimeException('CSRF cookie could not be set.');
+        }
+    }
+
+    public function clearAuthenticationCookies(Response $response): void
+    {
+        $expiresAt = time() - 3600;
+
+        $this->clearCookie(
+            $response,
+            $this->config->getAccessTokenCookieName(),
+            true,
+            $expiresAt,
+        );
+
+        $this->clearCookie(
+            $response,
+            $this->config->getRefreshTokenCookieName(),
+            true,
+            $expiresAt,
+        );
+
+        $this->clearCookie(
+            $response,
+            $this->config->getCsrfTokenCookieName(),
+            false,
+            $expiresAt,
+        );
+    }
+
     private function setCookie(
         Response $response,
         string $name,
@@ -62,6 +110,30 @@ final readonly class AuthCookieService
 
         if ($success === false) {
             throw new RuntimeException(sprintf('Cookie "%s" could not be set.', $name));
+        }
+    }
+
+    private function clearCookie(
+        Response $response,
+        string $name,
+        bool $httpOnly,
+        int $expiresAt,
+    ): void {
+        $success = $response->cookie(
+            $name,
+            '',
+            $expiresAt,
+            $this->config->getCookiePath(),
+            '',
+            $this->config->isCookieSecure(),
+            $httpOnly,
+            $this->config->getCookieSameSite()->value,
+        );
+
+        if ($success === false) {
+            throw new RuntimeException(
+                sprintf('Cookie "%s" could not be cleared.', $name),
+            );
         }
     }
 }
