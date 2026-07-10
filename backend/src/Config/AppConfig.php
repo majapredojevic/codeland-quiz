@@ -15,6 +15,12 @@ final readonly class AppConfig
 
     private string $appUrl;
 
+    private string $accessTokenCookieName;
+
+    private string $refreshTokenCookieName;
+
+    private string $cookiePath;
+
     private int $jwtExpirationMinutes;
 
     private int $refreshTokenExpirationDays;
@@ -48,6 +54,9 @@ final readonly class AppConfig
         $this->appName = $this->environment->get('APP_NAME');
         $this->appEnv = $this->environment->get('APP_ENV');
         $this->appUrl = $this->environment->get('APP_URL');
+        $this->accessTokenCookieName = $this->environment->get('ACCESS_TOKEN_COOKIE_NAME');
+        $this->refreshTokenCookieName = $this->environment->get('REFRESH_TOKEN_COOKIE_NAME');
+        $this->cookiePath = $this->environment->get('COOKIE_PATH');
         $this->jwtExpirationMinutes = $this->environment->getInt('JWT_EXPIRATION_MINUTES');
         $this->refreshTokenExpirationDays = $this->environment->getInt('REFRESH_TOKEN_EXPIRATION_DAYS');
         $this->csrfTokenExpirationMinutes = $this->environment->getInt('CSRF_TOKEN_EXPIRATION_MINUTES');
@@ -109,6 +118,21 @@ final readonly class AppConfig
         return $this->maximumUploadSizeMb;
     }
 
+    public function getAccessTokenCookieName(): string
+    {
+        return $this->accessTokenCookieName;
+    }
+
+    public function getRefreshTokenCookieName(): string
+    {
+        return $this->refreshTokenCookieName;
+    }
+
+    public function getCookiePath(): string
+    {
+        return $this->cookiePath;
+    }
+
     /**
      * @return string[]
      */
@@ -164,10 +188,10 @@ final readonly class AppConfig
     {
         return array_values(array_filter(
             array_map(
-                static fn (string $extension): string => strtolower(trim($extension)),
+                static fn(string $extension): string => strtolower(trim($extension)),
                 explode(',', $extensions),
             ),
-            static fn (string $extension): bool => $extension !== '',
+            static fn(string $extension): bool => $extension !== '',
         ));
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz;
 
+use CodeLandQuiz\Bootstrap\ApplicationFactory;
 use CodeLandQuiz\Controller\HealthController;
 use CodeLandQuiz\Support\Router;
 use CodeLandQuiz\WebSocket\EchoGateway;
@@ -20,6 +21,8 @@ final class Application
 
     private EchoGateway $echoGateway;
 
+    private ApplicationFactory $applicationFactory;
+
     public function __construct(
         private readonly string $host = '0.0.0.0',
         private readonly int $port = 9501,
@@ -27,6 +30,7 @@ final class Application
         $this->server = new Server($this->host, $this->port);
         $this->router = new Router();
         $this->echoGateway = new EchoGateway();
+        $this->applicationFactory = new ApplicationFactory(dirname(__DIR__));
     }
 
     public function run(): void
@@ -49,6 +53,11 @@ final class Application
     private function registerRoutes(): void
     {
         $this->router->get('/health', new HealthController());
+
+        $this->router->post(
+            '/api/auth/login',
+            $this->applicationFactory->createAuthController(),
+        );
     }
 
     private function registerEvents(): void
