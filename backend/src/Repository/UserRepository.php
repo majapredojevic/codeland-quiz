@@ -15,5 +15,7 @@ interface UserRepository
 
     public function findByEmail(string $email): ?User;
 
+    public function findByEmailIncludingInactive(string $email): ?User;
+
     public function save(User $user): void;
 }

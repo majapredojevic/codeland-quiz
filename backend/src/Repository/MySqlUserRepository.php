@@ -50,6 +50,15 @@ WHERE email = :email
 LIMIT 1
 SQL;
 
+    private const FIND_BY_EMAIL_INCLUDING_INACTIVE_SQL = <<<SQL
+SELECT id, name, email, password_hash, must_change_password, role, is_active
+FROM users
+WHERE email = :email
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+LIMIT 1
+SQL;
+
     private const UPDATE_PASSWORD_STATE_SQL = <<<SQL
 UPDATE users
 SET password_hash = :password_hash,
@@ -109,6 +118,25 @@ SQL;
     public function findByEmail(string $email): ?User
     {
         $statement = $this->connection()->prepare(self::FIND_BY_EMAIL_SQL);
+
+        $statement->execute([
+            'email' => $email,
+        ]);
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToUser($row);
+    }
+
+    public function findByEmailIncludingInactive(string $email): ?User
+    {
+        $statement = $this->connection()->prepare(
+            self::FIND_BY_EMAIL_INCLUDING_INACTIVE_SQL,
+        );
 
         $statement->execute([
             'email' => $email,

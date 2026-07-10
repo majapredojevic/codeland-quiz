@@ -26,8 +26,18 @@ final readonly class UserManagementService
         $name = $this->normalizeName($dto->name);
         $email = $this->normalizeEmail($dto->email);
 
-        if ($this->users->findByEmail($email) !== null) {
-            throw new InvalidArgumentException('A user with this email already exists.');
+        $existingUser = $this->users->findByEmailIncludingInactive($email);
+
+        if ($existingUser !== null) {
+            if (!$existingUser->isActive()) {
+                throw new InvalidArgumentException(
+                    'A user with this email already exists but is inactive.',
+                );
+            }
+
+            throw new InvalidArgumentException(
+                'A user with this email already exists.',
+            );
         }
 
         $temporaryPassword = $this->temporaryPasswordGenerator->generate();
