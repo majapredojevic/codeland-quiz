@@ -8,7 +8,9 @@ use CodeLandQuiz\Auth\PasswordHasher;
 use CodeLandQuiz\Auth\TemporaryPasswordGenerator;
 use CodeLandQuiz\DTO\CreateTeacherDTO;
 use CodeLandQuiz\DTO\CreateTeacherResult;
+use CodeLandQuiz\DTO\UserListItemDTO;
 use CodeLandQuiz\Model\NewUser;
+use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\UserRepository;
 use InvalidArgumentException;
@@ -63,6 +65,24 @@ final readonly class UserManagementService
         );
     }
 
+    /**
+     * @return UserListItemDTO[]
+     */
+    public function listTeachers(): array
+    {
+        return array_map(
+            static fn(User $user): UserListItemDTO => new UserListItemDTO(
+                id: $user->getId(),
+                name: $user->getName(),
+                email: $user->getEmail(),
+                role: $user->getRole(),
+                isActive: $user->isActive(),
+                mustChangePassword: $user->mustChangePassword(),
+            ),
+            $this->users->findAllTeachers(),
+        );
+    }
+
     private function normalizeName(string $name): string
     {
         $name = trim($name);
@@ -77,11 +97,6 @@ final readonly class UserManagementService
     private function normalizeEmail(string $email): string
     {
         $email = strtolower(trim($email));
-
-        $email = filter_var(
-            $email,
-            FILTER_SANITIZE_EMAIL,
-        );
 
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             throw new InvalidArgumentException('Teacher email is invalid.');

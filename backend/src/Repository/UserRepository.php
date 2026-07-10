@@ -18,4 +18,9 @@ interface UserRepository
     public function findByEmailIncludingInactive(string $email): ?User;
 
     public function save(User $user): void;
+
+    /**
+     * @return User[]
+     */
+    public function findAllTeachers(): array;
 }

@@ -82,6 +82,9 @@ final class Application
                 UserRole::TEACHER,
             );
 
+        $adminUserController =
+            $this->applicationFactory->createAdminUserController();
+
         $this->router->get(
             '/api/auth/me',
             $this->applicationFactory->createMeController(),
@@ -101,13 +104,22 @@ final class Application
 
         $this->router->post(
             '/api/admin/users',
-            $this->applicationFactory->createAdminUserController(),
+            $adminUserController,
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/admin/users',
+            $adminUserController->list(...),
             [
                 $authenticationMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
-
         $this->router->post(
             '/api/auth/logout',
             $this->applicationFactory->createLogoutController(),

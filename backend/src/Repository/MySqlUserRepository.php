@@ -59,6 +59,15 @@ WHERE email = :email
 LIMIT 1
 SQL;
 
+    private const FIND_ALL_TEACHERS_SQL = <<<SQL
+SELECT id, name, email, password_hash, must_change_password, role, is_active
+FROM users
+WHERE role = 'TEACHER'
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+ORDER BY name ASC, id ASC
+SQL;
+
     private const UPDATE_PASSWORD_STATE_SQL = <<<SQL
 UPDATE users
 SET password_hash = :password_hash,
@@ -149,6 +158,23 @@ SQL;
         }
 
         return $this->mapRowToUser($row);
+    }
+
+    /**
+     * @return User[]
+     */
+    public function findAllTeachers(): array
+    {
+        $statement = $this->connection()->prepare(self::FIND_ALL_TEACHERS_SQL);
+        $statement->execute();
+
+        $users = [];
+
+        while (($row = $statement->fetch()) !== false) {
+            $users[] = $this->mapRowToUser($row);
+        }
+
+        return $users;
     }
 
     public function save(User $user): void
