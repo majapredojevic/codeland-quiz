@@ -10,6 +10,7 @@ use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
 use CodeLandQuiz\Http\JsonRequest;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Http\RequestContext;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
@@ -26,7 +27,7 @@ final class AuthController
         private readonly ResponseFactory $responseFactory,
     ) {}
 
-    public function __invoke(Request $request, Response $response): void
+    public function __invoke(Request $request, Response $response,  RequestContext $context): void
     {
         try {
             $body = JsonRequest::from($request);

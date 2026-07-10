@@ -24,6 +24,8 @@ use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
+use CodeLandQuiz\Controller\MeController;
+use CodeLandQuiz\Middleware\AuthenticationMiddleware;
 
 final class ApplicationFactory
 {
@@ -77,6 +79,25 @@ final class ApplicationFactory
         );
     }
 
+    public function createMeController(): MeController
+    {
+        return new MeController(
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createAuthenticationMiddleware(): AuthenticationMiddleware
+    {
+        return new AuthenticationMiddleware(
+            jwtService: new JwtTokenService(
+                config: $this->config,
+                environment: $this->environment,
+            ),
+            cookieReader: new CookieReader(),
+            config: $this->config,
+            responseFactory: new ResponseFactory(),
+        );
+    }
     private function createAuthService(): AuthService
     {
         $userRepository = new MySqlUserRepository($this->database);

@@ -68,8 +68,18 @@ final class Application
             '/api/auth/logout',
             $this->applicationFactory->createLogoutController(),
         );
-    }
 
+        $authenticationMiddleware =
+            $this->applicationFactory->createAuthenticationMiddleware();
+
+        $this->router->get(
+            '/api/auth/me',
+            $this->applicationFactory->createMeController(),
+            [
+                $authenticationMiddleware->handle(...),
+            ],
+        );
+    }
     private function registerEvents(): void
     {
         $this->server->on('start', function (): void {

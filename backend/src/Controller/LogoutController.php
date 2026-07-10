@@ -10,6 +10,7 @@ use CodeLandQuiz\Auth\RefreshTokenService;
 use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Http\RequestContext;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
@@ -29,7 +30,7 @@ final class LogoutController
         private readonly ResponseFactory $responseFactory,
     ) {}
 
-    public function __invoke(Request $request, Response $response): void
+    public function __invoke(Request $request, Response $response, RequestContext $context): void
     {
         try {
             $csrfHeader = $this->csrfHeader($request);
