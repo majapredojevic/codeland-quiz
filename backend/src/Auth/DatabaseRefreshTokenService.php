@@ -8,6 +8,7 @@ use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\Model\RefreshToken;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Repository\RefreshTokenRepository;
+use CodeLandQuiz\DTO\RefreshTokenResult;
 use DateTimeImmutable;
 use RuntimeException;
 
@@ -24,23 +25,26 @@ final readonly class DatabaseRefreshTokenService implements RefreshTokenService
         return $this->createForUserId($user->getId())['plainToken'];
     }
 
-    public function rotate(string $refreshToken): string
-    {
-        $existingToken = $this->refreshTokens->findValidByPlainToken($refreshToken);
+    public function rotate(string $refreshToken): RefreshTokenResult
+{
+    $existingToken = $this->refreshTokens->findValidByPlainToken($refreshToken);
 
-        if ($existingToken === null) {
-            throw new RuntimeException('Refresh token is invalid or expired.');
-        }
-
-        $newToken = $this->createForUserId($existingToken->getUserId());
-
-        $this->refreshTokens->revoke(
-            $this->existingTokenId($existingToken),
-            $newToken['id'],
-        );
-
-        return $newToken['plainToken'];
+    if ($existingToken === null) {
+        throw new RuntimeException('Refresh token is invalid or expired.');
     }
+
+    $newToken = $this->createForUserId($existingToken->getUserId());
+
+    $this->refreshTokens->revoke(
+        $this->existingTokenId($existingToken),
+        $newToken['id'],
+    );
+
+    return new RefreshTokenResult(
+        userId: $existingToken->getUserId(),
+        refreshToken: $newToken['plainToken'],
+    );
+}
 
     public function revoke(string $refreshToken): void
     {

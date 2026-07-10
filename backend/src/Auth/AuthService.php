@@ -9,6 +9,7 @@ use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Repository\UserRepository;
+use CodeLandQuiz\DTO\RefreshResult;
 use RuntimeException;
 
 final readonly class AuthService
@@ -87,5 +88,23 @@ final readonly class AuthService
     private function getAccessTokenExpirationSeconds(): int
     {
         return $this->config->getJwtExpirationMinutes() * self::SECONDS_PER_MINUTE;
+    }
+
+    public function refresh(string $plainRefreshToken): RefreshResult
+    {
+        $rotatedToken = $this->refreshTokenService->rotate($plainRefreshToken);
+
+        $user = $this->users->findById($rotatedToken->userId);
+
+        if ($user === null || !$user->isActive()) {
+            throw new RuntimeException('Refresh token user is unavailable.');
+        }
+
+        return new RefreshResult(
+            accessToken: $this->jwtService->createAccessToken($user),
+            refreshToken: $rotatedToken->refreshToken,
+            csrfToken: $this->csrfTokenService->generate(),
+            expiresInSeconds: $this->getAccessTokenExpirationSeconds(),
+        );
     }
 }
