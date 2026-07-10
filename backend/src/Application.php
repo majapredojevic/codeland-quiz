@@ -12,6 +12,7 @@ use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
+use CodeLandQuiz\Model\UserRole;
 
 final class Application
 {
@@ -72,6 +73,17 @@ final class Application
         $authenticationMiddleware =
             $this->applicationFactory->createAuthenticationMiddleware();
 
+        $adminOnlyMiddleware =
+            $this->applicationFactory->createRoleMiddleware(
+                UserRole::ADMIN,
+            );
+
+        $teacherAccessMiddleware =
+            $this->applicationFactory->createRoleMiddleware(
+                UserRole::ADMIN,
+                UserRole::TEACHER,
+            );
+
         $this->router->get(
             '/api/auth/me',
             $this->applicationFactory->createMeController(),
@@ -79,7 +91,17 @@ final class Application
                 $authenticationMiddleware->handle(...),
             ],
         );
+
+        $this->router->get(
+            '/api/auth/admin-test',
+            $this->applicationFactory->createMeController(),
+            [
+                $authenticationMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
     }
+    
     private function registerEvents(): void
     {
         $this->server->on('start', function (): void {

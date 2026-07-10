@@ -26,6 +26,10 @@ use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Middleware\AuthenticationMiddleware;
+use CodeLandQuiz\Auth\AuthorizationService;
+use CodeLandQuiz\Middleware\RoleMiddleware;
+use CodeLandQuiz\Model\UserRole;
+
 
 final class ApplicationFactory
 {
@@ -98,6 +102,17 @@ final class ApplicationFactory
             responseFactory: new ResponseFactory(),
         );
     }
+
+    public function createRoleMiddleware(
+        UserRole ...$allowedRoles,
+    ): RoleMiddleware {
+        return new RoleMiddleware(
+            authorizationService: new AuthorizationService(),
+            responseFactory: new ResponseFactory(),
+            allowedRoles: $allowedRoles,
+        );
+    }
+
     private function createAuthService(): AuthService
     {
         $userRepository = new MySqlUserRepository($this->database);
