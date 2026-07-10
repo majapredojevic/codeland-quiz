@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Repository;
 
+use CodeLandQuiz\Model\NewUser;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Support\Database;
@@ -12,6 +13,24 @@ use RuntimeException;
 
 final class MySqlUserRepository implements UserRepository
 {
+    private const INSERT_SQL = <<<SQL
+INSERT INTO users (
+    name,
+    email,
+    password_hash,
+    must_change_password,
+    role,
+    is_active
+) VALUES (
+    :name,
+    :email,
+    :password_hash,
+    :must_change_password,
+    :role,
+    :is_active
+)
+SQL;
+
     private const FIND_BY_ID_SQL = <<<SQL
 SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
@@ -43,6 +62,32 @@ SQL;
     public function __construct(
         private readonly Database $database,
     ) {}
+
+    public function create(NewUser $user): int
+    {
+        $statement = $this->connection()->prepare(self::INSERT_SQL);
+
+        $statement->execute([
+            'name' => $user->getName(),
+            'email' => $user->getEmail(),
+            'password_hash' => $user->getPasswordHash(),
+            'must_change_password' => $user->mustChangePassword() ? 1 : 0,
+            'role' => $user->getRole()->value,
+            'is_active' => $user->isActive() ? 1 : 0,
+        ]);
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('User was not created.');
+        }
+
+        $id = (int) $this->connection()->lastInsertId();
+
+        if ($id < 1) {
+            throw new RuntimeException('User ID was not returned.');
+        }
+
+        return $id;
+    }
 
     public function findById(int $id): ?User
     {
