@@ -54,8 +54,31 @@ CREATE TABLE students (
     KEY idx_students_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE topics (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    description VARCHAR(255) NULL,
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
+    UNIQUE KEY uq_topics_name (name),
+    KEY idx_topics_created_by (created_by),
+    KEY idx_topics_updated_by (updated_by),
+    KEY idx_topics_created_at (created_at),
+    CONSTRAINT fk_topics_created_by
+        FOREIGN KEY (created_by) REFERENCES users (id)
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_topics_updated_by
+        FOREIGN KEY (updated_by) REFERENCES users (id)
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE quizzes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    topic_id BIGINT UNSIGNED NULL,
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NOT NULL,
     title VARCHAR(180) NOT NULL,
@@ -67,10 +90,14 @@ CREATE TABLE quizzes (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     UNIQUE KEY uq_quizzes_title_version (title, version),
+    KEY idx_quizzes_topic_id (topic_id),
     KEY idx_quizzes_title (title),
     KEY idx_quizzes_created_by (created_by),
     KEY idx_quizzes_updated_by (updated_by),
     KEY idx_quizzes_created_at (created_at),
+    CONSTRAINT fk_quizzes_topic_id
+        FOREIGN KEY (topic_id) REFERENCES topics (id)
+        ON DELETE SET NULL,
     CONSTRAINT fk_quizzes_created_by
         FOREIGN KEY (created_by) REFERENCES users (id)
         ON DELETE RESTRICT,

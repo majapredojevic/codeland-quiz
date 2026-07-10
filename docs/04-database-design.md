@@ -34,12 +34,16 @@ The database design follows these goals:
 
 ```mermaid
 erDiagram
+    USERS ||--o{ TOPICS : creates
+    USERS ||--o{ TOPICS : updates
     USERS ||--o{ QUIZZES : creates
     USERS ||--o{ QUIZZES : updates
     USERS ||--o{ QUIZ_SESSIONS : hosts
     USERS ||--o{ AUDIT_LOGS : performs
 
     STUDENTS ||--o{ SESSION_PARTICIPANTS : joins
+
+    TOPICS ||--o{ QUIZZES : organizes
 
     QUIZZES ||--o{ QUESTIONS : contains
     QUIZZES ||--o{ QUIZ_SESSIONS : played_as
@@ -71,8 +75,21 @@ erDiagram
         timestamp updated_at
     }
 
+    TOPICS {
+        bigint id PK
+        varchar name
+        varchar description
+        bigint created_by FK
+        bigint updated_by FK
+        boolean is_deleted
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+
     QUIZZES {
         bigint id PK
+        bigint topic_id FK
         bigint created_by FK
         bigint updated_by FK
         varchar title
@@ -165,6 +182,7 @@ erDiagram
 | --- | --- |
 | `users` | Stores administrator and teacher accounts. |
 | `students` | Stores student profiles used for quiz participation. |
+| `topics` | Stores shared thematic folders used to organize quizzes. |
 | `quizzes` | Stores quiz definitions. |
 | `questions` | Stores quiz questions. |
 | `question_options` | Stores answer options for each question. |
@@ -227,6 +245,41 @@ Main fields:
 
 ---
 
+## Topics Table
+
+The `topics` table stores shared thematic folders used to organize quizzes.
+
+Examples include:
+
+- Scratch
+- Python
+- Robotics
+- General Knowledge
+- Games
+- Proverbs
+
+Both administrators and teachers may create, rename, update, and delete topics.
+
+A topic may be deleted only when it contains no active, non-deleted quizzes.
+
+Quizzes are never deleted together with a topic. A quiz may also have no topic, in which case the frontend displays it as unassigned.
+
+Main fields:
+
+| Column | Description |
+| --- | --- |
+| `id` | Primary key. |
+| `name` | Unique topic name. |
+| `description` | Optional description. |
+| `created_by` | User who created the topic. |
+| `updated_by` | User who last updated the topic. |
+| `is_deleted` | Soft-delete flag. |
+| `created_at` | Creation timestamp. |
+| `updated_at` | Last update timestamp. |
+| `deleted_at` | Soft-delete timestamp. |
+
+---
+
 ## Quizzes Table
 
 The `quizzes` table stores quiz definitions.
@@ -238,6 +291,7 @@ Main fields:
 | Column | Description |
 | --- | --- |
 | `id` | Primary key. |
+| `topic_id` | Optional related topic. A null value means the quiz is unassigned. |
 | `created_by` | User who created the quiz. |
 | `updated_by` | User who last updated the quiz. |
 | `title` | Quiz title. |
@@ -457,6 +511,24 @@ Administrators and teachers use traditional authentication with email and passwo
 Students only participate in quiz sessions and do not need a full account with password-based login.
 
 This is why `users` and `students` are modeled separately.
+
+### Topic Organization
+
+The backend entity name is Topic.
+
+The frontend displays topics as folders or themes.
+
+Administrators and teachers have the same management permissions for topics.
+
+A topic can be deleted only when it contains no active, non-deleted quizzes.
+
+Deleting a topic must never delete quizzes.
+
+Quizzes with `topic_id = NULL` are treated as unassigned.
+
+Topics use soft delete.
+
+Student-course or student-topic relationships are intentionally not introduced.
 
 ### Store Image Paths Instead of BLOB Values
 
