@@ -29,6 +29,10 @@ use CodeLandQuiz\Middleware\AuthenticationMiddleware;
 use CodeLandQuiz\Auth\AuthorizationService;
 use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
+use CodeLandQuiz\Admin\UserManagementService;
+use CodeLandQuiz\Auth\SecureTemporaryPasswordGenerator;
+use CodeLandQuiz\Controller\AdminUserController;
+use CodeLandQuiz\Middleware\CsrfMiddleware;
 
 
 final class ApplicationFactory
@@ -44,6 +48,16 @@ final class ApplicationFactory
         $this->environment = new Environment($projectRootPath);
         $this->config = new AppConfig($this->environment);
         $this->database = new Database($this->environment);
+    }
+
+    public function createCsrfMiddleware(): CsrfMiddleware
+    {
+        return new CsrfMiddleware(
+            csrfTokenService: new DefaultCsrfTokenService(),
+            cookieReader: new CookieReader(),
+            config: $this->config,
+            responseFactory: new ResponseFactory(),
+        );
     }
 
     public function createAuthController(): AuthController
@@ -76,7 +90,6 @@ final class ApplicationFactory
                 config: $this->config,
             ),
             authCookieService: $this->createAuthCookieService(),
-            csrfTokenService: new DefaultCsrfTokenService(),
             cookieReader: new CookieReader(),
             config: $this->config,
             responseFactory: new ResponseFactory(),
@@ -110,6 +123,18 @@ final class ApplicationFactory
             authorizationService: new AuthorizationService(),
             responseFactory: new ResponseFactory(),
             allowedRoles: $allowedRoles,
+        );
+    }
+
+    public function createAdminUserController(): AdminUserController
+    {
+        return new AdminUserController(
+            userManagementService: new UserManagementService(
+                users: new MySqlUserRepository($this->database),
+                temporaryPasswordGenerator: new SecureTemporaryPasswordGenerator(),
+                passwordHasher: new BcryptPasswordHasher(),
+            ),
+            responseFactory: new ResponseFactory(),
         );
     }
 

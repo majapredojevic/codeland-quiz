@@ -65,10 +65,8 @@ final class Application
             $this->applicationFactory->createRefreshController(),
         );
 
-        $this->router->post(
-            '/api/auth/logout',
-            $this->applicationFactory->createLogoutController(),
-        );
+        $csrfMiddleware =
+            $this->applicationFactory->createCsrfMiddleware();
 
         $authenticationMiddleware =
             $this->applicationFactory->createAuthenticationMiddleware();
@@ -100,8 +98,36 @@ final class Application
                 $adminOnlyMiddleware->handle(...),
             ],
         );
+
+        $this->router->post(
+            '/api/admin/users',
+            $this->applicationFactory->createAdminUserController(),
+            [
+                $authenticationMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
+            '/api/auth/logout',
+            $this->applicationFactory->createLogoutController(),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
+            '/api/admin/users',
+            $this->applicationFactory->createAdminUserController(),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
     }
-    
+
     private function registerEvents(): void
     {
         $this->server->on('start', function (): void {
