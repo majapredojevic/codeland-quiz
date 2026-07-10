@@ -13,7 +13,7 @@ use RuntimeException;
 final class MySqlUserRepository implements UserRepository
 {
     private const FIND_BY_ID_SQL = <<<SQL
-SELECT id, name, email, password_hash, role, is_active
+SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
 WHERE id = :id
   AND is_deleted = FALSE
@@ -22,7 +22,7 @@ LIMIT 1
 SQL;
 
     private const FIND_BY_EMAIL_SQL = <<<SQL
-SELECT id, name, email, password_hash, role, is_active
+SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
 WHERE email = :email
   AND is_active = TRUE
@@ -31,9 +31,10 @@ WHERE email = :email
 LIMIT 1
 SQL;
 
-    private const UPDATE_PASSWORD_HASH_SQL = <<<SQL
+    private const UPDATE_PASSWORD_STATE_SQL = <<<SQL
 UPDATE users
-SET password_hash = :password_hash
+SET password_hash = :password_hash,
+    must_change_password = :must_change_password
 WHERE id = :id
   AND is_deleted = FALSE
   AND deleted_at IS NULL
@@ -79,11 +80,12 @@ SQL;
 
     public function save(User $user): void
     {
-        $statement = $this->connection()->prepare(self::UPDATE_PASSWORD_HASH_SQL);
+        $statement = $this->connection()->prepare(self::UPDATE_PASSWORD_STATE_SQL);
 
         $statement->execute([
             'id' => $user->getId(),
             'password_hash' => $user->getPasswordHash(),
+            'must_change_password' => $user->mustChangePassword() ? 1 : 0,
         ]);
 
         if ($statement->rowCount() === 0) {
@@ -101,6 +103,7 @@ SQL;
             name: (string) $row['name'],
             email: (string) $row['email'],
             passwordHash: (string) $row['password_hash'],
+            mustChangePassword: (bool) (int) $row['must_change_password'],
             role: UserRole::from((string) $row['role']),
             isActive: (bool) (int) $row['is_active'],
         );

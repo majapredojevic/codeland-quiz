@@ -11,6 +11,7 @@ final class User
         private readonly string $name,
         private readonly string $email,
         private string $passwordHash,
+        private bool $mustChangePassword,
         private readonly UserRole $role,
         private readonly bool $isActive,
     ) {
@@ -36,6 +37,11 @@ final class User
         return $this->passwordHash;
     }
 
+    public function mustChangePassword(): bool
+    {
+        return $this->mustChangePassword;
+    }
+
     public function getRole(): UserRole
     {
         return $this->role;
@@ -49,6 +55,16 @@ final class User
     public function changePasswordHash(string $passwordHash): void
     {
         $this->passwordHash = $passwordHash;
+    }
+
+    public function requirePasswordChange(): void
+    {
+        $this->mustChangePassword = true;
+    }
+
+    public function passwordChanged(): void
+    {
+        $this->mustChangePassword = false;
     }
 
     public function canUseNormalLogin(): bool

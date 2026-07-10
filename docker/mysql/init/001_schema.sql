@@ -9,6 +9,7 @@ CREATE TABLE users (
     name VARCHAR(120) NOT NULL,
     email VARCHAR(180) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
     role ENUM('ADMIN', 'TEACHER') NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
