@@ -149,6 +149,16 @@ final class Application
                 $adminOnlyMiddleware->handle(...),
             ],
         );
+
+        $this->router->patch(
+            '/api/admin/users/{id}',
+            $adminUserController->update(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
     }
 
     private function registerEvents(): void

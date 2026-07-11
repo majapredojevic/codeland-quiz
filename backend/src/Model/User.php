@@ -8,8 +8,8 @@ final class User
 {
     public function __construct(
         private readonly int $id,
-        private readonly string $name,
-        private readonly string $email,
+        private string $name,
+        private string $email,
         private string $passwordHash,
         private bool $mustChangePassword,
         private readonly UserRole $role,
@@ -50,6 +50,14 @@ final class User
     public function isActive(): bool
     {
         return $this->isActive;
+    }
+
+    public function updateProfile(
+        string $name,
+        string $email,
+    ): void {
+        $this->name = $name;
+        $this->email = $email;
     }
 
     public function changePasswordHash(string $passwordHash): void

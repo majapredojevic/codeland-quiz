@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Admin;
 
+use CodeLandQuiz\Admin\Exception\TeacherEmailAlreadyExistsException;
+use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
 use CodeLandQuiz\Auth\PasswordHasher;
 use CodeLandQuiz\Auth\TemporaryPasswordGenerator;
 use CodeLandQuiz\DTO\CreateTeacherDTO;
 use CodeLandQuiz\DTO\CreateTeacherResult;
 use CodeLandQuiz\DTO\ListTeachersDTO;
 use CodeLandQuiz\DTO\TeacherListResultDTO;
+use CodeLandQuiz\DTO\UpdateTeacherDTO;
 use CodeLandQuiz\DTO\UserListItemDTO;
 use CodeLandQuiz\Model\NewUser;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\UserRepository;
-use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
 use InvalidArgumentException;
 
 final readonly class UserManagementService
@@ -46,12 +48,12 @@ final readonly class UserManagementService
 
         if ($existingUser !== null) {
             if (!$existingUser->isActive()) {
-                throw new InvalidArgumentException(
+                throw new TeacherEmailAlreadyExistsException(
                     'A user with this email already exists but is inactive.',
                 );
             }
 
-            throw new InvalidArgumentException(
+            throw new TeacherEmailAlreadyExistsException(
                 'A user with this email already exists.',
             );
         }
@@ -79,6 +81,55 @@ final readonly class UserManagementService
         );
     }
 
+    public function updateTeacher(
+        int $id,
+        UpdateTeacherDTO $dto,
+    ): UserListItemDTO {
+        $teacher = $this->users->findTeacherById($id);
+
+        if ($teacher === null) {
+            throw new TeacherNotFoundException('Teacher was not found.');
+        }
+
+        $name = $dto->name === null
+            ? $teacher->getName()
+            : $this->normalizeName($dto->name);
+        $email = $dto->email === null
+            ? $teacher->getEmail()
+            : $this->normalizeEmail($dto->email);
+
+        if ($email !== $teacher->getEmail()) {
+            $existingUser = $this->users->findByEmailIncludingInactive($email);
+
+            if (
+                $existingUser !== null
+                && $existingUser->getId() !== $teacher->getId()
+            ) {
+                if (!$existingUser->isActive()) {
+                    throw new TeacherEmailAlreadyExistsException(
+                        'A user with this email already exists but is inactive.',
+                    );
+                }
+
+                throw new TeacherEmailAlreadyExistsException(
+                    'A user with this email already exists.',
+                );
+            }
+        }
+
+        if (
+            $name === $teacher->getName()
+            && $email === $teacher->getEmail()
+        ) {
+            return $this->toUserListItem($teacher);
+        }
+
+        $teacher->updateProfile($name, $email);
+        $this->users->updateTeacherProfile($teacher);
+
+        return $this->toUserListItem($teacher);
+    }
+
     public function listTeachers(
         ListTeachersDTO $dto,
     ): TeacherListResultDTO
@@ -94,7 +145,7 @@ final readonly class UserManagementService
 
         return new TeacherListResultDTO(
             teachers: array_map(
-                fn(User $teacher): UserListItemDTO => $this->toUserListItem($teacher),
+                fn (User $teacher): UserListItemDTO => $this->toUserListItem($teacher),
                 $teachers,
             ),
             pageIndex: $dto->pageIndex,

@@ -97,6 +97,16 @@ WHERE id = :id
   AND deleted_at IS NULL
 SQL;
 
+    private const UPDATE_TEACHER_PROFILE_SQL = <<<SQL
+UPDATE users
+SET name = :name,
+    email = :email
+WHERE id = :id
+  AND role = 'TEACHER'
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+SQL;
+
     public function __construct(
         private readonly Database $database,
     ) {}
@@ -241,6 +251,21 @@ SQL;
 
         if ($statement->rowCount() === 0) {
             throw new RuntimeException('User password hash was not updated.');
+        }
+    }
+
+    public function updateTeacherProfile(User $user): void
+    {
+        $statement = $this->connection()->prepare(self::UPDATE_TEACHER_PROFILE_SQL);
+
+        $statement->execute([
+            'id' => $user->getId(),
+            'name' => $user->getName(),
+            'email' => $user->getEmail(),
+        ]);
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('Teacher profile was not updated.');
         }
     }
 

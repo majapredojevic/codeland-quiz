@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Controller;
 
+use CodeLandQuiz\Admin\Exception\TeacherEmailAlreadyExistsException;
+use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
 use CodeLandQuiz\Admin\Http\CreateTeacherRequest;
 use CodeLandQuiz\Admin\Http\ListTeachersRequest;
+use CodeLandQuiz\Admin\Http\UpdateTeacherRequest;
 use CodeLandQuiz\Admin\UserManagementService;
 use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\DTO\CreateTeacherResult;
@@ -15,8 +18,6 @@ use CodeLandQuiz\Http\RequestContext;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
-use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
-use RuntimeException;
 use Throwable;
 
 final class AdminUserController
@@ -25,7 +26,8 @@ final class AdminUserController
         private readonly UserManagementService $userManagementService,
         private readonly ResponseFactory $responseFactory,
         private readonly AppConfig $config,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Request $request, Response $response): void
     {
@@ -40,7 +42,7 @@ final class AdminUserController
             );
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error($response, $exception->getMessage(), 400);
-        } catch (RuntimeException $exception) {
+        } catch (TeacherEmailAlreadyExistsException $exception) {
             $this->responseFactory->error($response, $exception->getMessage(), 409);
         } catch (Throwable) {
             $this->responseFactory->error($response, 'Internal server error.', 500);
@@ -80,6 +82,46 @@ final class AdminUserController
         }
     }
 
+    public function update(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $teacherId = $context->getRouteInt('id');
+            $dto = UpdateTeacherRequest::from($request);
+            $teacher = $this->userManagementService->updateTeacher($teacherId, $dto);
+
+            $this->responseFactory->json($response, [
+                'user' => $this->userResponse($teacher),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (TeacherNotFoundException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                404,
+            );
+        } catch (TeacherEmailAlreadyExistsException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
     public function list(
         Request $request,
         Response $response,
@@ -94,7 +136,7 @@ final class AdminUserController
 
             $this->responseFactory->json($response, [
                 'users' => array_map(
-                    fn(UserListItemDTO $teacher): array => $this->userResponse($teacher),
+                    fn (UserListItemDTO $teacher): array => $this->userResponse($teacher),
                     $result->teachers,
                 ),
                 'pagination' => [

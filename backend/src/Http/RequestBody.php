@@ -16,6 +16,16 @@ final readonly class RequestBody
     ) {
     }
 
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+
+    public function getValue(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+
     public function getString(string $key): string
     {
         $value = $this->data[$key] ?? null;
