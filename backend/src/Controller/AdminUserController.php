@@ -13,6 +13,7 @@ use CodeLandQuiz\Http\RequestContext;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
+use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
 use RuntimeException;
 use Throwable;
 
@@ -43,6 +44,39 @@ final class AdminUserController
         }
     }
 
+    public function get(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $teacherId = $context->getRouteInt('id');
+            $teacher = $this->userManagementService->getTeacher($teacherId);
+
+            $this->responseFactory->json($response, [
+                'user' => $this->userResponse($teacher),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (TeacherNotFoundException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                404,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
     public function list(
         Request $request,
         Response $response,
@@ -53,14 +87,7 @@ final class AdminUserController
 
             $this->responseFactory->json($response, [
                 'users' => array_map(
-                    static fn(UserListItemDTO $teacher): array => [
-                        'id' => $teacher->id,
-                        'name' => $teacher->name,
-                        'email' => $teacher->email,
-                        'role' => $teacher->role->value,
-                        'isActive' => $teacher->isActive,
-                        'mustChangePassword' => $teacher->mustChangePassword,
-                    ],
+                    fn(UserListItemDTO $teacher): array => $this->userResponse($teacher),
                     $teachers,
                 ),
             ]);
@@ -86,6 +113,21 @@ final class AdminUserController
                 'role' => $result->role->value,
             ],
             'temporaryPassword' => $result->temporaryPassword,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function userResponse(UserListItemDTO $teacher): array
+    {
+        return [
+            'id' => $teacher->id,
+            'name' => $teacher->name,
+            'email' => $teacher->email,
+            'role' => $teacher->role->value,
+            'isActive' => $teacher->isActive,
+            'mustChangePassword' => $teacher->mustChangePassword,
         ];
     }
 }

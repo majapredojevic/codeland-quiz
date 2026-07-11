@@ -59,6 +59,16 @@ WHERE email = :email
 LIMIT 1
 SQL;
 
+    private const FIND_TEACHER_BY_ID_SQL = <<<SQL
+SELECT id, name, email, password_hash, must_change_password, role, is_active
+FROM users
+WHERE id = :id
+  AND role = 'TEACHER'
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+LIMIT 1
+SQL;
+
     private const FIND_ALL_TEACHERS_SQL = <<<SQL
 SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
@@ -110,6 +120,25 @@ SQL;
     public function findById(int $id): ?User
     {
         $statement = $this->connection()->prepare(self::FIND_BY_ID_SQL);
+
+        $statement->execute([
+            'id' => $id,
+        ]);
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToUser($row);
+    }
+
+    public function findTeacherById(int $id): ?User
+    {
+        $statement = $this->connection()->prepare(
+            self::FIND_TEACHER_BY_ID_SQL,
+        );
 
         $statement->execute([
             'id' => $id,

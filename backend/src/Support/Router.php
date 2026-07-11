@@ -7,11 +7,15 @@ namespace CodeLandQuiz\Support;
 use CodeLandQuiz\Http\RequestContext;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
+use RuntimeException;
 
 final class Router
 {
     /**
-     * @var array<string, array<string, array{
+     * @var array<string, array<int, array{
+     *     path: string,
+     *     pattern: string,
+     *     parameterNames: string[],
      *     handler: callable(Request, Response, RequestContext): void,
      *     middleware: array<int, callable(
      *         Request,
@@ -119,21 +123,20 @@ final class Router
             PHP_URL_PATH,
         ) ?: '/';
 
-        $route = $this->routes[$method][$path] ?? null;
+        $matchedRoute = $this->findRoute($method, $path);
 
-        if ($route === null) {
+        if ($matchedRoute === null) {
             $this->sendRouteError($response, $path);
 
             return;
         }
 
-        // A new context is created for every request.
-        // This is especially important because OpenSwoole is long-running.
         $context = new RequestContext();
+        $context->setRouteParameters($matchedRoute['parameters']);
 
         $pipeline = $this->buildMiddlewarePipeline(
-            $route['handler'],
-            $route['middleware'],
+            $matchedRoute['handler'],
+            $matchedRoute['middleware'],
         );
 
         $pipeline($request, $response, $context);
@@ -154,9 +157,127 @@ final class Router
         callable $handler,
         array $middleware,
     ): void {
-        $this->routes[$method][$path] = [
+        [$pattern, $parameterNames] = $this->compilePath($path);
+
+        $this->routes[$method][] = [
+            'path' => $path,
+            'pattern' => $pattern,
+            'parameterNames' => $parameterNames,
             'handler' => $handler,
             'middleware' => $middleware,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     handler: callable(Request, Response, RequestContext): void,
+     *     middleware: array<int, callable(
+     *         Request,
+     *         Response,
+     *         RequestContext,
+     *         callable
+     *     ): void>,
+     *     parameters: array<string, string>
+     * }|null
+     */
+    private function findRoute(string $method, string $path): ?array
+    {
+        $routes = $this->routes[$method] ?? [];
+
+        foreach ($routes as $route) {
+            if ($route['path'] === $path) {
+                return [
+                    'handler' => $route['handler'],
+                    'middleware' => $route['middleware'],
+                    'parameters' => [],
+                ];
+            }
+        }
+
+        foreach ($routes as $route) {
+            $parameters = $this->matchRoute($route, $path);
+
+            if ($parameters !== null) {
+                return [
+                    'handler' => $route['handler'],
+                    'middleware' => $route['middleware'],
+                    'parameters' => $parameters,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{
+     *     path: string,
+     *     pattern: string,
+     *     parameterNames: string[],
+     *     handler: callable(Request, Response, RequestContext): void,
+     *     middleware: array<int, callable(
+     *         Request,
+     *         Response,
+     *         RequestContext,
+     *         callable
+     *     ): void>
+     * } $route
+     *
+     * @return array<string, string>|null
+     */
+    private function matchRoute(array $route, string $path): ?array
+    {
+        $matches = [];
+
+        if (preg_match($route['pattern'], $path, $matches) !== 1) {
+            return null;
+        }
+
+        $parameters = [];
+
+        foreach ($route['parameterNames'] as $parameterName) {
+            $value = $matches[$parameterName] ?? null;
+
+            if (!is_string($value)) {
+                return null;
+            }
+
+            $parameters[$parameterName] = rawurldecode($value);
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * @return array{0: string, 1: string[]}
+     */
+    private function compilePath(string $path): array
+    {
+        $parameterNames = [];
+        $quotedPath = preg_quote($path, '#');
+
+        $pattern = preg_replace_callback(
+            '/\\\\\{([A-Za-z_][A-Za-z0-9_]*)\\\\\}/',
+            static function (array $matches) use (&$parameterNames): string {
+                $parameterName = $matches[1];
+
+                $parameterNames[] = $parameterName;
+
+                return sprintf(
+                    '(?P<%s>[^/]+)',
+                    $parameterName,
+                );
+            },
+            $quotedPath,
+        );
+
+        if ($pattern === null) {
+            throw new RuntimeException('Route pattern could not be compiled.');
+        }
+
+        return [
+            sprintf('#^%s$#', $pattern),
+            $parameterNames,
         ];
     }
 
@@ -215,8 +336,13 @@ final class Router
     private function pathExists(string $path): bool
     {
         foreach ($this->routes as $routesByMethod) {
-            if (isset($routesByMethod[$path])) {
-                return true;
+            foreach ($routesByMethod as $route) {
+                if (
+                    $route['path'] === $path
+                    || preg_match($route['pattern'], $path) === 1
+                ) {
+                    return true;
+                }
             }
         }
 

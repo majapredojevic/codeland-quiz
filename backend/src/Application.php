@@ -13,6 +13,8 @@ use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
 use CodeLandQuiz\Model\UserRole;
+use CodeLandQuiz\Http\RequestContext;
+use CodeLandQuiz\Support\JsonResponse;
 
 final class Application
 {
@@ -135,6 +137,15 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/admin/users/{id}',
+            $adminUserController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );

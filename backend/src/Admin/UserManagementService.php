@@ -13,6 +13,7 @@ use CodeLandQuiz\Model\NewUser;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\UserRepository;
+use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
 use InvalidArgumentException;
 
 final readonly class UserManagementService
@@ -22,6 +23,17 @@ final readonly class UserManagementService
         private TemporaryPasswordGenerator $temporaryPasswordGenerator,
         private PasswordHasher $passwordHasher,
     ) {}
+
+    public function getTeacher(int $id): UserListItemDTO
+    {
+        $teacher = $this->users->findTeacherById($id);
+
+        if ($teacher === null) {
+            throw new TeacherNotFoundException('Teacher was not found.');
+        }
+
+        return $this->toUserListItem($teacher);
+    }
 
     public function createTeacher(CreateTeacherDTO $dto): CreateTeacherResult
     {
@@ -71,15 +83,20 @@ final readonly class UserManagementService
     public function listTeachers(): array
     {
         return array_map(
-            static fn(User $user): UserListItemDTO => new UserListItemDTO(
-                id: $user->getId(),
-                name: $user->getName(),
-                email: $user->getEmail(),
-                role: $user->getRole(),
-                isActive: $user->isActive(),
-                mustChangePassword: $user->mustChangePassword(),
-            ),
+            fn(User $teacher): UserListItemDTO => $this->toUserListItem($teacher),
             $this->users->findAllTeachers(),
+        );
+    }
+
+    private function toUserListItem(User $teacher): UserListItemDTO
+    {
+        return new UserListItemDTO(
+            id: $teacher->getId(),
+            name: $teacher->getName(),
+            email: $teacher->getEmail(),
+            role: $teacher->getRole(),
+            isActive: $teacher->isActive(),
+            mustChangePassword: $teacher->mustChangePassword(),
         );
     }
 

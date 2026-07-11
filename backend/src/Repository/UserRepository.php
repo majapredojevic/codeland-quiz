@@ -13,6 +13,8 @@ interface UserRepository
 
     public function findById(int $id): ?User;
 
+    public function findTeacherById(int $id): ?User;
+
     public function findByEmail(string $email): ?User;
 
     public function findByEmailIncludingInactive(string $email): ?User;
