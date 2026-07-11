@@ -50,6 +50,10 @@ final readonly class AppConfig
 
     private int $maximumNicknameLength;
 
+    private int $defaultPageSize;
+
+    private int $maximumPageSize;
+
     public function __construct(
         private readonly Environment $environment,
     ) {
@@ -76,6 +80,8 @@ final readonly class AppConfig
             'DEFAULT_QUIZ_QUESTION_TIME_LIMIT_SECONDS',
         );
         $this->maximumNicknameLength = $this->environment->getInt('MAXIMUM_NICKNAME_LENGTH');
+        $this->defaultPageSize = $this->environment->getInt('DEFAULT_PAGE_SIZE');
+        $this->maximumPageSize = $this->environment->getInt('MAX_PAGE_SIZE');
 
         $this->ensurePositive($this->loginAttemptLimit, 'Login attempt limit');
         $this->ensurePositive($this->loginLockDurationMinutes, 'Login lock duration');
@@ -85,9 +91,15 @@ final readonly class AppConfig
         $this->ensurePositive($this->maximumUploadSizeMb, 'Maximum upload size');
         $this->ensurePositive($this->defaultQuizQuestionTimeLimitSeconds, 'Default question time limit');
         $this->ensurePositive($this->maximumNicknameLength, 'Maximum nickname length');
+        $this->ensurePositive($this->defaultPageSize, 'Default page size');
+        $this->ensurePositive($this->maximumPageSize, 'Maximum page size');
 
         if ($this->allowedImageExtensions === []) {
             throw new InvalidArgumentException('Allowed image extensions cannot be empty.');
+        }
+
+        if ($this->defaultPageSize > $this->maximumPageSize) {
+            throw new InvalidArgumentException('Default page size cannot exceed maximum page size.');
         }
     }
 
@@ -157,6 +169,16 @@ final readonly class AppConfig
     public function getMaximumNicknameLength(): int
     {
         return $this->maximumNicknameLength;
+    }
+
+    public function getDefaultPageSize(): int
+    {
+        return $this->defaultPageSize;
+    }
+
+    public function getMaximumPageSize(): int
+    {
+        return $this->maximumPageSize;
     }
 
     public function isCookieSecure(): bool

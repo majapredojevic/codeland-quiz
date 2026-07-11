@@ -135,6 +135,7 @@ final class ApplicationFactory
                 passwordHasher: new BcryptPasswordHasher(),
             ),
             responseFactory: new ResponseFactory(),
+            config: $this->config,
         );
     }
 

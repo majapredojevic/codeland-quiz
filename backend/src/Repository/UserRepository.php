@@ -24,5 +24,10 @@ interface UserRepository
     /**
      * @return User[]
      */
-    public function findAllTeachers(): array;
+    public function findTeachersPage(
+        int $limit,
+        int $offset,
+    ): array;
+
+    public function countTeachers(): int;
 }

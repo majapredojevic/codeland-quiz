@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Controller;
 
 use CodeLandQuiz\Admin\Http\CreateTeacherRequest;
+use CodeLandQuiz\Admin\Http\ListTeachersRequest;
 use CodeLandQuiz\Admin\UserManagementService;
+use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\DTO\CreateTeacherResult;
 use CodeLandQuiz\DTO\UserListItemDTO;
 use CodeLandQuiz\Http\ResponseFactory;
@@ -22,6 +24,7 @@ final class AdminUserController
     public function __construct(
         private readonly UserManagementService $userManagementService,
         private readonly ResponseFactory $responseFactory,
+        private readonly AppConfig $config,
     ) {}
 
     public function __invoke(Request $request, Response $response): void
@@ -83,14 +86,30 @@ final class AdminUserController
         RequestContext $context,
     ): void {
         try {
-            $teachers = $this->userManagementService->listTeachers();
+            $dto = ListTeachersRequest::from(
+                $request,
+                $this->config,
+            );
+            $result = $this->userManagementService->listTeachers($dto);
 
             $this->responseFactory->json($response, [
                 'users' => array_map(
                     fn(UserListItemDTO $teacher): array => $this->userResponse($teacher),
-                    $teachers,
+                    $result->teachers,
                 ),
+                'pagination' => [
+                    'pageIndex' => $result->pageIndex,
+                    'pageSize' => $result->pageSize,
+                    'totalItems' => $result->totalItems,
+                    'totalPages' => $result->totalPages,
+                ],
             ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
         } catch (Throwable) {
             $this->responseFactory->error(
                 $response,

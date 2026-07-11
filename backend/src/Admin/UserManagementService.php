@@ -8,6 +8,8 @@ use CodeLandQuiz\Auth\PasswordHasher;
 use CodeLandQuiz\Auth\TemporaryPasswordGenerator;
 use CodeLandQuiz\DTO\CreateTeacherDTO;
 use CodeLandQuiz\DTO\CreateTeacherResult;
+use CodeLandQuiz\DTO\ListTeachersDTO;
+use CodeLandQuiz\DTO\TeacherListResultDTO;
 use CodeLandQuiz\DTO\UserListItemDTO;
 use CodeLandQuiz\Model\NewUser;
 use CodeLandQuiz\Model\User;
@@ -77,14 +79,28 @@ final readonly class UserManagementService
         );
     }
 
-    /**
-     * @return UserListItemDTO[]
-     */
-    public function listTeachers(): array
+    public function listTeachers(
+        ListTeachersDTO $dto,
+    ): TeacherListResultDTO
     {
-        return array_map(
-            fn(User $teacher): UserListItemDTO => $this->toUserListItem($teacher),
-            $this->users->findAllTeachers(),
+        $totalItems = $this->users->countTeachers();
+        $teachers = $this->users->findTeachersPage(
+            $dto->pageSize,
+            $dto->getOffset(),
+        );
+        $totalPages = $totalItems === 0
+            ? 0
+            : (int) ceil($totalItems / $dto->pageSize);
+
+        return new TeacherListResultDTO(
+            teachers: array_map(
+                fn(User $teacher): UserListItemDTO => $this->toUserListItem($teacher),
+                $teachers,
+            ),
+            pageIndex: $dto->pageIndex,
+            pageSize: $dto->pageSize,
+            totalItems: $totalItems,
+            totalPages: $totalPages,
         );
     }
 

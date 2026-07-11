@@ -69,13 +69,23 @@ WHERE id = :id
 LIMIT 1
 SQL;
 
-    private const FIND_ALL_TEACHERS_SQL = <<<SQL
+    private const FIND_TEACHERS_PAGE_SQL = <<<SQL
 SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
 WHERE role = 'TEACHER'
   AND is_deleted = FALSE
   AND deleted_at IS NULL
 ORDER BY name ASC, id ASC
+LIMIT :limit
+OFFSET :offset
+SQL;
+
+    private const COUNT_TEACHERS_SQL = <<<SQL
+SELECT COUNT(*)
+FROM users
+WHERE role = 'TEACHER'
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
 SQL;
 
     private const UPDATE_PASSWORD_STATE_SQL = <<<SQL
@@ -192,9 +202,14 @@ SQL;
     /**
      * @return User[]
      */
-    public function findAllTeachers(): array
+    public function findTeachersPage(
+        int $limit,
+        int $offset,
+    ): array
     {
-        $statement = $this->connection()->prepare(self::FIND_ALL_TEACHERS_SQL);
+        $statement = $this->connection()->prepare(self::FIND_TEACHERS_PAGE_SQL);
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->bindValue(':offset', $offset, PDO::PARAM_INT);
         $statement->execute();
 
         $users = [];
@@ -204,6 +219,14 @@ SQL;
         }
 
         return $users;
+    }
+
+    public function countTeachers(): int
+    {
+        $statement = $this->connection()->prepare(self::COUNT_TEACHERS_SQL);
+        $statement->execute();
+
+        return (int) $statement->fetchColumn();
     }
 
     public function save(User $user): void
