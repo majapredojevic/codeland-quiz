@@ -12,6 +12,7 @@ use CodeLandQuiz\Admin\Http\UpdateTeacherRequest;
 use CodeLandQuiz\Admin\UserManagementService;
 use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\DTO\CreateTeacherResult;
+use CodeLandQuiz\DTO\ResetTeacherPasswordResult;
 use CodeLandQuiz\DTO\UserListItemDTO;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Http\RequestContext;
@@ -138,6 +139,40 @@ final class AdminUserController
         $this->changeTeacherStatus($response, $context, false);
     }
 
+    public function resetPassword(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $teacherId = $context->getRouteInt('id');
+            $result = $this->userManagementService->resetTeacherPassword($teacherId);
+
+            $this->responseFactory->json(
+                $response,
+                $this->resetTeacherPasswordResponse($result),
+            );
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (TeacherNotFoundException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                404,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
     public function list(
         Request $request,
         Response $response,
@@ -189,6 +224,18 @@ final class AdminUserController
                 'email' => $result->email,
                 'role' => $result->role->value,
             ],
+            'temporaryPassword' => $result->temporaryPassword,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resetTeacherPasswordResponse(
+        ResetTeacherPasswordResult $result,
+    ): array {
+        return [
+            'user' => $this->userResponse($result->user),
             'temporaryPassword' => $result->temporaryPassword,
         ];
     }

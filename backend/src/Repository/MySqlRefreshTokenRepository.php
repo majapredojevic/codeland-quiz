@@ -44,6 +44,14 @@ SET revoked_at = CURRENT_TIMESTAMP,
 WHERE id = :id
 SQL;
 
+    private const REVOKE_ALL_FOR_USER_SQL = <<<SQL
+UPDATE refresh_tokens
+SET revoked_at = CURRENT_TIMESTAMP,
+    replaced_by_token_id = NULL
+WHERE user_id = :user_id
+  AND revoked_at IS NULL
+SQL;
+
     public function __construct(
         private readonly Database $database,
     ) {
@@ -100,6 +108,17 @@ SQL;
         if ($statement->rowCount() === 0) {
             throw new RuntimeException('Refresh token was not revoked.');
         }
+    }
+
+    public function revokeAllForUser(int $userId): int
+    {
+        $statement = $this->connection()->prepare(self::REVOKE_ALL_FOR_USER_SQL);
+
+        $statement->execute([
+            'user_id' => $userId,
+        ]);
+
+        return $statement->rowCount();
     }
 
     /**

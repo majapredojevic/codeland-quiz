@@ -11,12 +11,14 @@ use CodeLandQuiz\Auth\TemporaryPasswordGenerator;
 use CodeLandQuiz\DTO\CreateTeacherDTO;
 use CodeLandQuiz\DTO\CreateTeacherResult;
 use CodeLandQuiz\DTO\ListTeachersDTO;
+use CodeLandQuiz\DTO\ResetTeacherPasswordResult;
 use CodeLandQuiz\DTO\TeacherListResultDTO;
 use CodeLandQuiz\DTO\UpdateTeacherDTO;
 use CodeLandQuiz\DTO\UserListItemDTO;
 use CodeLandQuiz\Model\NewUser;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Model\UserRole;
+use CodeLandQuiz\Repository\RefreshTokenRepository;
 use CodeLandQuiz\Repository\UserRepository;
 use InvalidArgumentException;
 
@@ -24,6 +26,7 @@ final readonly class UserManagementService
 {
     public function __construct(
         private UserRepository $users,
+        private RefreshTokenRepository $refreshTokens,
         private TemporaryPasswordGenerator $temporaryPasswordGenerator,
         private PasswordHasher $passwordHasher,
     ) {}
@@ -138,6 +141,31 @@ final readonly class UserManagementService
     public function deactivateTeacher(int $id): UserListItemDTO
     {
         return $this->changeTeacherStatus($id, false);
+    }
+
+    public function resetTeacherPassword(
+        int $id,
+    ): ResetTeacherPasswordResult {
+        $teacher = $this->users->findTeacherById($id);
+
+        if ($teacher === null) {
+            throw new TeacherNotFoundException('Teacher was not found.');
+        }
+
+        $temporaryPassword = $this->temporaryPasswordGenerator->generate();
+        $passwordHash = $this->passwordHasher->hash($temporaryPassword);
+
+        $this->refreshTokens->revokeAllForUser($teacher->getId());
+
+        $teacher->changePasswordHash($passwordHash);
+        $teacher->requirePasswordChange();
+
+        $this->users->save($teacher);
+
+        return new ResetTeacherPasswordResult(
+            user: $this->toUserListItem($teacher),
+            temporaryPassword: $temporaryPassword,
+        );
     }
 
     public function listTeachers(

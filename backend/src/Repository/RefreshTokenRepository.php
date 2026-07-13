@@ -13,4 +13,6 @@ interface RefreshTokenRepository
     public function findValidByPlainToken(string $plainToken): ?RefreshToken;
 
     public function revoke(int $refreshTokenId, ?int $replacedByTokenId = null): void;
+
+    public function revokeAllForUser(int $userId): int;
 }

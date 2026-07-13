@@ -179,6 +179,16 @@ final class Application
                 $adminOnlyMiddleware->handle(...),
             ],
         );
+
+        $this->router->post(
+            '/api/admin/users/{id}/reset-password',
+            $adminUserController->resetPassword(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
     }
 
     private function registerEvents(): void

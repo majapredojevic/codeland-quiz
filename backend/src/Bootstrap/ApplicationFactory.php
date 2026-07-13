@@ -128,9 +128,12 @@ final class ApplicationFactory
 
     public function createAdminUserController(): AdminUserController
     {
+        $refreshTokenRepository = new MySqlRefreshTokenRepository($this->database);
+
         return new AdminUserController(
             userManagementService: new UserManagementService(
                 users: new MySqlUserRepository($this->database),
+                refreshTokens: $refreshTokenRepository,
                 temporaryPasswordGenerator: new SecureTemporaryPasswordGenerator(),
                 passwordHasher: new BcryptPasswordHasher(),
             ),
