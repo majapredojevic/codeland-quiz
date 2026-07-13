@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Auth;
 
 use CodeLandQuiz\Config\AppConfig;
+use CodeLandQuiz\DTO\RefreshTokenResult;
 use CodeLandQuiz\Model\RefreshToken;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Repository\RefreshTokenRepository;
-use CodeLandQuiz\DTO\RefreshTokenResult;
 use DateTimeImmutable;
 use RuntimeException;
 
@@ -26,29 +26,33 @@ final readonly class DatabaseRefreshTokenService implements RefreshTokenService
     }
 
     public function rotate(string $refreshToken): RefreshTokenResult
-{
-    $existingToken = $this->refreshTokens->findValidByPlainToken($refreshToken);
+    {
+        $existingToken = $this->refreshTokens->findValidByTokenHash(
+            $this->hashToken($refreshToken),
+        );
 
-    if ($existingToken === null) {
-        throw new RuntimeException('Refresh token is invalid or expired.');
+        if ($existingToken === null) {
+            throw new RuntimeException('Refresh token is invalid or expired.');
+        }
+
+        $newToken = $this->createForUserId($existingToken->getUserId());
+
+        $this->refreshTokens->revoke(
+            $this->existingTokenId($existingToken),
+            $newToken['id'],
+        );
+
+        return new RefreshTokenResult(
+            userId: $existingToken->getUserId(),
+            refreshToken: $newToken['plainToken'],
+        );
     }
-
-    $newToken = $this->createForUserId($existingToken->getUserId());
-
-    $this->refreshTokens->revoke(
-        $this->existingTokenId($existingToken),
-        $newToken['id'],
-    );
-
-    return new RefreshTokenResult(
-        userId: $existingToken->getUserId(),
-        refreshToken: $newToken['plainToken'],
-    );
-}
 
     public function revoke(string $refreshToken): void
     {
-        $existingToken = $this->refreshTokens->findValidByPlainToken($refreshToken);
+        $existingToken = $this->refreshTokens->findValidByTokenHash(
+            $this->hashToken($refreshToken),
+        );
 
         if ($existingToken === null) {
             return;
@@ -83,15 +87,13 @@ final readonly class DatabaseRefreshTokenService implements RefreshTokenService
     }
 
     private function hashToken(string $plainToken): string
-{
-    $hash = password_hash($plainToken, PASSWORD_DEFAULT);
-
-    if ($hash === false) {
-        throw new RuntimeException('Refresh token could not be hashed.');
+    {
+        return hash_hmac(
+            'sha256',
+            $plainToken,
+            $this->config->getRefreshTokenHashKey(),
+        );
     }
-
-    return $hash;
-}
 
     private function existingTokenId(RefreshToken $refreshToken): int
     {

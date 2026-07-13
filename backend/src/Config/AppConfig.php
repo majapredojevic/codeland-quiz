@@ -23,6 +23,8 @@ final readonly class AppConfig
 
     private string $csrfTokenCookieName;
 
+    private string $refreshTokenHashKey;
+
     private int $jwtExpirationMinutes;
 
     private int $refreshTokenExpirationDays;
@@ -64,6 +66,7 @@ final readonly class AppConfig
         $this->refreshTokenCookieName = $this->environment->get('REFRESH_TOKEN_COOKIE_NAME');
         $this->cookiePath = $this->environment->get('COOKIE_PATH');
         $this->csrfTokenCookieName = $this->environment->get('CSRF_TOKEN_COOKIE_NAME');
+        $this->refreshTokenHashKey = $this->readRefreshTokenHashKey();
         $this->jwtExpirationMinutes = $this->environment->getInt('JWT_EXPIRATION_MINUTES');
         $this->refreshTokenExpirationDays = $this->environment->getInt('REFRESH_TOKEN_EXPIRATION_DAYS');
         $this->csrfTokenExpirationMinutes = $this->environment->getInt('CSRF_TOKEN_EXPIRATION_MINUTES');
@@ -121,6 +124,11 @@ final readonly class AppConfig
     public function getRefreshTokenExpirationDays(): int
     {
         return $this->refreshTokenExpirationDays;
+    }
+
+    public function getRefreshTokenHashKey(): string
+    {
+        return $this->refreshTokenHashKey;
     }
 
     public function getCsrfTokenExpirationMinutes(): int
@@ -223,6 +231,25 @@ final readonly class AppConfig
             ),
             static fn(string $extension): bool => $extension !== '',
         ));
+    }
+
+    private function readRefreshTokenHashKey(): string
+    {
+        if (!$this->environment->has('REFRESH_TOKEN_HASH_KEY')) {
+            throw new InvalidArgumentException(
+                'Refresh token hash key must contain at least 32 characters.',
+            );
+        }
+
+        $hashKey = $this->environment->get('REFRESH_TOKEN_HASH_KEY');
+
+        if (strlen($hashKey) < 32) {
+            throw new InvalidArgumentException(
+                'Refresh token hash key must contain at least 32 characters.',
+            );
+        }
+
+        return $hashKey;
     }
 
     private function ensurePositive(int $value, string $label): void

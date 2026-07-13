@@ -10,7 +10,7 @@ interface RefreshTokenRepository
 {
     public function save(RefreshToken $refreshToken): int;
 
-    public function findValidByPlainToken(string $plainToken): ?RefreshToken;
+    public function findValidByTokenHash(string $tokenHash): ?RefreshToken;
 
     public function revoke(int $refreshTokenId, ?int $replacedByTokenId = null): void;
 

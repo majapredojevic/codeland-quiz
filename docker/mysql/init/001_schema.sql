@@ -29,6 +29,7 @@ CREATE TABLE refresh_tokens (
     revoked_at TIMESTAMP NULL DEFAULT NULL,
     replaced_by_token_id BIGINT UNSIGNED NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_refresh_tokens_token_hash (token_hash),
     KEY idx_refresh_tokens_user_id (user_id),
     KEY idx_refresh_tokens_expires_at (expires_at),
     KEY idx_refresh_tokens_revoked_at (revoked_at),

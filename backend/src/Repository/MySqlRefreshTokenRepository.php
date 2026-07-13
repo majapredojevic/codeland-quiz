@@ -28,13 +28,13 @@ INSERT INTO refresh_tokens (
 )
 SQL;
 
-   private const FIND_VALID_SQL = <<<SQL
+    private const FIND_VALID_BY_TOKEN_HASH_SQL = <<<SQL
 SELECT id, user_id, token_hash, expires_at, revoked_at, replaced_by_token_id
 FROM refresh_tokens
-WHERE revoked_at IS NULL
+WHERE token_hash = :token_hash
+  AND revoked_at IS NULL
   AND expires_at > CURRENT_TIMESTAMP
-ORDER BY id DESC
-LIMIT 100
+LIMIT 1
 SQL;
 
     private const REVOKE_SQL = <<<SQL
@@ -82,18 +82,23 @@ SQL;
         return $id;
     }
 
-    public function findValidByPlainToken(string $plainToken): ?RefreshToken
+    public function findValidByTokenHash(string $tokenHash): ?RefreshToken
     {
-        $statement = $this->connection()->prepare(self::FIND_VALID_SQL);
-        $statement->execute();
+        $statement = $this->connection()->prepare(
+            self::FIND_VALID_BY_TOKEN_HASH_SQL,
+        );
 
-        while (($row = $statement->fetch()) !== false) {
-            if (password_verify($plainToken, (string) $row['token_hash'])) {
-                return $this->mapRowToRefreshToken($row);
-            }
+        $statement->execute([
+            'token_hash' => $tokenHash,
+        ]);
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
         }
 
-        return null;
+        return $this->mapRowToRefreshToken($row);
     }
 
     public function revoke(int $refreshTokenId, ?int $replacedByTokenId = null): void
