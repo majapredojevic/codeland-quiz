@@ -122,6 +122,22 @@ final class AdminUserController
         }
     }
 
+    public function activate(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        $this->changeTeacherStatus($response, $context, true);
+    }
+
+    public function deactivate(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        $this->changeTeacherStatus($response, $context, false);
+    }
+
     public function list(
         Request $request,
         Response $response,
@@ -175,6 +191,41 @@ final class AdminUserController
             ],
             'temporaryPassword' => $result->temporaryPassword,
         ];
+    }
+
+    private function changeTeacherStatus(
+        Response $response,
+        RequestContext $context,
+        bool $shouldBeActive,
+    ): void {
+        try {
+            $teacherId = $context->getRouteInt('id');
+            $teacher = $shouldBeActive
+                ? $this->userManagementService->activateTeacher($teacherId)
+                : $this->userManagementService->deactivateTeacher($teacherId);
+
+            $this->responseFactory->json($response, [
+                'user' => $this->userResponse($teacher),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (TeacherNotFoundException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                404,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
     }
 
     /**

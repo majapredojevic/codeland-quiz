@@ -107,6 +107,15 @@ WHERE id = :id
   AND deleted_at IS NULL
 SQL;
 
+    private const UPDATE_TEACHER_STATUS_SQL = <<<SQL
+UPDATE users
+SET is_active = :is_active
+WHERE id = :id
+  AND role = 'TEACHER'
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+SQL;
+
     public function __construct(
         private readonly Database $database,
     ) {}
@@ -266,6 +275,20 @@ SQL;
 
         if ($statement->rowCount() === 0) {
             throw new RuntimeException('Teacher profile was not updated.');
+        }
+    }
+
+    public function updateTeacherStatus(User $user): void
+    {
+        $statement = $this->connection()->prepare(self::UPDATE_TEACHER_STATUS_SQL);
+
+        $statement->execute([
+            'id' => $user->getId(),
+            'is_active' => $user->isActive() ? 1 : 0,
+        ]);
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('Teacher status was not updated.');
         }
     }
 

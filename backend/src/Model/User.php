@@ -13,7 +13,7 @@ final class User
         private string $passwordHash,
         private bool $mustChangePassword,
         private readonly UserRole $role,
-        private readonly bool $isActive,
+        private bool $isActive,
     ) {
     }
 
@@ -50,6 +50,16 @@ final class User
     public function isActive(): bool
     {
         return $this->isActive;
+    }
+
+    public function activate(): void
+    {
+        $this->isActive = true;
+    }
+
+    public function deactivate(): void
+    {
+        $this->isActive = false;
     }
 
     public function updateProfile(

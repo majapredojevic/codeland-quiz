@@ -130,6 +130,16 @@ final readonly class UserManagementService
         return $this->toUserListItem($teacher);
     }
 
+    public function activateTeacher(int $id): UserListItemDTO
+    {
+        return $this->changeTeacherStatus($id, true);
+    }
+
+    public function deactivateTeacher(int $id): UserListItemDTO
+    {
+        return $this->changeTeacherStatus($id, false);
+    }
+
     public function listTeachers(
         ListTeachersDTO $dto,
     ): TeacherListResultDTO
@@ -153,6 +163,31 @@ final readonly class UserManagementService
             totalItems: $totalItems,
             totalPages: $totalPages,
         );
+    }
+
+    private function changeTeacherStatus(
+        int $id,
+        bool $shouldBeActive,
+    ): UserListItemDTO {
+        $teacher = $this->users->findTeacherById($id);
+
+        if ($teacher === null) {
+            throw new TeacherNotFoundException('Teacher was not found.');
+        }
+
+        if ($teacher->isActive() === $shouldBeActive) {
+            return $this->toUserListItem($teacher);
+        }
+
+        if ($shouldBeActive) {
+            $teacher->activate();
+        } else {
+            $teacher->deactivate();
+        }
+
+        $this->users->updateTeacherStatus($teacher);
+
+        return $this->toUserListItem($teacher);
     }
 
     private function toUserListItem(User $teacher): UserListItemDTO

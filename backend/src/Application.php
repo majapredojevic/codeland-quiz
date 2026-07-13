@@ -159,6 +159,26 @@ final class Application
                 $adminOnlyMiddleware->handle(...),
             ],
         );
+
+        $this->router->patch(
+            '/api/admin/users/{id}/activate',
+            $adminUserController->activate(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->patch(
+            '/api/admin/users/{id}/deactivate',
+            $adminUserController->deactivate(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $adminOnlyMiddleware->handle(...),
+            ],
+        );
     }
 
     private function registerEvents(): void

@@ -23,6 +23,8 @@ interface UserRepository
 
     public function updateTeacherProfile(User $user): void;
 
+    public function updateTeacherStatus(User $user): void;
+
     /**
      * @return User[]
      */
