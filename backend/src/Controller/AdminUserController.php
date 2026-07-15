@@ -30,11 +30,18 @@ final class AdminUserController
     ) {
     }
 
-    public function __invoke(Request $request, Response $response): void
-    {
+    public function __invoke(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
         try {
+            $performedByUserId = $context->getAuthenticatedUser()->userId;
             $dto = CreateTeacherRequest::from($request);
-            $result = $this->userManagementService->createTeacher($dto);
+            $result = $this->userManagementService->createTeacher(
+                $dto,
+                $performedByUserId,
+            );
 
             $this->responseFactory->json(
                 $response,
@@ -90,8 +97,13 @@ final class AdminUserController
     ): void {
         try {
             $teacherId = $context->getRouteInt('id');
+            $performedByUserId = $context->getAuthenticatedUser()->userId;
             $dto = UpdateTeacherRequest::from($request);
-            $teacher = $this->userManagementService->updateTeacher($teacherId, $dto);
+            $teacher = $this->userManagementService->updateTeacher(
+                $teacherId,
+                $dto,
+                $performedByUserId,
+            );
 
             $this->responseFactory->json($response, [
                 'user' => $this->userResponse($teacher),
@@ -146,7 +158,11 @@ final class AdminUserController
     ): void {
         try {
             $teacherId = $context->getRouteInt('id');
-            $result = $this->userManagementService->resetTeacherPassword($teacherId);
+            $performedByUserId = $context->getAuthenticatedUser()->userId;
+            $result = $this->userManagementService->resetTeacherPassword(
+                $teacherId,
+                $performedByUserId,
+            );
 
             $this->responseFactory->json(
                 $response,
@@ -247,9 +263,16 @@ final class AdminUserController
     ): void {
         try {
             $teacherId = $context->getRouteInt('id');
+            $performedByUserId = $context->getAuthenticatedUser()->userId;
             $teacher = $shouldBeActive
-                ? $this->userManagementService->activateTeacher($teacherId)
-                : $this->userManagementService->deactivateTeacher($teacherId);
+                ? $this->userManagementService->activateTeacher(
+                    $teacherId,
+                    $performedByUserId,
+                )
+                : $this->userManagementService->deactivateTeacher(
+                    $teacherId,
+                    $performedByUserId,
+                );
 
             $this->responseFactory->json($response, [
                 'user' => $this->userResponse($teacher),

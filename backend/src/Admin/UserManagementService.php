@@ -6,6 +6,7 @@ namespace CodeLandQuiz\Admin;
 
 use CodeLandQuiz\Admin\Exception\TeacherEmailAlreadyExistsException;
 use CodeLandQuiz\Admin\Exception\TeacherNotFoundException;
+use CodeLandQuiz\Auth\AuditLogService;
 use CodeLandQuiz\Auth\PasswordHasher;
 use CodeLandQuiz\Auth\TemporaryPasswordGenerator;
 use CodeLandQuiz\DTO\CreateTeacherDTO;
@@ -15,20 +16,26 @@ use CodeLandQuiz\DTO\ResetTeacherPasswordResult;
 use CodeLandQuiz\DTO\TeacherListResultDTO;
 use CodeLandQuiz\DTO\UpdateTeacherDTO;
 use CodeLandQuiz\DTO\UserListItemDTO;
+use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\NewUser;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\RefreshTokenRepository;
 use CodeLandQuiz\Repository\UserRepository;
+use CodeLandQuiz\Support\TransactionManager;
 use InvalidArgumentException;
 
 final readonly class UserManagementService
 {
+    private const AUDIT_ENTITY_TYPE = 'USER';
+
     public function __construct(
         private UserRepository $users,
         private RefreshTokenRepository $refreshTokens,
         private TemporaryPasswordGenerator $temporaryPasswordGenerator,
         private PasswordHasher $passwordHasher,
+        private AuditLogService $auditLogService,
+        private TransactionManager $transactionManager,
     ) {}
 
     public function getTeacher(int $id): UserListItemDTO
@@ -42,28 +49,14 @@ final readonly class UserManagementService
         return $this->toUserListItem($teacher);
     }
 
-    public function createTeacher(CreateTeacherDTO $dto): CreateTeacherResult
-    {
+    public function createTeacher(
+        CreateTeacherDTO $dto,
+        int $performedByUserId,
+    ): CreateTeacherResult {
         $name = $this->normalizeName($dto->name);
         $email = $this->normalizeEmail($dto->email);
-
-        $existingUser = $this->users->findByEmailIncludingInactive($email);
-
-        if ($existingUser !== null) {
-            if (!$existingUser->isActive()) {
-                throw new TeacherEmailAlreadyExistsException(
-                    'A user with this email already exists but is inactive.',
-                );
-            }
-
-            throw new TeacherEmailAlreadyExistsException(
-                'A user with this email already exists.',
-            );
-        }
-
         $temporaryPassword = $this->temporaryPasswordGenerator->generate();
         $passwordHash = $this->passwordHasher->hash($temporaryPassword);
-
         $newUser = new NewUser(
             name: $name,
             email: $email,
@@ -73,7 +66,43 @@ final readonly class UserManagementService
             isActive: true,
         );
 
-        $userId = $this->users->create($newUser);
+        $userId = $this->transactionManager->transactional(function () use (
+            $email,
+            $name,
+            $newUser,
+            $performedByUserId,
+        ): int {
+            $existingUser = $this->users->findByEmailIncludingInactive($email);
+
+            if ($existingUser !== null) {
+                if (!$existingUser->isActive()) {
+                    throw new TeacherEmailAlreadyExistsException(
+                        'A user with this email already exists but is inactive.',
+                    );
+                }
+
+                throw new TeacherEmailAlreadyExistsException(
+                    'A user with this email already exists.',
+                );
+            }
+
+            $userId = $this->users->create($newUser);
+
+            $this->auditLogService->log(
+                action: AuditAction::TEACHER_CREATED,
+                userId: $performedByUserId,
+                entityType: self::AUDIT_ENTITY_TYPE,
+                entityId: $userId,
+                metadata: [
+                    'name' => $name,
+                    'email' => $email,
+                    'role' => UserRole::TEACHER->value,
+                    'isActive' => true,
+                ],
+            );
+
+            return $userId;
+        });
 
         return new CreateTeacherResult(
             userId: $userId,
@@ -87,64 +116,99 @@ final readonly class UserManagementService
     public function updateTeacher(
         int $id,
         UpdateTeacherDTO $dto,
+        int $performedByUserId,
     ): UserListItemDTO {
-        $teacher = $this->users->findTeacherById($id);
+        return $this->transactionManager->transactional(function () use (
+            $dto,
+            $id,
+            $performedByUserId,
+        ): UserListItemDTO {
+            $teacher = $this->users->findTeacherById($id);
 
-        if ($teacher === null) {
-            throw new TeacherNotFoundException('Teacher was not found.');
-        }
+            if ($teacher === null) {
+                throw new TeacherNotFoundException('Teacher was not found.');
+            }
 
-        $name = $dto->name === null
-            ? $teacher->getName()
-            : $this->normalizeName($dto->name);
-        $email = $dto->email === null
-            ? $teacher->getEmail()
-            : $this->normalizeEmail($dto->email);
+            $name = $dto->name === null
+                ? $teacher->getName()
+                : $this->normalizeName($dto->name);
+            $email = $dto->email === null
+                ? $teacher->getEmail()
+                : $this->normalizeEmail($dto->email);
 
-        if ($email !== $teacher->getEmail()) {
-            $existingUser = $this->users->findByEmailIncludingInactive($email);
+            if ($email !== $teacher->getEmail()) {
+                $existingUser = $this->users->findByEmailIncludingInactive($email);
 
-            if (
-                $existingUser !== null
-                && $existingUser->getId() !== $teacher->getId()
-            ) {
-                if (!$existingUser->isActive()) {
+                if (
+                    $existingUser !== null
+                    && $existingUser->getId() !== $teacher->getId()
+                ) {
+                    if (!$existingUser->isActive()) {
+                        throw new TeacherEmailAlreadyExistsException(
+                            'A user with this email already exists but is inactive.',
+                        );
+                    }
+
                     throw new TeacherEmailAlreadyExistsException(
-                        'A user with this email already exists but is inactive.',
+                        'A user with this email already exists.',
                     );
                 }
-
-                throw new TeacherEmailAlreadyExistsException(
-                    'A user with this email already exists.',
-                );
             }
-        }
 
-        if (
-            $name === $teacher->getName()
-            && $email === $teacher->getEmail()
-        ) {
+            $changes = [];
+
+            if ($name !== $teacher->getName()) {
+                $changes['name'] = [
+                    'from' => $teacher->getName(),
+                    'to' => $name,
+                ];
+            }
+
+            if ($email !== $teacher->getEmail()) {
+                $changes['email'] = [
+                    'from' => $teacher->getEmail(),
+                    'to' => $email,
+                ];
+            }
+
+            if ($changes === []) {
+                return $this->toUserListItem($teacher);
+            }
+
+            $teacher->updateProfile($name, $email);
+            $this->users->updateTeacherProfile($teacher);
+
+            $this->auditLogService->log(
+                action: AuditAction::TEACHER_UPDATED,
+                userId: $performedByUserId,
+                entityType: self::AUDIT_ENTITY_TYPE,
+                entityId: $teacher->getId(),
+                metadata: [
+                    'changes' => $changes,
+                ],
+            );
+
             return $this->toUserListItem($teacher);
-        }
-
-        $teacher->updateProfile($name, $email);
-        $this->users->updateTeacherProfile($teacher);
-
-        return $this->toUserListItem($teacher);
+        });
     }
 
-    public function activateTeacher(int $id): UserListItemDTO
-    {
-        return $this->changeTeacherStatus($id, true);
+    public function activateTeacher(
+        int $id,
+        int $performedByUserId,
+    ): UserListItemDTO {
+        return $this->changeTeacherStatus($id, true, $performedByUserId);
     }
 
-    public function deactivateTeacher(int $id): UserListItemDTO
-    {
-        return $this->changeTeacherStatus($id, false);
+    public function deactivateTeacher(
+        int $id,
+        int $performedByUserId,
+    ): UserListItemDTO {
+        return $this->changeTeacherStatus($id, false, $performedByUserId);
     }
 
     public function resetTeacherPassword(
         int $id,
+        int $performedByUserId,
     ): ResetTeacherPasswordResult {
         $teacher = $this->users->findTeacherById($id);
 
@@ -155,12 +219,29 @@ final readonly class UserManagementService
         $temporaryPassword = $this->temporaryPasswordGenerator->generate();
         $passwordHash = $this->passwordHasher->hash($temporaryPassword);
 
-        $this->refreshTokens->revokeAllForUser($teacher->getId());
-
         $teacher->changePasswordHash($passwordHash);
         $teacher->requirePasswordChange();
 
-        $this->users->save($teacher);
+        $this->transactionManager->transactional(function () use (
+            $performedByUserId,
+            $teacher,
+        ): void {
+            $this->users->save($teacher);
+            $revokedRefreshTokens = $this->refreshTokens->revokeAllForUser(
+                $teacher->getId(),
+            );
+
+            $this->auditLogService->log(
+                action: AuditAction::TEACHER_PASSWORD_RESET,
+                userId: $performedByUserId,
+                entityType: self::AUDIT_ENTITY_TYPE,
+                entityId: $teacher->getId(),
+                metadata: [
+                    'mustChangePassword' => true,
+                    'revokedRefreshTokens' => $revokedRefreshTokens,
+                ],
+            );
+        });
 
         return new ResetTeacherPasswordResult(
             user: $this->toUserListItem($teacher),
@@ -196,26 +277,50 @@ final readonly class UserManagementService
     private function changeTeacherStatus(
         int $id,
         bool $shouldBeActive,
+        int $performedByUserId,
     ): UserListItemDTO {
-        $teacher = $this->users->findTeacherById($id);
+        return $this->transactionManager->transactional(function () use (
+            $id,
+            $performedByUserId,
+            $shouldBeActive,
+        ): UserListItemDTO {
+            $teacher = $this->users->findTeacherById($id);
 
-        if ($teacher === null) {
-            throw new TeacherNotFoundException('Teacher was not found.');
-        }
+            if ($teacher === null) {
+                throw new TeacherNotFoundException('Teacher was not found.');
+            }
 
-        if ($teacher->isActive() === $shouldBeActive) {
+            if ($teacher->isActive() === $shouldBeActive) {
+                return $this->toUserListItem($teacher);
+            }
+
+            $wasActive = $teacher->isActive();
+
+            if ($shouldBeActive) {
+                $teacher->activate();
+            } else {
+                $teacher->deactivate();
+            }
+
+            $this->users->updateTeacherStatus($teacher);
+
+            $this->auditLogService->log(
+                action: $shouldBeActive
+                    ? AuditAction::TEACHER_ACTIVATED
+                    : AuditAction::TEACHER_DEACTIVATED,
+                userId: $performedByUserId,
+                entityType: self::AUDIT_ENTITY_TYPE,
+                entityId: $teacher->getId(),
+                metadata: [
+                    'status' => [
+                        'from' => $wasActive,
+                        'to' => $shouldBeActive,
+                    ],
+                ],
+            );
+
             return $this->toUserListItem($teacher);
-        }
-
-        if ($shouldBeActive) {
-            $teacher->activate();
-        } else {
-            $teacher->deactivate();
-        }
-
-        $this->users->updateTeacherStatus($teacher);
-
-        return $this->toUserListItem($teacher);
+        });
     }
 
     private function toUserListItem(User $teacher): UserListItemDTO

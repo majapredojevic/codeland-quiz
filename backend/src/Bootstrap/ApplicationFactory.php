@@ -24,6 +24,7 @@ use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
+use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Middleware\AuthenticationMiddleware;
 use CodeLandQuiz\Auth\AuthorizationService;
@@ -128,14 +129,18 @@ final class ApplicationFactory
 
     public function createAdminUserController(): AdminUserController
     {
+        $userRepository = new MySqlUserRepository($this->database);
         $refreshTokenRepository = new MySqlRefreshTokenRepository($this->database);
+        $auditLogRepository = new MySqlAuditLogRepository($this->database);
 
         return new AdminUserController(
             userManagementService: new UserManagementService(
-                users: new MySqlUserRepository($this->database),
+                users: $userRepository,
                 refreshTokens: $refreshTokenRepository,
                 temporaryPasswordGenerator: new SecureTemporaryPasswordGenerator(),
                 passwordHasher: new BcryptPasswordHasher(),
+                auditLogService: new AuditLogService($auditLogRepository),
+                transactionManager: new PdoTransactionManager($this->database),
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,
