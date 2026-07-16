@@ -6,15 +6,13 @@ namespace CodeLandQuiz;
 
 use CodeLandQuiz\Bootstrap\ApplicationFactory;
 use CodeLandQuiz\Controller\HealthController;
+use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Support\Router;
 use CodeLandQuiz\WebSocket\EchoGateway;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
-use CodeLandQuiz\Model\UserRole;
-use CodeLandQuiz\Http\RequestContext;
-use CodeLandQuiz\Support\JsonResponse;
 
 final class Application
 {
@@ -101,6 +99,16 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
+            '/api/auth/change-password',
+            $this->applicationFactory->createChangePasswordController(),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
             ],
         );
 

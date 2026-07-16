@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Bootstrap;
 
 use CodeLandQuiz\Auth\AuditLogService;
+use CodeLandQuiz\Auth\AuthorizationService;
 use CodeLandQuiz\Auth\AuthCookieService;
 use CodeLandQuiz\Auth\AuthService;
 use CodeLandQuiz\Auth\BcryptPasswordHasher;
@@ -12,12 +13,22 @@ use CodeLandQuiz\Auth\DatabaseRefreshTokenService;
 use CodeLandQuiz\Auth\DefaultCsrfTokenService;
 use CodeLandQuiz\Auth\JwtTokenService;
 use CodeLandQuiz\Auth\LoginAttemptService;
+use CodeLandQuiz\Auth\SecureTemporaryPasswordGenerator;
+use CodeLandQuiz\Auth\UserService;
+use CodeLandQuiz\Admin\UserManagementService;
 use CodeLandQuiz\Config\AppConfig;
+use CodeLandQuiz\Controller\AdminUserController;
 use CodeLandQuiz\Controller\AuthController;
-use CodeLandQuiz\Controller\RefreshController;
+use CodeLandQuiz\Controller\ChangePasswordController;
 use CodeLandQuiz\Controller\LogoutController;
+use CodeLandQuiz\Controller\MeController;
+use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Middleware\AuthenticationMiddleware;
+use CodeLandQuiz\Middleware\CsrfMiddleware;
+use CodeLandQuiz\Middleware\RoleMiddleware;
+use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
@@ -25,16 +36,6 @@ use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
-use CodeLandQuiz\Controller\MeController;
-use CodeLandQuiz\Middleware\AuthenticationMiddleware;
-use CodeLandQuiz\Auth\AuthorizationService;
-use CodeLandQuiz\Middleware\RoleMiddleware;
-use CodeLandQuiz\Model\UserRole;
-use CodeLandQuiz\Admin\UserManagementService;
-use CodeLandQuiz\Auth\SecureTemporaryPasswordGenerator;
-use CodeLandQuiz\Controller\AdminUserController;
-use CodeLandQuiz\Middleware\CsrfMiddleware;
-
 
 final class ApplicationFactory
 {
@@ -144,6 +145,33 @@ final class ApplicationFactory
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,
+        );
+    }
+
+    public function createChangePasswordController(): ChangePasswordController
+    {
+        $userRepository = new MySqlUserRepository($this->database);
+        $refreshTokenRepository = new MySqlRefreshTokenRepository(
+            $this->database,
+        );
+        $auditLogRepository = new MySqlAuditLogRepository(
+            $this->database,
+        );
+
+        return new ChangePasswordController(
+            userService: new UserService(
+                users: $userRepository,
+                passwordHasher: new BcryptPasswordHasher(),
+                refreshTokens: $refreshTokenRepository,
+                auditLogService: new AuditLogService(
+                    $auditLogRepository,
+                ),
+                transactionManager: new PdoTransactionManager(
+                    $this->database,
+                ),
+            ),
+            authCookieService: $this->createAuthCookieService(),
+            responseFactory: new ResponseFactory(),
         );
     }
 
