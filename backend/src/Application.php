@@ -71,6 +71,10 @@ final class Application
         $authenticationMiddleware =
             $this->applicationFactory->createAuthenticationMiddleware();
 
+        $passwordChangeRequiredMiddleware =
+            $this->applicationFactory
+                ->createPasswordChangeRequiredMiddleware();
+
         $adminOnlyMiddleware =
             $this->applicationFactory->createRoleMiddleware(
                 UserRole::ADMIN,
@@ -93,15 +97,6 @@ final class Application
             ],
         );
 
-        $this->router->get(
-            '/api/auth/admin-test',
-            $this->applicationFactory->createMeController(),
-            [
-                $authenticationMiddleware->handle(...),
-                $adminOnlyMiddleware->handle(...),
-            ],
-        );
-
         $this->router->post(
             '/api/auth/change-password',
             $this->applicationFactory->createChangePasswordController(),
@@ -118,6 +113,7 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -127,6 +123,7 @@ final class Application
             $adminUserController->list(...),
             [
                 $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -145,6 +142,7 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -154,6 +152,7 @@ final class Application
             $adminUserController->get(...),
             [
                 $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -164,6 +163,7 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -174,6 +174,7 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -184,6 +185,7 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );
@@ -194,6 +196,7 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
                 $adminOnlyMiddleware->handle(...),
             ],
         );

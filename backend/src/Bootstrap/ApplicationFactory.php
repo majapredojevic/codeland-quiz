@@ -27,6 +27,7 @@ use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Middleware\AuthenticationMiddleware;
 use CodeLandQuiz\Middleware\CsrfMiddleware;
+use CodeLandQuiz\Middleware\PasswordChangeRequiredMiddleware;
 use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
@@ -114,6 +115,15 @@ final class ApplicationFactory
             ),
             cookieReader: new CookieReader(),
             config: $this->config,
+            responseFactory: new ResponseFactory(),
+            users: new MySqlUserRepository($this->database),
+        );
+    }
+
+    public function createPasswordChangeRequiredMiddleware():
+        PasswordChangeRequiredMiddleware
+    {
+        return new PasswordChangeRequiredMiddleware(
             responseFactory: new ResponseFactory(),
         );
     }

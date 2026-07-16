@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Auth;
 
 use CodeLandQuiz\DTO\AccessTokenPayload;
+use CodeLandQuiz\DTO\CurrentUserDTO;
 use CodeLandQuiz\Model\UserRole;
 use RuntimeException;
 
 final readonly class AuthorizationService
 {
     public function isGranted(
-        AccessTokenPayload $user,
+        AccessTokenPayload|CurrentUserDTO $user,
         UserRole ...$allowedRoles,
     ): bool {
         return in_array(
@@ -22,7 +23,7 @@ final readonly class AuthorizationService
     }
 
     public function ensureGranted(
-        AccessTokenPayload $user,
+        AccessTokenPayload|CurrentUserDTO $user,
         UserRole ...$allowedRoles,
     ): void {
         if (!$this->isGranted($user, ...$allowedRoles)) {

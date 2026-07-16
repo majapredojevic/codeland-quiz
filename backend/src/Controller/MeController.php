@@ -23,13 +23,15 @@ final readonly class MeController
         RequestContext $context,
     ): void {
         try {
-            $user = $context->getAuthenticatedUser();
+            $user = $context->getCurrentUser();
 
             $this->responseFactory->json($response, [
                 'user' => [
-                    'id' => $user->userId,
+                    'id' => $user->id,
+                    'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role->value,
+                    'mustChangePassword' => $user->mustChangePassword,
                 ],
             ]);
         } catch (Throwable) {

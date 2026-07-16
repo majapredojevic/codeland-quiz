@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Http;
 
 use CodeLandQuiz\DTO\AccessTokenPayload;
+use CodeLandQuiz\DTO\CurrentUserDTO;
 use InvalidArgumentException;
 use RuntimeException;
 
 final class RequestContext
 {
     private ?AccessTokenPayload $authenticatedUser = null;
+
+    private ?CurrentUserDTO $currentUser = null;
 
     /**
      * @var array<string, string>
@@ -34,6 +37,25 @@ final class RequestContext
     public function hasAuthenticatedUser(): bool
     {
         return $this->authenticatedUser !== null;
+    }
+
+    public function setCurrentUser(CurrentUserDTO $currentUser): void
+    {
+        $this->currentUser = $currentUser;
+    }
+
+    public function getCurrentUser(): CurrentUserDTO
+    {
+        if ($this->currentUser === null) {
+            throw new RuntimeException('Current user is not set.');
+        }
+
+        return $this->currentUser;
+    }
+
+    public function hasCurrentUser(): bool
+    {
+        return $this->currentUser !== null;
     }
 
     /**

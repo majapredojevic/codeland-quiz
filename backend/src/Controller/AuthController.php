@@ -9,8 +9,8 @@ use CodeLandQuiz\Auth\AuthService;
 use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
 use CodeLandQuiz\Http\JsonRequest;
-use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Http\RequestContext;
+use CodeLandQuiz\Http\ResponseFactory;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
@@ -25,10 +25,14 @@ final class AuthController
         private readonly AuthService $authService,
         private readonly AuthCookieService $authCookieService,
         private readonly ResponseFactory $responseFactory,
-    ) {}
+    ) {
+    }
 
-    public function __invoke(Request $request, Response $response,  RequestContext $context): void
-    {
+    public function __invoke(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
         try {
             $body = JsonRequest::from($request);
 
@@ -58,11 +62,23 @@ final class AuthController
                 $this->createLoginResponse($loginResult),
             );
         } catch (InvalidArgumentException $exception) {
-            $this->responseFactory->error($response, $exception->getMessage(), 400);
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
         } catch (RuntimeException $exception) {
-            $this->responseFactory->error($response, $exception->getMessage(), 401);
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                401,
+            );
         } catch (Throwable) {
-            $this->responseFactory->error($response, 'Internal server error.', 500);
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
         }
     }
 
@@ -78,6 +94,7 @@ final class AuthController
                 'name' => $loginResult->userName,
                 'email' => $loginResult->userEmail,
                 'role' => $loginResult->userRole->value,
+                'mustChangePassword' => $loginResult->mustChangePassword,
             ],
         ];
     }

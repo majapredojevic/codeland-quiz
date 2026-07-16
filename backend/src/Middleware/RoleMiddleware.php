@@ -35,7 +35,7 @@ final readonly class RoleMiddleware
         callable $next,
     ): void {
         try {
-            $user = $context->getAuthenticatedUser();
+            $user = $context->getCurrentUser();
 
             $this->authorizationService->ensureGranted(
                 $user,

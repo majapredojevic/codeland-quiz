@@ -7,9 +7,9 @@ namespace CodeLandQuiz\Auth;
 use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
+use CodeLandQuiz\DTO\RefreshResult;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Repository\UserRepository;
-use CodeLandQuiz\DTO\RefreshResult;
 use RuntimeException;
 
 final readonly class AuthService
@@ -25,7 +25,8 @@ final readonly class AuthService
         private readonly LoginAttemptService $loginAttemptService,
         private readonly AuditLogService $auditLogService,
         private readonly AppConfig $config,
-    ) {}
+    ) {
+    }
 
     public function login(LoginDTO $dto, ?string $userAgent = null): LoginResult
     {
@@ -82,6 +83,7 @@ final readonly class AuthService
             userName: $user->getName(),
             userEmail: $user->getEmail(),
             userRole: $user->getRole(),
+            mustChangePassword: $user->mustChangePassword(),
         );
     }
 

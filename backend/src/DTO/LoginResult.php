@@ -17,6 +17,7 @@ final readonly class LoginResult
         public string $userName,
         public string $userEmail,
         public UserRole $userRole,
+        public bool $mustChangePassword,
     ) {
     }
 }
