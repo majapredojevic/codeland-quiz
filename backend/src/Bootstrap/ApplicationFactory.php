@@ -164,10 +164,13 @@ final class ApplicationFactory
     public function createTopicController(): TopicController
     {
         $topicRepository = new MySqlTopicRepository($this->database);
+        $auditLogRepository = new MySqlAuditLogRepository($this->database);
 
         return new TopicController(
             topicService: new TopicService(
                 topics: $topicRepository,
+                auditLogService: new AuditLogService($auditLogRepository),
+                transactionManager: new PdoTransactionManager($this->database),
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,
