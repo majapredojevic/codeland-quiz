@@ -23,6 +23,7 @@ use CodeLandQuiz\Controller\ChangePasswordController;
 use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\RefreshController;
+use CodeLandQuiz\Controller\TopicController;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Middleware\AuthenticationMiddleware;
@@ -33,10 +34,12 @@ use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
+use CodeLandQuiz\Repository\MySqlTopicRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
+use CodeLandQuiz\Topic\TopicService;
 
 final class ApplicationFactory
 {
@@ -152,6 +155,19 @@ final class ApplicationFactory
                 passwordHasher: new BcryptPasswordHasher(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
+            ),
+            responseFactory: new ResponseFactory(),
+            config: $this->config,
+        );
+    }
+
+    public function createTopicController(): TopicController
+    {
+        $topicRepository = new MySqlTopicRepository($this->database);
+
+        return new TopicController(
+            topicService: new TopicService(
+                topics: $topicRepository,
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,

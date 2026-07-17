@@ -89,6 +89,9 @@ final class Application
         $adminUserController =
             $this->applicationFactory->createAdminUserController();
 
+        $topicController =
+            $this->applicationFactory->createTopicController();
+
         $this->router->get(
             '/api/auth/me',
             $this->applicationFactory->createMeController(),
@@ -127,6 +130,27 @@ final class Application
                 $adminOnlyMiddleware->handle(...),
             ],
         );
+
+        $this->router->get(
+            '/api/topics',
+            $topicController->list(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/topics/{id}',
+            $topicController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
         $this->router->post(
             '/api/auth/logout',
             $this->applicationFactory->createLogoutController(),
