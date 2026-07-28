@@ -330,11 +330,20 @@ CREATE TABLE session_question_options (
 CREATE TABLE session_participants (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     session_id BIGINT UNSIGNED NOT NULL,
-    student_id BIGINT UNSIGNED NOT NULL,
+
+    participant_type ENUM(
+        'REGISTERED',
+        'GUEST'
+    ) NOT NULL,
+
+    student_id BIGINT UNSIGNED NULL,
+
     nickname VARCHAR(100) NOT NULL,
     avatar_key VARCHAR(80) NOT NULL,
+
     total_score INT NOT NULL DEFAULT 0,
     is_connected BOOLEAN NOT NULL DEFAULT TRUE,
+
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     disconnected_at TIMESTAMP NULL DEFAULT NULL,
 
@@ -342,17 +351,46 @@ CREATE TABLE session_participants (
         session_id,
         student_id
     ),
-    KEY idx_session_participants_session_id (session_id),
-    KEY idx_session_participants_student_id (student_id),
-    KEY idx_session_participants_joined_at (joined_at),
+
+    UNIQUE KEY uq_session_participants_session_nickname (
+        session_id,
+        nickname
+    ),
+
+    KEY idx_session_participants_session_id (
+        session_id
+    ),
+
+    KEY idx_session_participants_student_id (
+        student_id
+    ),
+
+    KEY idx_session_participants_joined_at (
+        joined_at
+    ),
+
+    CONSTRAINT chk_session_participants_identity
+        CHECK (
+            (
+                participant_type = 'REGISTERED'
+                AND student_id IS NOT NULL
+            )
+            OR
+            (
+                participant_type = 'GUEST'
+                AND student_id IS NULL
+            )
+        ),
 
     CONSTRAINT fk_session_participants_session_id
-        FOREIGN KEY (session_id) REFERENCES quiz_sessions (id)
+        FOREIGN KEY (session_id)
+        REFERENCES quiz_sessions (id)
         ON DELETE CASCADE,
 
     CONSTRAINT fk_session_participants_student_id
-        FOREIGN KEY (student_id) REFERENCES students (id)
-        ON DELETE CASCADE
+        FOREIGN KEY (student_id)
+        REFERENCES students (id)
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
