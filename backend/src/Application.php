@@ -197,6 +197,17 @@ final class Application
             ],
         );
 
+        $this->router->put(
+            '/api/quizzes/{quizId}/questions/order',
+            $questionController->reorder(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
         $this->router->post(
             '/api/quizzes/{quizId}/questions',
             $questionController->create(...),
@@ -244,6 +255,28 @@ final class Application
         $this->router->patch(
             '/api/quizzes/{id}',
             $quizController->update(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->patch(
+            '/api/quizzes/{id}/activate',
+            $quizController->activate(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->patch(
+            '/api/quizzes/{id}/deactivate',
+            $quizController->deactivate(...),
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),

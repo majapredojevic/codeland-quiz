@@ -135,6 +135,15 @@ WHERE id = :id
   AND is_deleted = FALSE
 SQL;
 
+    private const UPDATE_ACTIVE_STATUS_SQL = <<<SQL
+UPDATE quizzes
+SET is_active = :is_active,
+    updated_by = :updated_by,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = :quiz_id
+  AND is_deleted = FALSE
+SQL;
+
     public function __construct(
         private Database $database,
     ) {
@@ -299,6 +308,20 @@ SQL;
     ): void {
         $statement = $this->connection()->prepare(self::TOUCH_SQL);
         $statement->bindValue(':id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(':updated_by', $actorUserId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function updateActiveStatus(
+        int $quizId,
+        bool $isActive,
+        int $actorUserId,
+    ): void {
+        $statement = $this->connection()->prepare(
+            self::UPDATE_ACTIVE_STATUS_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(':is_active', $isActive ? 1 : 0, PDO::PARAM_INT);
         $statement->bindValue(':updated_by', $actorUserId, PDO::PARAM_INT);
         $statement->execute();
     }

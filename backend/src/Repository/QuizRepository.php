@@ -61,4 +61,10 @@ interface QuizRepository
         int $quizId,
         int $actorUserId,
     ): void;
+
+    public function updateActiveStatus(
+        int $quizId,
+        bool $isActive,
+        int $actorUserId,
+    ): void;
 }

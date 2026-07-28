@@ -9,6 +9,7 @@ use CodeLandQuiz\DTO\CreateQuestionDTO;
 use CodeLandQuiz\DTO\QuestionItemDTO;
 use CodeLandQuiz\DTO\QuestionOptionInputDTO;
 use CodeLandQuiz\DTO\QuestionOptionItemDTO;
+use CodeLandQuiz\DTO\ReorderQuestionsDTO;
 use CodeLandQuiz\DTO\UpdateQuestionDTO;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\QuestionOptionOverview;
@@ -30,6 +31,7 @@ final readonly class QuestionService
     public function __construct(
         private QuestionRepository $questions,
         private QuizRepository $quizzes,
+        private QuestionContentValidator $questionContentValidator,
         private AuditLogService $auditLogService,
         private TransactionManager $transactionManager,
     ) {
@@ -72,7 +74,7 @@ final readonly class QuestionService
         int $quizId,
         CreateQuestionDTO $dto,
     ): QuestionItemDTO {
-        $this->validateOptions($dto->questionType, $dto->options);
+        $this->validateOptionInputs($dto->questionType, $dto->options);
 
         $questionId = $this->transactionManager->transactional(
             function () use ($actorUserId, $dto, $quizId): int {
@@ -193,7 +195,7 @@ final readonly class QuestionService
                     ? (array) $dto->options
                     : $this->toOptionInputs($question->options);
 
-                $this->validateOptions($questionType, $options);
+                $this->validateOptionInputs($questionType, $options);
 
                 $changedFields = $this->changedScalarFields(
                     $question,
@@ -308,7 +310,21 @@ final readonly class QuestionService
                     $quizId,
                     $question->questionOrder,
                 );
-                $this->quizzes->touch($quizId, $actorUserId);
+                $remainingQuestionCount = $this->questions->countActiveByQuizId(
+                    $quizId,
+                );
+                $quizAutomaticallyDeactivated = $quiz->isActive
+                    && $remainingQuestionCount === 0;
+
+                if ($quizAutomaticallyDeactivated) {
+                    $this->quizzes->updateActiveStatus(
+                        $quizId,
+                        false,
+                        $actorUserId,
+                    );
+                } else {
+                    $this->quizzes->touch($quizId, $actorUserId);
+                }
 
                 $this->auditLogService->log(
                     action: AuditAction::QUESTION_DELETED,
@@ -320,10 +336,88 @@ final readonly class QuestionService
                         'questionType' => $question->questionType->value,
                         'deletedQuestionOrder' => $question->questionOrder,
                         'optionCount' => count($question->options),
+                        'quizAutomaticallyDeactivated' =>
+                            $quizAutomaticallyDeactivated,
+                    ],
+                );
+
+                if ($quizAutomaticallyDeactivated) {
+                    $this->auditLogService->log(
+                        action: AuditAction::QUIZ_DEACTIVATED,
+                        userId: $actorUserId,
+                        entityType: 'QUIZ',
+                        entityId: $quizId,
+                        metadata: [
+                            'reason' => 'LAST_QUESTION_DELETED',
+                            'questionCount' => 0,
+                        ],
+                    );
+                }
+            },
+        );
+    }
+
+    /**
+     * @return QuestionItemDTO[]
+     */
+    public function reorderQuestions(
+        int $actorUserId,
+        int $quizId,
+        ReorderQuestionsDTO $dto,
+    ): array {
+        $this->transactionManager->transactional(
+            function () use ($actorUserId, $dto, $quizId): void {
+                $quiz = $this->quizzes->findByIdForUpdate($quizId);
+
+                if ($quiz === null) {
+                    throw new QuizNotFoundException('Quiz was not found.');
+                }
+
+                if ($this->quizzes->hasOpenSessions($quizId)) {
+                    throw new QuizContentLockedException(
+                        'Quiz content cannot be changed while it has an open session.',
+                    );
+                }
+
+                $activeQuestionIds =
+                    $this->questions->findActiveIdsOrderedForUpdate($quizId);
+
+                $this->ensureCompleteQuestionIdList(
+                    $dto->questionIds,
+                    $activeQuestionIds,
+                );
+
+                if ($dto->questionIds === $activeQuestionIds) {
+                    return;
+                }
+
+                $this->questions->moveActiveOrdersToTemporaryValues($quizId);
+
+                foreach ($dto->questionIds as $index => $questionId) {
+                    $this->questions->updateQuestionOrder(
+                        $quizId,
+                        $questionId,
+                        $index + 1,
+                    );
+                }
+
+                $this->quizzes->touch($quizId, $actorUserId);
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUESTIONS_REORDERED,
+                    userId: $actorUserId,
+                    entityType: 'QUIZ',
+                    entityId: $quizId,
+                    metadata: [
+                        'questionCount' => count($dto->questionIds),
+                        'previousQuestionIds' => $activeQuestionIds,
+                        'newQuestionIds' => $dto->questionIds,
                     ],
                 );
             },
         );
+
+        return $this->listQuestions($quizId);
     }
 
     private function ensureQuizExists(int $quizId): void
@@ -336,113 +430,63 @@ final readonly class QuestionService
     /**
      * @param QuestionOptionInputDTO[] $options
      */
-    private function validateOptions(
+    private function validateOptionInputs(
         QuestionType $questionType,
         array $options,
     ): void {
-        $this->ensureUniqueOptionTexts($options);
-        $correctOptionCount = $this->correctOptionCount($options);
-
-        if ($questionType === QuestionType::TRUE_FALSE) {
-            $this->validateTrueFalseOptions($options, $correctOptionCount);
-
-            return;
-        }
-
-        if ($questionType === QuestionType::SINGLE_CHOICE) {
-            $this->validateSingleChoiceOptions($options, $correctOptionCount);
-
-            return;
-        }
-
-        $this->validateMultipleChoiceOptions($options, $correctOptionCount);
+        $this->questionContentValidator->validateOptions(
+            $questionType,
+            $this->optionTexts($options),
+            $this->correctStates($options),
+        );
     }
+
 
     /**
      * @param QuestionOptionInputDTO[] $options
+     *
+     * @return string[]
      */
-    private function ensureUniqueOptionTexts(array $options): void
+    private function optionTexts(array $options): array
     {
-        $seenOptionTexts = [];
-
-        foreach ($options as $option) {
-            $normalizedText = mb_strtolower($option->optionText, 'UTF-8');
-
-            if (isset($seenOptionTexts[$normalizedText])) {
-                throw new InvalidArgumentException(
-                    'Question option texts must be unique.',
-                );
-            }
-
-            $seenOptionTexts[$normalizedText] = true;
-        }
+        return array_map(
+            static fn (QuestionOptionInputDTO $option): string =>
+                $option->optionText,
+            $options,
+        );
     }
 
     /**
      * @param QuestionOptionInputDTO[] $options
+     *
+     * @return bool[]
      */
-    private function validateTrueFalseOptions(
-        array $options,
-        int $correctOptionCount,
-    ): void {
-        if (count($options) !== 2) {
-            throw new InvalidArgumentException(
-                'TRUE_FALSE questions must have exactly two options.',
-            );
-        }
-
-        if (
-            $options[0]->optionText !== 'Tačno'
-            || $options[1]->optionText !== 'Netačno'
-        ) {
-            throw new InvalidArgumentException(
-                'TRUE_FALSE options must be "Tačno" and "Netačno" in that order.',
-            );
-        }
-
-        if ($correctOptionCount !== 1) {
-            throw new InvalidArgumentException(
-                'TRUE_FALSE questions must have exactly one correct option.',
-            );
-        }
+    private function correctStates(array $options): array
+    {
+        return array_map(
+            static fn (QuestionOptionInputDTO $option): bool =>
+                $option->isCorrect,
+            $options,
+        );
     }
 
     /**
-     * @param QuestionOptionInputDTO[] $options
+     * @param int[] $questionIds
+     * @param int[] $activeQuestionIds
      */
-    private function validateSingleChoiceOptions(
-        array $options,
-        int $correctOptionCount,
+    private function ensureCompleteQuestionIdList(
+        array $questionIds,
+        array $activeQuestionIds,
     ): void {
-        if (!in_array(count($options), [2, 4], true)) {
-            throw new InvalidArgumentException(
-                'SINGLE_CHOICE questions must have exactly two or four options.',
-            );
-        }
+        $sortedQuestionIds = $questionIds;
+        $sortedActiveQuestionIds = $activeQuestionIds;
 
-        if ($correctOptionCount !== 1) {
-            throw new InvalidArgumentException(
-                'SINGLE_CHOICE questions must have exactly one correct option.',
-            );
-        }
-    }
+        sort($sortedQuestionIds, SORT_NUMERIC);
+        sort($sortedActiveQuestionIds, SORT_NUMERIC);
 
-    /**
-     * @param QuestionOptionInputDTO[] $options
-     */
-    private function validateMultipleChoiceOptions(
-        array $options,
-        int $correctOptionCount,
-    ): void {
-        if (count($options) !== 4) {
+        if ($sortedQuestionIds !== $sortedActiveQuestionIds) {
             throw new InvalidArgumentException(
-                'MULTIPLE_CHOICE questions must have exactly four options.',
-            );
-        }
-
-        if (!in_array($correctOptionCount, [2, 3], true)) {
-            throw new InvalidArgumentException(
-                'MULTIPLE_CHOICE questions must have two or three correct options.',
+                'Question IDs must contain every active quiz question exactly once.',
             );
         }
     }

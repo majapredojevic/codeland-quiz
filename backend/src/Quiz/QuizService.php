@@ -13,12 +13,17 @@ use CodeLandQuiz\DTO\UpdateQuizDTO;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\Quiz;
 use CodeLandQuiz\Model\QuizOverview;
+use CodeLandQuiz\Question\QuestionContentValidator;
+use CodeLandQuiz\Repository\QuestionRepository;
 use CodeLandQuiz\Repository\QuizRepository;
 use CodeLandQuiz\Repository\TopicRepository;
 use CodeLandQuiz\Support\TransactionManager;
 use CodeLandQuiz\Topic\Exception\TopicNotFoundException;
+use CodeLandQuiz\Quiz\Exception\QuizCannotBeActivatedException;
 use CodeLandQuiz\Quiz\Exception\QuizHasOpenSessionsException;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
+use CodeLandQuiz\Quiz\Exception\QuizStatusLockedException;
+use InvalidArgumentException;
 use RuntimeException;
 
 final readonly class QuizService
@@ -28,6 +33,8 @@ final readonly class QuizService
     public function __construct(
         private QuizRepository $quizzes,
         private TopicRepository $topics,
+        private QuestionRepository $questions,
+        private QuestionContentValidator $questionContentValidator,
         private AuditLogService $auditLogService,
         private TransactionManager $transactionManager,
     ) {
@@ -231,6 +238,147 @@ final readonly class QuizService
                 );
             },
         );
+    }
+
+    public function activateQuiz(
+        int $actorUserId,
+        int $quizId,
+    ): QuizItemDTO {
+        $this->transactionManager->transactional(
+            function () use ($actorUserId, $quizId): void {
+                $quiz = $this->quizzes->findByIdForUpdate($quizId);
+
+                if ($quiz === null) {
+                    throw new QuizNotFoundException('Quiz was not found.');
+                }
+
+                if ($quiz->isActive) {
+                    return;
+                }
+
+                if ($this->quizzes->hasOpenSessions($quizId)) {
+                    throw new QuizStatusLockedException(
+                        'Quiz status cannot be changed while it has an open session.',
+                    );
+                }
+
+                $questionCount = $this->validateQuizCanBeActivated($quizId);
+
+                $this->quizzes->updateActiveStatus(
+                    $quizId,
+                    true,
+                    $actorUserId,
+                );
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUIZ_ACTIVATED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $quizId,
+                    metadata: [
+                        'questionCount' => $questionCount,
+                    ],
+                );
+            },
+        );
+
+        $quiz = $this->quizzes->findOverviewById($quizId);
+
+        if ($quiz === null) {
+            throw new RuntimeException('Activated quiz was not found.');
+        }
+
+        return $this->toQuizItem($quiz);
+    }
+
+    public function deactivateQuiz(
+        int $actorUserId,
+        int $quizId,
+    ): QuizItemDTO {
+        $this->transactionManager->transactional(
+            function () use ($actorUserId, $quizId): void {
+                $quiz = $this->quizzes->findByIdForUpdate($quizId);
+
+                if ($quiz === null) {
+                    throw new QuizNotFoundException('Quiz was not found.');
+                }
+
+                if (!$quiz->isActive) {
+                    return;
+                }
+
+                if ($this->quizzes->hasOpenSessions($quizId)) {
+                    throw new QuizStatusLockedException(
+                        'Quiz status cannot be changed while it has an open session.',
+                    );
+                }
+
+                $this->quizzes->updateActiveStatus(
+                    $quizId,
+                    false,
+                    $actorUserId,
+                );
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUIZ_DEACTIVATED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $quizId,
+                    metadata: [
+                        'reason' => 'MANUAL',
+                    ],
+                );
+            },
+        );
+
+        $quiz = $this->quizzes->findOverviewById($quizId);
+
+        if ($quiz === null) {
+            throw new RuntimeException('Deactivated quiz was not found.');
+        }
+
+        return $this->toQuizItem($quiz);
+    }
+
+    private function validateQuizCanBeActivated(int $quizId): int
+    {
+        $questions = $this->questions->findAllByQuizId($quizId);
+
+        if ($questions === []) {
+            throw new QuizCannotBeActivatedException(
+                'Quiz must contain at least one question before activation.',
+            );
+        }
+
+        $expectedOrder = 1;
+
+        foreach ($questions as $question) {
+            if ($question->questionOrder !== $expectedOrder) {
+                throw new QuizCannotBeActivatedException(
+                    'Quiz questions must have a continuous order before activation.',
+                );
+            }
+
+            try {
+                $this->questionContentValidator->validateStoredQuestion(
+                    $question,
+                );
+            } catch (InvalidArgumentException $exception) {
+                throw new QuizCannotBeActivatedException(
+                    sprintf(
+                        'Quiz cannot be activated because question %d is invalid: %s',
+                        $question->id,
+                        $exception->getMessage(),
+                    ),
+                    0,
+                    $exception,
+                );
+            }
+
+            $expectedOrder++;
+        }
+
+        return count($questions);
     }
 
     /**

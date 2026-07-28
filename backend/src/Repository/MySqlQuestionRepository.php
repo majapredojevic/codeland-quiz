@@ -127,6 +127,37 @@ WHERE quiz_id = :quiz_id
 ORDER BY question_order ASC
 SQL;
 
+    private const FIND_ACTIVE_IDS_ORDERED_FOR_UPDATE_SQL = <<<SQL
+SELECT id
+FROM questions
+WHERE quiz_id = :quiz_id
+  AND is_deleted = FALSE
+ORDER BY question_order ASC, id ASC
+FOR UPDATE
+SQL;
+
+    private const MOVE_ACTIVE_ORDERS_TO_TEMPORARY_VALUES_SQL = <<<SQL
+UPDATE questions
+SET question_order = -question_order
+WHERE quiz_id = :quiz_id
+  AND is_deleted = FALSE
+SQL;
+
+    private const UPDATE_QUESTION_ORDER_SQL = <<<SQL
+UPDATE questions
+SET question_order = :question_order
+WHERE quiz_id = :quiz_id
+  AND id = :question_id
+  AND is_deleted = FALSE
+SQL;
+
+    private const COUNT_ACTIVE_BY_QUIZ_ID_SQL = <<<SQL
+SELECT COUNT(*)
+FROM questions
+WHERE quiz_id = :quiz_id
+  AND is_deleted = FALSE
+SQL;
+
     private const INSERT_OPTION_SQL = <<<SQL
 INSERT INTO question_options (
     question_id,
@@ -312,6 +343,57 @@ SQL;
             PDO::PARAM_INT,
         );
         $statement->execute();
+    }
+
+    /**
+     * @return int[]
+     */
+    public function findActiveIdsOrderedForUpdate(int $quizId): array
+    {
+        $statement = $this->connection()->prepare(
+            self::FIND_ACTIVE_IDS_ORDERED_FOR_UPDATE_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return array_map(
+            static fn (mixed $questionId): int => (int) $questionId,
+            $statement->fetchAll(PDO::FETCH_COLUMN),
+        );
+    }
+
+    public function moveActiveOrdersToTemporaryValues(int $quizId): void
+    {
+        $statement = $this->connection()->prepare(
+            self::MOVE_ACTIVE_ORDERS_TO_TEMPORARY_VALUES_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function updateQuestionOrder(
+        int $quizId,
+        int $questionId,
+        int $questionOrder,
+    ): void {
+        $statement = $this->connection()->prepare(
+            self::UPDATE_QUESTION_ORDER_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(':question_id', $questionId, PDO::PARAM_INT);
+        $statement->bindValue(':question_order', $questionOrder, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function countActiveByQuizId(int $quizId): int
+    {
+        $statement = $this->connection()->prepare(
+            self::COUNT_ACTIVE_BY_QUIZ_ID_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return (int) $statement->fetchColumn();
     }
 
     private function bindNullableString(

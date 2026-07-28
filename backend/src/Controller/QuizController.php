@@ -8,8 +8,10 @@ use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\DTO\QuizItemDTO;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Quiz\Exception\QuizCannotBeActivatedException;
 use CodeLandQuiz\Quiz\Exception\QuizHasOpenSessionsException;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
+use CodeLandQuiz\Quiz\Exception\QuizStatusLockedException;
 use CodeLandQuiz\Quiz\Exception\QuizTitleVersionAlreadyExistsException;
 use CodeLandQuiz\Quiz\Http\CreateQuizRequest;
 use CodeLandQuiz\Quiz\Http\ListQuizzesRequest;
@@ -225,6 +227,92 @@ final class QuizController
             $this->responseFactory->error(
                 $response,
                 'Quiz cannot be deleted while it has an open session.',
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function activate(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $quizId = $context->getRouteInt('id');
+            $actorUserId = $context->getCurrentUser()->id;
+            $quiz = $this->quizService->activateQuiz($actorUserId, $quizId);
+
+            $this->responseFactory->json($response, [
+                'quiz' => $this->quizResponse($quiz),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizNotFoundException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                404,
+            );
+        } catch (QuizCannotBeActivatedException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                409,
+            );
+        } catch (QuizStatusLockedException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function deactivate(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $quizId = $context->getRouteInt('id');
+            $actorUserId = $context->getCurrentUser()->id;
+            $quiz = $this->quizService->deactivateQuiz($actorUserId, $quizId);
+
+            $this->responseFactory->json($response, [
+                'quiz' => $this->quizResponse($quiz),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizNotFoundException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                404,
+            );
+        } catch (QuizStatusLockedException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
                 409,
             );
         } catch (Throwable) {

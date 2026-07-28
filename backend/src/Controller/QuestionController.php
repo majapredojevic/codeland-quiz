@@ -11,6 +11,7 @@ use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Question\Exception\QuizContentLockedException;
 use CodeLandQuiz\Question\Exception\QuestionNotFoundException;
 use CodeLandQuiz\Question\Http\CreateQuestionRequest;
+use CodeLandQuiz\Question\Http\ReorderQuestionsRequest;
 use CodeLandQuiz\Question\Http\UpdateQuestionRequest;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
@@ -240,6 +241,56 @@ final class QuestionController
             $this->responseFactory->error(
                 $response,
                 'Question was not found.',
+                404,
+            );
+        } catch (QuizContentLockedException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz content cannot be changed while it has an open session.',
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function reorder(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $quizId = $context->getRouteInt('quizId');
+            $dto = ReorderQuestionsRequest::from($request);
+            $actorUserId = $context->getCurrentUser()->id;
+            $questions = $this->questionService->reorderQuestions(
+                $actorUserId,
+                $quizId,
+                $dto,
+            );
+
+            $this->responseFactory->json($response, [
+                'questions' => array_map(
+                    fn (QuestionItemDTO $question): array =>
+                        $this->questionResponse($question),
+                    $questions,
+                ),
+                'questionCount' => count($questions),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz was not found.',
                 404,
             );
         } catch (QuizContentLockedException) {

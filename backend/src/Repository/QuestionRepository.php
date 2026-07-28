@@ -60,4 +60,19 @@ interface QuestionRepository
         int $quizId,
         int $deletedQuestionOrder,
     ): void;
+
+    /**
+     * @return int[]
+     */
+    public function findActiveIdsOrderedForUpdate(int $quizId): array;
+
+    public function moveActiveOrdersToTemporaryValues(int $quizId): void;
+
+    public function updateQuestionOrder(
+        int $quizId,
+        int $questionId,
+        int $questionOrder,
+    ): void;
+
+    public function countActiveByQuizId(int $quizId): int;
 }

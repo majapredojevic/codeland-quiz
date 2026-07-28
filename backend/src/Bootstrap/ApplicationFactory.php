@@ -43,6 +43,7 @@ use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
+use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\Topic\TopicService;
@@ -187,12 +188,15 @@ final class ApplicationFactory
     {
         $quizRepository = new MySqlQuizRepository($this->database);
         $topicRepository = new MySqlTopicRepository($this->database);
+        $questionRepository = new MySqlQuestionRepository($this->database);
         $auditLogRepository = new MySqlAuditLogRepository($this->database);
 
         return new QuizController(
             quizService: new QuizService(
                 quizzes: $quizRepository,
                 topics: $topicRepository,
+                questions: $questionRepository,
+                questionContentValidator: new QuestionContentValidator(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),
@@ -211,6 +215,7 @@ final class ApplicationFactory
             questionService: new QuestionService(
                 questions: $questionRepository,
                 quizzes: $quizRepository,
+                questionContentValidator: new QuestionContentValidator(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),
