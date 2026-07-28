@@ -198,6 +198,17 @@ final class Application
         );
 
         $this->router->post(
+            '/api/quizzes/{quizId}/questions',
+            $questionController->create(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
             '/api/quizzes',
             $quizController->create(...),
             [

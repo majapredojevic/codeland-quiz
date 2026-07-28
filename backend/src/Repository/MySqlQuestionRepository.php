@@ -10,6 +10,8 @@ use CodeLandQuiz\Model\QuestionType;
 use CodeLandQuiz\Support\Database;
 use DateTimeImmutable;
 use PDO;
+use PDOStatement;
+use RuntimeException;
 
 final readonly class MySqlQuestionRepository implements QuestionRepository
 {
@@ -54,6 +56,49 @@ ORDER BY
     qo.id ASC
 SQL;
 
+    private const GET_NEXT_ACTIVE_ORDER_SQL = <<<SQL
+SELECT COALESCE(MAX(question_order), 0) + 1
+FROM questions
+WHERE quiz_id = :quiz_id
+  AND is_deleted = FALSE
+SQL;
+
+    private const INSERT_QUESTION_SQL = <<<SQL
+INSERT INTO questions (
+    quiz_id,
+    question_text,
+    question_type,
+    image_path,
+    time_limit_seconds,
+    max_points,
+    question_order,
+    is_deleted
+) VALUES (
+    :quiz_id,
+    :question_text,
+    :question_type,
+    :image_path,
+    :time_limit_seconds,
+    :max_points,
+    :question_order,
+    FALSE
+)
+SQL;
+
+    private const INSERT_OPTION_SQL = <<<SQL
+INSERT INTO question_options (
+    question_id,
+    option_text,
+    is_correct,
+    option_order
+) VALUES (
+    :question_id,
+    :option_text,
+    :is_correct,
+    :option_order
+)
+SQL;
+
     public function __construct(
         private Database $database,
     ) {
@@ -87,6 +132,92 @@ SQL;
         $questions = $this->mapRowsToQuestions($statement->fetchAll());
 
         return $questions[0] ?? null;
+    }
+
+    public function getNextActiveOrder(int $quizId): int
+    {
+        $statement = $this->connection()->prepare(
+            self::GET_NEXT_ACTIVE_ORDER_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return (int) $statement->fetchColumn();
+    }
+
+    public function create(
+        int $quizId,
+        string $questionText,
+        QuestionType $questionType,
+        ?string $imagePath,
+        int $timeLimitSeconds,
+        int $maxPoints,
+        int $questionOrder,
+    ): int {
+        $statement = $this->connection()->prepare(self::INSERT_QUESTION_SQL);
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(':question_text', $questionText);
+        $statement->bindValue(':question_type', $questionType->value);
+        $this->bindNullableString($statement, ':image_path', $imagePath);
+        $statement->bindValue(
+            ':time_limit_seconds',
+            $timeLimitSeconds,
+            PDO::PARAM_INT,
+        );
+        $statement->bindValue(':max_points', $maxPoints, PDO::PARAM_INT);
+        $statement->bindValue(
+            ':question_order',
+            $questionOrder,
+            PDO::PARAM_INT,
+        );
+        $statement->execute();
+
+        return $this->lastInsertId('Question ID was not returned.');
+    }
+
+    public function createOption(
+        int $questionId,
+        string $optionText,
+        bool $isCorrect,
+        int $optionOrder,
+    ): int {
+        $statement = $this->connection()->prepare(self::INSERT_OPTION_SQL);
+        $statement->bindValue(':question_id', $questionId, PDO::PARAM_INT);
+        $statement->bindValue(':option_text', $optionText);
+        $statement->bindValue(
+            ':is_correct',
+            $isCorrect ? 1 : 0,
+            PDO::PARAM_INT,
+        );
+        $statement->bindValue(':option_order', $optionOrder, PDO::PARAM_INT);
+        $statement->execute();
+
+        return $this->lastInsertId('Question option ID was not returned.');
+    }
+
+    private function bindNullableString(
+        PDOStatement $statement,
+        string $parameter,
+        ?string $value,
+    ): void {
+        if ($value === null) {
+            $statement->bindValue($parameter, null, PDO::PARAM_NULL);
+
+            return;
+        }
+
+        $statement->bindValue($parameter, $value, PDO::PARAM_STR);
+    }
+
+    private function lastInsertId(string $message): int
+    {
+        $id = (int) $this->connection()->lastInsertId();
+
+        if ($id < 1) {
+            throw new RuntimeException($message);
+        }
+
+        return $id;
     }
 
     /**

@@ -56,4 +56,9 @@ interface QuizRepository
     ): void;
 
     public function hasOpenSessions(int $quizId): bool;
+
+    public function touch(
+        int $quizId,
+        int $actorUserId,
+    ): void;
 }

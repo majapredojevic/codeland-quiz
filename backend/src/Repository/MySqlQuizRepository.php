@@ -127,6 +127,14 @@ WHERE id = :id
   AND is_deleted = FALSE
 SQL;
 
+    private const TOUCH_SQL = <<<SQL
+UPDATE quizzes
+SET updated_by = :updated_by,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = :id
+  AND is_deleted = FALSE
+SQL;
+
     public function __construct(
         private Database $database,
     ) {
@@ -283,6 +291,16 @@ SQL;
         $statement->execute();
 
         return (bool) (int) $statement->fetchColumn();
+    }
+
+    public function touch(
+        int $quizId,
+        int $actorUserId,
+    ): void {
+        $statement = $this->connection()->prepare(self::TOUCH_SQL);
+        $statement->bindValue(':id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(':updated_by', $actorUserId, PDO::PARAM_INT);
+        $statement->execute();
     }
 
     private function filterClause(

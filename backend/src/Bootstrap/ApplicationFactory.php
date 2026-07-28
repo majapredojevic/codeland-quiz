@@ -203,10 +203,16 @@ final class ApplicationFactory
 
     public function createQuestionController(): QuestionController
     {
+        $questionRepository = new MySqlQuestionRepository($this->database);
+        $quizRepository = new MySqlQuizRepository($this->database);
+        $auditLogRepository = new MySqlAuditLogRepository($this->database);
+
         return new QuestionController(
             questionService: new QuestionService(
-                questions: new MySqlQuestionRepository($this->database),
-                quizzes: new MySqlQuizRepository($this->database),
+                questions: $questionRepository,
+                quizzes: $quizRepository,
+                auditLogService: new AuditLogService($auditLogRepository),
+                transactionManager: new PdoTransactionManager($this->database),
             ),
             responseFactory: new ResponseFactory(),
         );

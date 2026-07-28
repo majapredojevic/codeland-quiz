@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Repository;
 
 use CodeLandQuiz\Model\QuestionOverview;
+use CodeLandQuiz\Model\QuestionType;
 
 interface QuestionRepository
 {
@@ -17,4 +18,23 @@ interface QuestionRepository
         int $quizId,
         int $questionId,
     ): ?QuestionOverview;
+
+    public function getNextActiveOrder(int $quizId): int;
+
+    public function create(
+        int $quizId,
+        string $questionText,
+        QuestionType $questionType,
+        ?string $imagePath,
+        int $timeLimitSeconds,
+        int $maxPoints,
+        int $questionOrder,
+    ): int;
+
+    public function createOption(
+        int $questionId,
+        string $optionText,
+        bool $isCorrect,
+        int $optionOrder,
+    ): int;
 }
