@@ -92,6 +92,9 @@ final class Application
         $topicController =
             $this->applicationFactory->createTopicController();
 
+        $quizController =
+            $this->applicationFactory->createQuizController();
+
         $this->router->get(
             '/api/auth/me',
             $this->applicationFactory->createMeController(),
@@ -144,6 +147,26 @@ final class Application
         $this->router->get(
             '/api/topics/{id}',
             $topicController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/quizzes',
+            $quizController->list(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/quizzes/{id}',
+            $quizController->get(...),
             [
                 $authenticationMiddleware->handle(...),
                 $passwordChangeRequiredMiddleware->handle(...),

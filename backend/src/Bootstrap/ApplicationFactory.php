@@ -22,6 +22,7 @@ use CodeLandQuiz\Controller\AuthController;
 use CodeLandQuiz\Controller\ChangePasswordController;
 use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
+use CodeLandQuiz\Controller\QuizController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\TopicController;
 use CodeLandQuiz\Http\CookieReader;
@@ -33,12 +34,14 @@ use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
+use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
+use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\Topic\TopicService;
 
 final class ApplicationFactory
@@ -171,6 +174,17 @@ final class ApplicationFactory
                 topics: $topicRepository,
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
+            ),
+            responseFactory: new ResponseFactory(),
+            config: $this->config,
+        );
+    }
+
+    public function createQuizController(): QuizController
+    {
+        return new QuizController(
+            quizService: new QuizService(
+                quizzes: new MySqlQuizRepository($this->database),
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,
