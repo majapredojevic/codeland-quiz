@@ -174,6 +174,39 @@ final class Application
             ],
         );
 
+        $this->router->patch(
+            '/api/students/{id}',
+            $studentController->update(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->patch(
+            '/api/students/{id}/activate',
+            $studentController->activate(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->patch(
+            '/api/students/{id}/deactivate',
+            $studentController->deactivate(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
         $this->router->get(
             '/api/topics',
             $topicController->list(...),

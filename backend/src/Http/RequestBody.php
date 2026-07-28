@@ -21,6 +21,14 @@ final readonly class RequestBody
         return array_key_exists($key, $this->data);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function all(): array
+    {
+        return $this->data;
+    }
+
     public function getValue(string $key): mixed
     {
         return $this->data[$key] ?? null;

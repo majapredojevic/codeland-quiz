@@ -9,6 +9,7 @@ use CodeLandQuiz\DTO\CreateStudentDTO;
 use CodeLandQuiz\DTO\StudentItemDTO;
 use CodeLandQuiz\DTO\StudentListQueryDTO;
 use CodeLandQuiz\DTO\StudentPageDTO;
+use CodeLandQuiz\DTO\UpdateStudentDTO;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\StudentOverview;
 use CodeLandQuiz\Repository\StudentRepository;
@@ -60,6 +61,97 @@ final readonly class StudentService
         return $this->toItem($student);
     }
 
+    public function updateStudent(
+        int $actorUserId,
+        int $studentId,
+        UpdateStudentDTO $dto,
+    ): StudentItemDTO {
+        $this->transactionManager->transactional(
+            function () use ($actorUserId, $dto, $studentId): void {
+                $student = $this->students->findOverviewByIdForUpdate(
+                    $studentId,
+                );
+
+                if ($student === null) {
+                    throw new StudentNotFoundException('Student was not found.');
+                }
+
+                $firstName = $dto->hasFirstName
+                    ? (string) $dto->firstName
+                    : $student->firstName;
+                $lastName = $dto->hasLastName
+                    ? (string) $dto->lastName
+                    : $student->lastName;
+                $username = $dto->hasUsername
+                    ? (string) $dto->username
+                    : $student->username;
+                $changedFields = $this->changedFields(
+                    $student,
+                    $firstName,
+                    $lastName,
+                    $username,
+                );
+
+                if ($changedFields === []) {
+                    return;
+                }
+
+                $this->students->update(
+                    studentId: $student->id,
+                    firstName: $firstName,
+                    lastName: $lastName,
+                    username: $username,
+                );
+
+                $this->auditLogService->log(
+                    action: AuditAction::STUDENT_UPDATED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $student->id,
+                    metadata: [
+                        'changedFields' => $changedFields,
+                    ],
+                );
+            },
+        );
+
+        return $this->getLatestStudent($studentId, 'Updated student was not found.');
+    }
+
+    public function activateStudent(
+        int $actorUserId,
+        int $studentId,
+    ): StudentItemDTO {
+        $this->changeActiveStatus(
+            actorUserId: $actorUserId,
+            studentId: $studentId,
+            isActive: true,
+            auditAction: AuditAction::STUDENT_ACTIVATED,
+        );
+
+        return $this->getLatestStudent(
+            $studentId,
+            'Activated student was not found.',
+        );
+    }
+
+    public function deactivateStudent(
+        int $actorUserId,
+        int $studentId,
+    ): StudentItemDTO {
+        $this->changeActiveStatus(
+            actorUserId: $actorUserId,
+            studentId: $studentId,
+            isActive: false,
+            auditAction: AuditAction::STUDENT_DEACTIVATED,
+        );
+
+        return $this->getLatestStudent(
+            $studentId,
+            'Deactivated student was not found.',
+        );
+    }
+
     public function createStudent(
         int $actorUserId,
         CreateStudentDTO $dto,
@@ -90,6 +182,80 @@ final readonly class StudentService
 
         if ($student === null) {
             throw new RuntimeException('Created student was not found.');
+        }
+
+        return $this->toItem($student);
+    }
+
+    private function changeActiveStatus(
+        int $actorUserId,
+        int $studentId,
+        bool $isActive,
+        AuditAction $auditAction,
+    ): void {
+        $this->transactionManager->transactional(
+            function () use ($actorUserId, $auditAction, $isActive, $studentId): void {
+                $student = $this->students->findOverviewByIdForUpdate(
+                    $studentId,
+                );
+
+                if ($student === null) {
+                    throw new StudentNotFoundException('Student was not found.');
+                }
+
+                if ($student->isActive === $isActive) {
+                    return;
+                }
+
+                $this->students->updateActiveStatus($student->id, $isActive);
+
+                $this->auditLogService->log(
+                    action: $auditAction,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $student->id,
+                    metadata: [
+                        'isActive' => $isActive,
+                    ],
+                );
+            },
+        );
+    }
+
+    /**
+     * @return string[]
+     */
+    private function changedFields(
+        StudentOverview $student,
+        string $firstName,
+        string $lastName,
+        string $username,
+    ): array {
+        $changedFields = [];
+
+        if ($firstName !== $student->firstName) {
+            $changedFields[] = 'firstName';
+        }
+
+        if ($lastName !== $student->lastName) {
+            $changedFields[] = 'lastName';
+        }
+
+        if ($username !== $student->username) {
+            $changedFields[] = 'username';
+        }
+
+        return $changedFields;
+    }
+
+    private function getLatestStudent(
+        int $studentId,
+        string $missingMessage,
+    ): StudentItemDTO {
+        $student = $this->students->findOverviewById($studentId);
+
+        if ($student === null) {
+            throw new RuntimeException($missingMessage);
         }
 
         return $this->toItem($student);

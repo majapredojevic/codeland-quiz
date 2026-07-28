@@ -50,6 +50,21 @@ WHERE id = :student_id
 LIMIT 1
 SQL;
 
+    private const FIND_OVERVIEW_BY_ID_FOR_UPDATE_SQL = <<<SQL
+SELECT
+    id,
+    first_name,
+    last_name,
+    username,
+    is_active,
+    created_at,
+    updated_at
+FROM students
+WHERE id = :student_id
+  AND is_deleted = FALSE
+FOR UPDATE
+SQL;
+
     private const INSERT_SQL = <<<SQL
 INSERT INTO students (
     first_name,
@@ -64,6 +79,24 @@ INSERT INTO students (
     TRUE,
     FALSE
 )
+SQL;
+
+    private const UPDATE_SQL = <<<SQL
+UPDATE students
+SET first_name = :first_name,
+    last_name = :last_name,
+    username = :username,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = :student_id
+  AND is_deleted = FALSE
+SQL;
+
+    private const UPDATE_ACTIVE_STATUS_SQL = <<<SQL
+UPDATE students
+SET is_active = :is_active,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = :student_id
+  AND is_deleted = FALSE
 SQL;
 
     public function __construct(
@@ -125,6 +158,23 @@ SQL;
         return $this->mapRowToStudentOverview($row);
     }
 
+    public function findOverviewByIdForUpdate(
+        int $studentId,
+    ): ?StudentOverview {
+        $statement = $this->connection()->prepare(
+            self::FIND_OVERVIEW_BY_ID_FOR_UPDATE_SQL,
+        );
+        $statement->bindValue(':student_id', $studentId, PDO::PARAM_INT);
+        $statement->execute();
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToStudentOverview($row);
+    }
+
     public function create(
         string $firstName,
         string $lastName,
@@ -154,6 +204,51 @@ SQL;
         }
 
         return $id;
+    }
+
+    public function update(
+        int $studentId,
+        string $firstName,
+        string $lastName,
+        string $username,
+    ): void {
+        $statement = $this->connection()->prepare(self::UPDATE_SQL);
+        $statement->bindValue(':student_id', $studentId, PDO::PARAM_INT);
+        $statement->bindValue(':first_name', $firstName);
+        $statement->bindValue(':last_name', $lastName);
+        $statement->bindValue(':username', $username);
+
+        try {
+            $statement->execute();
+        } catch (PDOException $exception) {
+            $this->throwDuplicateUsernameIfNeeded($exception);
+
+            throw $exception;
+        }
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('Student was not updated.');
+        }
+    }
+
+    public function updateActiveStatus(
+        int $studentId,
+        bool $isActive,
+    ): void {
+        $statement = $this->connection()->prepare(
+            self::UPDATE_ACTIVE_STATUS_SQL,
+        );
+        $statement->bindValue(':student_id', $studentId, PDO::PARAM_INT);
+        $statement->bindValue(
+            ':is_active',
+            $isActive ? 1 : 0,
+            PDO::PARAM_INT,
+        );
+        $statement->execute();
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('Student active status was not updated.');
+        }
     }
 
     private function searchJoinClause(?string $search): string

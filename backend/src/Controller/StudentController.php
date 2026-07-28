@@ -11,6 +11,7 @@ use CodeLandQuiz\Student\Exception\StudentNotFoundException;
 use CodeLandQuiz\Student\Exception\StudentUsernameAlreadyExistsException;
 use CodeLandQuiz\Student\Http\CreateStudentRequest;
 use CodeLandQuiz\Student\Http\StudentListQueryRequest;
+use CodeLandQuiz\Student\Http\UpdateStudentRequest;
 use CodeLandQuiz\Student\StudentService;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
@@ -95,6 +96,75 @@ final class StudentController
         }
     }
 
+    public function update(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $studentId = $context->getRouteInt('id');
+            $dto = UpdateStudentRequest::from($request);
+            $actorUserId = $context->getCurrentUser()->id;
+            $student = $this->studentService->updateStudent(
+                $actorUserId,
+                $studentId,
+                $dto,
+            );
+
+            $this->responseFactory->json($response, [
+                'student' => $this->studentResponse($student),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (StudentNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Student was not found.',
+                404,
+            );
+        } catch (StudentUsernameAlreadyExistsException) {
+            $this->responseFactory->error(
+                $response,
+                'Student username is already in use.',
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function activate(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        $this->changeActiveStatus(
+            $response,
+            $context,
+            true,
+        );
+    }
+
+    public function deactivate(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        $this->changeActiveStatus(
+            $response,
+            $context,
+            false,
+        );
+    }
+
     public function create(
         Request $request,
         Response $response,
@@ -122,6 +192,48 @@ final class StudentController
                 $response,
                 'Student username is already in use.',
                 409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    private function changeActiveStatus(
+        Response $response,
+        RequestContext $context,
+        bool $shouldBeActive,
+    ): void {
+        try {
+            $studentId = $context->getRouteInt('id');
+            $actorUserId = $context->getCurrentUser()->id;
+            $student = $shouldBeActive
+                ? $this->studentService->activateStudent(
+                    $actorUserId,
+                    $studentId,
+                )
+                : $this->studentService->deactivateStudent(
+                    $actorUserId,
+                    $studentId,
+                );
+
+            $this->responseFactory->json($response, [
+                'student' => $this->studentResponse($student),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (StudentNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Student was not found.',
+                404,
             );
         } catch (Throwable) {
             $this->responseFactory->error(
