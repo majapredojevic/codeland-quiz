@@ -208,6 +208,28 @@ final class Application
             ],
         );
 
+        $this->router->patch(
+            '/api/quizzes/{quizId}/questions/{questionId}',
+            $questionController->update(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->delete(
+            '/api/quizzes/{quizId}/questions/{questionId}',
+            $questionController->delete(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
         $this->router->post(
             '/api/quizzes',
             $quizController->create(...),

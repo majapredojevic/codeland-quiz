@@ -11,6 +11,7 @@ use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Question\Exception\QuizContentLockedException;
 use CodeLandQuiz\Question\Exception\QuestionNotFoundException;
 use CodeLandQuiz\Question\Http\CreateQuestionRequest;
+use CodeLandQuiz\Question\Http\UpdateQuestionRequest;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use InvalidArgumentException;
@@ -135,6 +136,110 @@ final class QuestionController
             $this->responseFactory->error(
                 $response,
                 'Quiz was not found.',
+                404,
+            );
+        } catch (QuizContentLockedException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz content cannot be changed while it has an open session.',
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function update(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $quizId = $context->getRouteInt('quizId');
+            $questionId = $context->getRouteInt('questionId');
+            $dto = UpdateQuestionRequest::from($request);
+            $actorUserId = $context->getCurrentUser()->id;
+            $question = $this->questionService->updateQuestion(
+                actorUserId: $actorUserId,
+                quizId: $quizId,
+                questionId: $questionId,
+                dto: $dto,
+            );
+
+            $this->responseFactory->json($response, [
+                'question' => $this->questionResponse($question),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz was not found.',
+                404,
+            );
+        } catch (QuestionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Question was not found.',
+                404,
+            );
+        } catch (QuizContentLockedException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz content cannot be changed while it has an open session.',
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function delete(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $quizId = $context->getRouteInt('quizId');
+            $questionId = $context->getRouteInt('questionId');
+            $actorUserId = $context->getCurrentUser()->id;
+
+            $this->questionService->deleteQuestion(
+                $actorUserId,
+                $quizId,
+                $questionId,
+            );
+
+            $response->status(204);
+            $response->end();
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz was not found.',
+                404,
+            );
+        } catch (QuestionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Question was not found.',
                 404,
             );
         } catch (QuizContentLockedException) {

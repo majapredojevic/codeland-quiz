@@ -19,6 +19,11 @@ interface QuestionRepository
         int $questionId,
     ): ?QuestionOverview;
 
+    public function findOverviewByQuizAndIdForUpdate(
+        int $quizId,
+        int $questionId,
+    ): ?QuestionOverview;
+
     public function getNextActiveOrder(int $quizId): int;
 
     public function create(
@@ -37,4 +42,22 @@ interface QuestionRepository
         bool $isCorrect,
         int $optionOrder,
     ): int;
+
+    public function update(
+        int $questionId,
+        string $questionText,
+        QuestionType $questionType,
+        ?string $imagePath,
+        int $timeLimitSeconds,
+        int $maxPoints,
+    ): void;
+
+    public function deleteOptions(int $questionId): void;
+
+    public function softDelete(int $questionId): void;
+
+    public function shiftActiveOrdersAfterDeletion(
+        int $quizId,
+        int $deletedQuestionOrder,
+    ): void;
 }

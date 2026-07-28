@@ -56,6 +56,15 @@ ORDER BY
     qo.id ASC
 SQL;
 
+    private const LOCK_BY_QUIZ_AND_ID_SQL = <<<SQL
+SELECT id
+FROM questions
+WHERE quiz_id = :quiz_id
+  AND id = :question_id
+  AND is_deleted = FALSE
+FOR UPDATE
+SQL;
+
     private const GET_NEXT_ACTIVE_ORDER_SQL = <<<SQL
 SELECT COALESCE(MAX(question_order), 0) + 1
 FROM questions
@@ -83,6 +92,39 @@ INSERT INTO questions (
     :question_order,
     FALSE
 )
+SQL;
+
+    private const UPDATE_QUESTION_SQL = <<<SQL
+UPDATE questions
+SET question_text = :question_text,
+    question_type = :question_type,
+    image_path = :image_path,
+    time_limit_seconds = :time_limit_seconds,
+    max_points = :max_points
+WHERE id = :question_id
+  AND is_deleted = FALSE
+SQL;
+
+    private const DELETE_OPTIONS_SQL = <<<SQL
+DELETE FROM question_options
+WHERE question_id = :question_id
+SQL;
+
+    private const SOFT_DELETE_SQL = <<<SQL
+UPDATE questions
+SET is_deleted = TRUE,
+    deleted_at = CURRENT_TIMESTAMP
+WHERE id = :question_id
+  AND is_deleted = FALSE
+SQL;
+
+    private const SHIFT_ACTIVE_ORDERS_AFTER_DELETION_SQL = <<<SQL
+UPDATE questions
+SET question_order = question_order - 1
+WHERE quiz_id = :quiz_id
+  AND is_deleted = FALSE
+  AND question_order > :deleted_question_order
+ORDER BY question_order ASC
 SQL;
 
     private const INSERT_OPTION_SQL = <<<SQL
@@ -119,6 +161,31 @@ SQL;
     }
 
     public function findOverviewByQuizAndId(
+        int $quizId,
+        int $questionId,
+    ): ?QuestionOverview {
+        return $this->findOneOverviewByQuizAndId($quizId, $questionId);
+    }
+
+    public function findOverviewByQuizAndIdForUpdate(
+        int $quizId,
+        int $questionId,
+    ): ?QuestionOverview {
+        $statement = $this->connection()->prepare(
+            self::LOCK_BY_QUIZ_AND_ID_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(':question_id', $questionId, PDO::PARAM_INT);
+        $statement->execute();
+
+        if ($statement->fetch() === false) {
+            return null;
+        }
+
+        return $this->findOneOverviewByQuizAndId($quizId, $questionId);
+    }
+
+    private function findOneOverviewByQuizAndId(
         int $quizId,
         int $questionId,
     ): ?QuestionOverview {
@@ -193,6 +260,58 @@ SQL;
         $statement->execute();
 
         return $this->lastInsertId('Question option ID was not returned.');
+    }
+
+    public function update(
+        int $questionId,
+        string $questionText,
+        QuestionType $questionType,
+        ?string $imagePath,
+        int $timeLimitSeconds,
+        int $maxPoints,
+    ): void {
+        $statement = $this->connection()->prepare(self::UPDATE_QUESTION_SQL);
+        $statement->bindValue(':question_id', $questionId, PDO::PARAM_INT);
+        $statement->bindValue(':question_text', $questionText);
+        $statement->bindValue(':question_type', $questionType->value);
+        $this->bindNullableString($statement, ':image_path', $imagePath);
+        $statement->bindValue(
+            ':time_limit_seconds',
+            $timeLimitSeconds,
+            PDO::PARAM_INT,
+        );
+        $statement->bindValue(':max_points', $maxPoints, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function deleteOptions(int $questionId): void
+    {
+        $statement = $this->connection()->prepare(self::DELETE_OPTIONS_SQL);
+        $statement->bindValue(':question_id', $questionId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function softDelete(int $questionId): void
+    {
+        $statement = $this->connection()->prepare(self::SOFT_DELETE_SQL);
+        $statement->bindValue(':question_id', $questionId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function shiftActiveOrdersAfterDeletion(
+        int $quizId,
+        int $deletedQuestionOrder,
+    ): void {
+        $statement = $this->connection()->prepare(
+            self::SHIFT_ACTIVE_ORDERS_AFTER_DELETION_SQL,
+        );
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->bindValue(
+            ':deleted_question_order',
+            $deletedQuestionOrder,
+            PDO::PARAM_INT,
+        );
+        $statement->execute();
     }
 
     private function bindNullableString(
