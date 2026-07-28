@@ -104,7 +104,7 @@ CREATE TABLE quizzes (
     title VARCHAR(180) NOT NULL,
     version INT NOT NULL,
     description TEXT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -152,11 +152,23 @@ CREATE TABLE questions (
         ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
 
-    UNIQUE KEY uq_questions_quiz_order (
+    active_question_order INT
+        GENERATED ALWAYS AS (
+            CASE
+                WHEN is_deleted = FALSE THEN question_order
+                ELSE NULL
+            END
+        ) STORED,
+
+    UNIQUE KEY uq_questions_active_order (
         quiz_id,
+        active_question_order
+    ),
+    KEY idx_questions_quiz_deleted_order (
+        quiz_id,
+        is_deleted,
         question_order
     ),
-    KEY idx_questions_quiz_id (quiz_id),
     KEY idx_questions_created_at (created_at),
 
     CONSTRAINT fk_questions_quiz_id
@@ -190,35 +202,126 @@ CREATE TABLE quiz_sessions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     quiz_id BIGINT UNSIGNED NOT NULL,
     host_user_id BIGINT UNSIGNED NOT NULL,
+
+    quiz_title VARCHAR(180) NOT NULL,
+    quiz_version INT NOT NULL,
+
     game_pin CHAR(6) NOT NULL,
+
     status ENUM(
         'WAITING',
         'ACTIVE',
         'FINISHED'
     ) NOT NULL DEFAULT 'WAITING',
-    current_question_id BIGINT UNSIGNED NULL,
+
+    active_game_pin CHAR(6)
+    GENERATED ALWAYS AS (
+        CASE
+            WHEN status IN ('WAITING', 'ACTIVE') THEN game_pin
+            ELSE NULL
+        END
+    ) STORED,
+
+    current_question_order INT NULL,
+
     join_deadline TIMESTAMP NULL DEFAULT NULL,
     started_at TIMESTAMP NULL DEFAULT NULL,
     ended_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE KEY uq_quiz_sessions_game_pin (game_pin),
+   UNIQUE KEY uq_quiz_sessions_active_game_pin (active_game_pin),
+
     KEY idx_quiz_sessions_game_pin (game_pin),
     KEY idx_quiz_sessions_quiz_id (quiz_id),
     KEY idx_quiz_sessions_host_user_id (host_user_id),
-    KEY idx_quiz_sessions_current_question_id (current_question_id),
+    KEY idx_quiz_sessions_status (status),
     KEY idx_quiz_sessions_created_at (created_at),
 
     CONSTRAINT fk_quiz_sessions_quiz_id
         FOREIGN KEY (quiz_id) REFERENCES quizzes (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
 
     CONSTRAINT fk_quiz_sessions_host_user_id
         FOREIGN KEY (host_user_id) REFERENCES users (id)
-        ON DELETE RESTRICT,
+        ON DELETE RESTRICT
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
 
-    CONSTRAINT fk_quiz_sessions_current_question_id
-        FOREIGN KEY (current_question_id) REFERENCES questions (id)
+CREATE TABLE session_questions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id BIGINT UNSIGNED NOT NULL,
+    source_question_id BIGINT UNSIGNED NULL,
+
+    question_text TEXT NOT NULL,
+    question_type ENUM(
+        'TRUE_FALSE',
+        'SINGLE_CHOICE',
+        'MULTIPLE_CHOICE'
+    ) NOT NULL,
+    image_path VARCHAR(255) NULL,
+    time_limit_seconds INT NOT NULL,
+    max_points INT NOT NULL,
+    question_order INT NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_session_questions_order (
+        session_id,
+        question_order
+    ),
+    UNIQUE KEY uq_session_questions_source (
+        session_id,
+        source_question_id
+    ),
+    KEY idx_session_questions_session_id (session_id),
+    KEY idx_session_questions_source_question_id (
+        source_question_id
+    ),
+
+    CONSTRAINT fk_session_questions_session_id
+        FOREIGN KEY (session_id) REFERENCES quiz_sessions (id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_session_questions_source_question_id
+        FOREIGN KEY (source_question_id) REFERENCES questions (id)
+        ON DELETE SET NULL
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE session_question_options (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_question_id BIGINT UNSIGNED NOT NULL,
+    source_option_id BIGINT UNSIGNED NULL,
+
+    option_text VARCHAR(255) NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    option_order INT NOT NULL,
+
+    UNIQUE KEY uq_session_question_options_order (
+        session_question_id,
+        option_order
+    ),
+    UNIQUE KEY uq_session_question_options_source (
+        session_question_id,
+        source_option_id
+    ),
+    KEY idx_session_question_options_question_id (
+        session_question_id
+    ),
+    KEY idx_session_question_options_source_option_id (
+        source_option_id
+    ),
+
+    CONSTRAINT fk_session_question_options_question_id
+        FOREIGN KEY (session_question_id)
+        REFERENCES session_questions (id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_session_question_options_source_option_id
+        FOREIGN KEY (source_option_id)
+        REFERENCES question_options (id)
         ON DELETE SET NULL
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
@@ -257,21 +360,24 @@ CREATE TABLE session_participants (
 CREATE TABLE participant_answers (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     session_participant_id BIGINT UNSIGNED NOT NULL,
-    question_id BIGINT UNSIGNED NOT NULL,
+    session_question_id BIGINT UNSIGNED NOT NULL,
+
     selected_option_ids JSON NOT NULL,
     is_correct BOOLEAN NOT NULL,
     response_time_ms INT NOT NULL,
     points_awarded INT NOT NULL DEFAULT 0,
     answered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE KEY uq_participant_answers_participant_question (
+    UNIQUE KEY uq_participant_answers_question (
         session_participant_id,
-        question_id
+        session_question_id
     ),
     KEY idx_participant_answers_session_participant_id (
         session_participant_id
     ),
-    KEY idx_participant_answers_question_id (question_id),
+    KEY idx_participant_answers_session_question_id (
+        session_question_id
+    ),
     KEY idx_participant_answers_answered_at (answered_at),
 
     CONSTRAINT fk_participant_answers_session_participant_id
@@ -279,8 +385,9 @@ CREATE TABLE participant_answers (
         REFERENCES session_participants (id)
         ON DELETE CASCADE,
 
-    CONSTRAINT fk_participant_answers_question_id
-        FOREIGN KEY (question_id) REFERENCES questions (id)
+    CONSTRAINT fk_participant_answers_session_question_id
+        FOREIGN KEY (session_question_id)
+        REFERENCES session_questions (id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
