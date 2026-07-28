@@ -22,6 +22,7 @@ use CodeLandQuiz\Controller\AuthController;
 use CodeLandQuiz\Controller\ChangePasswordController;
 use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
+use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuizController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\TopicController;
@@ -34,6 +35,7 @@ use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
+use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
@@ -41,6 +43,7 @@ use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
+use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\Topic\TopicService;
 
@@ -195,6 +198,17 @@ final class ApplicationFactory
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,
+        );
+    }
+
+    public function createQuestionController(): QuestionController
+    {
+        return new QuestionController(
+            questionService: new QuestionService(
+                questions: new MySqlQuestionRepository($this->database),
+                quizzes: new MySqlQuizRepository($this->database),
+            ),
+            responseFactory: new ResponseFactory(),
         );
     }
 
