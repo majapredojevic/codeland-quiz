@@ -24,6 +24,7 @@ use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuizController;
+use CodeLandQuiz\Controller\QuizSessionController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\TopicController;
 use CodeLandQuiz\Http\CookieReader;
@@ -37,6 +38,7 @@ use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
+use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
@@ -46,6 +48,8 @@ use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
+use CodeLandQuiz\QuizSession\QuizSessionService;
+use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
 use CodeLandQuiz\Topic\TopicService;
 
 final class ApplicationFactory
@@ -216,6 +220,27 @@ final class ApplicationFactory
                 questions: $questionRepository,
                 quizzes: $quizRepository,
                 questionContentValidator: new QuestionContentValidator(),
+                auditLogService: new AuditLogService($auditLogRepository),
+                transactionManager: new PdoTransactionManager($this->database),
+            ),
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createQuizSessionController(): QuizSessionController
+    {
+        $quizRepository = new MySqlQuizRepository($this->database);
+        $questionRepository = new MySqlQuestionRepository($this->database);
+        $sessionRepository = new MySqlQuizSessionRepository($this->database);
+        $auditLogRepository = new MySqlAuditLogRepository($this->database);
+
+        return new QuizSessionController(
+            quizSessionService: new QuizSessionService(
+                quizzes: $quizRepository,
+                questions: $questionRepository,
+                sessions: $sessionRepository,
+                questionContentValidator: new QuestionContentValidator(),
+                gamePinGenerator: new SecureGamePinGenerator(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),

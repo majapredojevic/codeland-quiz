@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace CodeLandQuiz\Model;
+
+use DateTimeImmutable;
+
+final readonly class QuizSessionOverview
+{
+    public function __construct(
+        public int $id,
+        public int $quizId,
+        public int $hostUserId,
+        public string $hostUserName,
+        public string $quizTitle,
+        public int $quizVersion,
+        public string $gamePin,
+        public QuizSessionStatus $status,
+        public ?int $currentQuestionOrder,
+        public ?DateTimeImmutable $joinDeadline,
+        public ?DateTimeImmutable $startedAt,
+        public ?DateTimeImmutable $endedAt,
+        public DateTimeImmutable $createdAt,
+        public int $questionCount,
+        public int $participantCount,
+    ) {
+    }
+}

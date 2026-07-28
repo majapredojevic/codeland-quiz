@@ -98,6 +98,9 @@ final class Application
         $questionController =
             $this->applicationFactory->createQuestionController();
 
+        $quizSessionController =
+            $this->applicationFactory->createQuizSessionController();
+
         $this->router->get(
             '/api/auth/me',
             $this->applicationFactory->createMeController(),
@@ -291,6 +294,27 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
+            '/api/quizzes/{quizId}/sessions',
+            $quizSessionController->create(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/sessions/{id}',
+            $quizSessionController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
                 $passwordChangeRequiredMiddleware->handle(...),
                 $teacherAccessMiddleware->handle(...),
             ],
