@@ -175,6 +175,39 @@ final class Application
         );
 
         $this->router->post(
+            '/api/quizzes',
+            $quizController->create(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->patch(
+            '/api/quizzes/{id}',
+            $quizController->update(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->delete(
+            '/api/quizzes/{id}',
+            $quizController->delete(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
             '/api/topics',
             $topicController->create(...),
             [

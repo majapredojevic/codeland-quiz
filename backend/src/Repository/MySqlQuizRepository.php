@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Repository;
 
+use CodeLandQuiz\Model\Quiz;
 use CodeLandQuiz\Model\QuizOverview;
 use CodeLandQuiz\Model\QuizSort;
 use CodeLandQuiz\Model\QuizStatusFilter;
+use CodeLandQuiz\Quiz\Exception\QuizTitleVersionAlreadyExistsException;
 use CodeLandQuiz\Support\Database;
 use DateTimeImmutable;
 use PDO;
+use PDOException;
 use PDOStatement;
+use RuntimeException;
 
 final readonly class MySqlQuizRepository implements QuizRepository
 {
@@ -49,6 +53,78 @@ SQL;
 SELECT COUNT(*)
 FROM quizzes q
 WHERE q.is_deleted = FALSE
+SQL;
+
+    private const INSERT_SQL = <<<SQL
+INSERT INTO quizzes (
+    topic_id,
+    created_by,
+    updated_by,
+    title,
+    version,
+    description,
+    is_active,
+    is_deleted
+) VALUES (
+    :topic_id,
+    :created_by,
+    :updated_by,
+    :title,
+    :version,
+    :description,
+    FALSE,
+    FALSE
+)
+SQL;
+
+    private const FIND_BY_ID_FOR_UPDATE_SQL = <<<SQL
+SELECT
+    id,
+    topic_id,
+    created_by,
+    updated_by,
+    title,
+    version,
+    description,
+    is_active,
+    is_deleted,
+    created_at,
+    updated_at,
+    deleted_at
+FROM quizzes
+WHERE id = :id
+  AND is_deleted = FALSE
+FOR UPDATE
+SQL;
+
+    private const UPDATE_SQL = <<<SQL
+UPDATE quizzes
+SET topic_id = :topic_id,
+    title = :title,
+    version = :version,
+    description = :description,
+    updated_by = :updated_by
+WHERE id = :id
+  AND is_deleted = FALSE
+SQL;
+
+    private const HAS_OPEN_SESSIONS_SQL = <<<SQL
+SELECT EXISTS (
+    SELECT 1
+    FROM quiz_sessions
+    WHERE quiz_id = :quiz_id
+      AND status IN ('WAITING', 'ACTIVE')
+) AS has_open_sessions
+SQL;
+
+    private const SOFT_DELETE_SQL = <<<SQL
+UPDATE quizzes
+SET is_deleted = TRUE,
+    is_active = FALSE,
+    deleted_at = CURRENT_TIMESTAMP,
+    updated_by = :updated_by
+WHERE id = :id
+  AND is_deleted = FALSE
 SQL;
 
     public function __construct(
@@ -117,6 +193,98 @@ SQL;
         return $this->mapRowToQuizOverview($row);
     }
 
+    public function create(
+        string $title,
+        int $version,
+        ?string $description,
+        ?int $topicId,
+        int $actorUserId,
+    ): int {
+        $statement = $this->connection()->prepare(self::INSERT_SQL);
+        $this->bindNullableInt($statement, ':topic_id', $topicId);
+        $statement->bindValue(':created_by', $actorUserId, PDO::PARAM_INT);
+        $statement->bindValue(':updated_by', $actorUserId, PDO::PARAM_INT);
+        $statement->bindValue(':title', $title);
+        $statement->bindValue(':version', $version, PDO::PARAM_INT);
+        $this->bindNullableString($statement, ':description', $description);
+
+        try {
+            $statement->execute();
+        } catch (PDOException $exception) {
+            $this->throwDuplicateQuizTitleVersionIfNeeded($exception);
+
+            throw $exception;
+        }
+
+        $id = (int) $this->connection()->lastInsertId();
+
+        if ($id < 1) {
+            throw new RuntimeException('Quiz ID was not returned.');
+        }
+
+        return $id;
+    }
+
+    public function findByIdForUpdate(int $id): ?Quiz
+    {
+        $statement = $this->connection()->prepare(
+            self::FIND_BY_ID_FOR_UPDATE_SQL,
+        );
+        $statement->bindValue(':id', $id, PDO::PARAM_INT);
+        $statement->execute();
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToQuiz($row);
+    }
+
+    public function update(
+        int $id,
+        string $title,
+        int $version,
+        ?string $description,
+        ?int $topicId,
+        int $actorUserId,
+    ): void {
+        $statement = $this->connection()->prepare(self::UPDATE_SQL);
+        $statement->bindValue(':id', $id, PDO::PARAM_INT);
+        $this->bindNullableInt($statement, ':topic_id', $topicId);
+        $statement->bindValue(':title', $title);
+        $statement->bindValue(':version', $version, PDO::PARAM_INT);
+        $this->bindNullableString($statement, ':description', $description);
+        $statement->bindValue(':updated_by', $actorUserId, PDO::PARAM_INT);
+
+        try {
+            $statement->execute();
+        } catch (PDOException $exception) {
+            $this->throwDuplicateQuizTitleVersionIfNeeded($exception);
+
+            throw $exception;
+        }
+    }
+
+    public function softDelete(
+        int $id,
+        int $actorUserId,
+    ): void {
+        $statement = $this->connection()->prepare(self::SOFT_DELETE_SQL);
+        $statement->bindValue(':id', $id, PDO::PARAM_INT);
+        $statement->bindValue(':updated_by', $actorUserId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function hasOpenSessions(int $quizId): bool
+    {
+        $statement = $this->connection()->prepare(self::HAS_OPEN_SESSIONS_SQL);
+        $statement->bindValue(':quiz_id', $quizId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return (bool) (int) $statement->fetchColumn();
+    }
+
     private function filterClause(
         ?string $search,
         ?int $topicId,
@@ -169,6 +337,77 @@ SQL;
         if ($topicId !== null) {
             $statement->bindValue(':topic_id', $topicId, PDO::PARAM_INT);
         }
+    }
+
+    private function bindNullableInt(
+        PDOStatement $statement,
+        string $parameter,
+        ?int $value,
+    ): void {
+        if ($value === null) {
+            $statement->bindValue($parameter, null, PDO::PARAM_NULL);
+
+            return;
+        }
+
+        $statement->bindValue($parameter, $value, PDO::PARAM_INT);
+    }
+
+    private function bindNullableString(
+        PDOStatement $statement,
+        string $parameter,
+        ?string $value,
+    ): void {
+        if ($value === null) {
+            $statement->bindValue($parameter, null, PDO::PARAM_NULL);
+
+            return;
+        }
+
+        $statement->bindValue($parameter, $value, PDO::PARAM_STR);
+    }
+
+    private function throwDuplicateQuizTitleVersionIfNeeded(
+        PDOException $exception,
+    ): void {
+        $errorInfo = $exception->errorInfo;
+        $sqlState = (string) ($errorInfo[0] ?? '');
+        $driverCode = (int) ($errorInfo[1] ?? 0);
+
+        if ($sqlState === '23000' && $driverCode === 1062) {
+            throw new QuizTitleVersionAlreadyExistsException(
+                'A quiz with this title and version already exists.',
+                0,
+                $exception,
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function mapRowToQuiz(array $row): Quiz
+    {
+        return new Quiz(
+            id: (int) $row['id'],
+            topicId: $row['topic_id'] === null
+                ? null
+                : (int) $row['topic_id'],
+            createdById: (int) $row['created_by'],
+            updatedById: (int) $row['updated_by'],
+            title: (string) $row['title'],
+            version: (int) $row['version'],
+            description: $row['description'] === null
+                ? null
+                : (string) $row['description'],
+            isActive: (bool) (int) $row['is_active'],
+            isDeleted: (bool) (int) $row['is_deleted'],
+            createdAt: new DateTimeImmutable((string) $row['created_at']),
+            updatedAt: new DateTimeImmutable((string) $row['updated_at']),
+            deletedAt: $row['deleted_at'] === null
+                ? null
+                : new DateTimeImmutable((string) $row['deleted_at']),
+        );
     }
 
     /**

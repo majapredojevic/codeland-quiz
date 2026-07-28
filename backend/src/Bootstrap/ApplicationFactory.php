@@ -182,9 +182,16 @@ final class ApplicationFactory
 
     public function createQuizController(): QuizController
     {
+        $quizRepository = new MySqlQuizRepository($this->database);
+        $topicRepository = new MySqlTopicRepository($this->database);
+        $auditLogRepository = new MySqlAuditLogRepository($this->database);
+
         return new QuizController(
             quizService: new QuizService(
-                quizzes: new MySqlQuizRepository($this->database),
+                quizzes: $quizRepository,
+                topics: $topicRepository,
+                auditLogService: new AuditLogService($auditLogRepository),
+                transactionManager: new PdoTransactionManager($this->database),
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,

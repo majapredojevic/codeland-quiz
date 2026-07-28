@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Repository;
 
+use CodeLandQuiz\Model\Quiz;
 use CodeLandQuiz\Model\QuizOverview;
 use CodeLandQuiz\Model\QuizSort;
 use CodeLandQuiz\Model\QuizStatusFilter;
@@ -29,4 +30,30 @@ interface QuizRepository
     ): int;
 
     public function findOverviewById(int $id): ?QuizOverview;
+
+    public function create(
+        string $title,
+        int $version,
+        ?string $description,
+        ?int $topicId,
+        int $actorUserId,
+    ): int;
+
+    public function findByIdForUpdate(int $id): ?Quiz;
+
+    public function update(
+        int $id,
+        string $title,
+        int $version,
+        ?string $description,
+        ?int $topicId,
+        int $actorUserId,
+    ): void;
+
+    public function softDelete(
+        int $id,
+        int $actorUserId,
+    ): void;
+
+    public function hasOpenSessions(int $quizId): bool;
 }
