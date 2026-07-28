@@ -26,6 +26,7 @@ use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuizController;
 use CodeLandQuiz\Controller\QuizSessionController;
 use CodeLandQuiz\Controller\RefreshController;
+use CodeLandQuiz\Controller\StudentController;
 use CodeLandQuiz\Controller\TopicController;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
@@ -40,8 +41,10 @@ use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
+use CodeLandQuiz\Repository\MySqlStudentRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
+use CodeLandQuiz\Student\StudentService;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
@@ -241,6 +244,21 @@ final class ApplicationFactory
                 sessions: $sessionRepository,
                 questionContentValidator: new QuestionContentValidator(),
                 gamePinGenerator: new SecureGamePinGenerator(),
+                auditLogService: new AuditLogService($auditLogRepository),
+                transactionManager: new PdoTransactionManager($this->database),
+            ),
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createStudentController(): StudentController
+    {
+        $studentRepository = new MySqlStudentRepository($this->database);
+        $auditLogRepository = new MySqlAuditLogRepository($this->database);
+
+        return new StudentController(
+            studentService: new StudentService(
+                students: $studentRepository,
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),
