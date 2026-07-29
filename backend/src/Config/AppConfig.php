@@ -25,7 +25,11 @@ final readonly class AppConfig
 
     private string $refreshTokenHashKey;
 
+    private string $participantTokenSecret;
+
     private int $jwtExpirationMinutes;
+
+    private int $participantTokenTtlSeconds;
 
     private int $refreshTokenExpirationDays;
 
@@ -67,7 +71,9 @@ final readonly class AppConfig
         $this->cookiePath = $this->environment->get('COOKIE_PATH');
         $this->csrfTokenCookieName = $this->environment->get('CSRF_TOKEN_COOKIE_NAME');
         $this->refreshTokenHashKey = $this->readRefreshTokenHashKey();
+        $this->participantTokenSecret = $this->readParticipantTokenSecret();
         $this->jwtExpirationMinutes = $this->environment->getInt('JWT_EXPIRATION_MINUTES');
+        $this->participantTokenTtlSeconds = $this->environment->getInt('PARTICIPANT_TOKEN_TTL_SECONDS');
         $this->refreshTokenExpirationDays = $this->environment->getInt('REFRESH_TOKEN_EXPIRATION_DAYS');
         $this->csrfTokenExpirationMinutes = $this->environment->getInt('CSRF_TOKEN_EXPIRATION_MINUTES');
         $this->loginAttemptLimit = $this->environment->getInt('LOGIN_ATTEMPT_LIMIT');
@@ -89,6 +95,7 @@ final readonly class AppConfig
         $this->ensurePositive($this->loginAttemptLimit, 'Login attempt limit');
         $this->ensurePositive($this->loginLockDurationMinutes, 'Login lock duration');
         $this->ensurePositive($this->jwtExpirationMinutes, 'JWT expiration');
+        $this->ensurePositive($this->participantTokenTtlSeconds, 'Participant token TTL');
         $this->ensurePositive($this->refreshTokenExpirationDays, 'Refresh token expiration');
         $this->ensurePositive($this->csrfTokenExpirationMinutes, 'CSRF token expiration');
         $this->ensurePositive($this->maximumUploadSizeMb, 'Maximum upload size');
@@ -129,6 +136,16 @@ final readonly class AppConfig
     public function getRefreshTokenHashKey(): string
     {
         return $this->refreshTokenHashKey;
+    }
+
+    public function getParticipantTokenSecret(): string
+    {
+        return $this->participantTokenSecret;
+    }
+
+    public function getParticipantTokenTtlSeconds(): int
+    {
+        return $this->participantTokenTtlSeconds;
     }
 
     public function getCsrfTokenExpirationMinutes(): int
@@ -250,6 +267,25 @@ final readonly class AppConfig
         }
 
         return $hashKey;
+    }
+
+    private function readParticipantTokenSecret(): string
+    {
+        if (!$this->environment->has('PARTICIPANT_TOKEN_SECRET')) {
+            throw new InvalidArgumentException(
+                'Participant token secret must contain at least 32 characters.',
+            );
+        }
+
+        $secret = $this->environment->get('PARTICIPANT_TOKEN_SECRET');
+
+        if (strlen($secret) < 32) {
+            throw new InvalidArgumentException(
+                'Participant token secret must contain at least 32 characters.',
+            );
+        }
+
+        return $secret;
     }
 
     private function ensurePositive(int $value, string $label): void

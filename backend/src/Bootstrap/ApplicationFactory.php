@@ -20,6 +20,7 @@ use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\Controller\AdminUserController;
 use CodeLandQuiz\Controller\AuthController;
 use CodeLandQuiz\Controller\ChangePasswordController;
+use CodeLandQuiz\Controller\GameController;
 use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\QuestionController;
@@ -28,6 +29,9 @@ use CodeLandQuiz\Controller\QuizSessionController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\StudentController;
 use CodeLandQuiz\Controller\TopicController;
+use CodeLandQuiz\Game\AvatarCatalog;
+use CodeLandQuiz\Game\GameService;
+use CodeLandQuiz\Game\JwtParticipantTokenIssuer;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Middleware\AuthenticationMiddleware;
@@ -41,6 +45,7 @@ use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
+use CodeLandQuiz\Repository\MySqlSessionParticipantRepository;
 use CodeLandQuiz\Repository\MySqlStudentRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
@@ -247,6 +252,32 @@ final class ApplicationFactory
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createGameController(): GameController
+    {
+        $sessionRepository = new MySqlQuizSessionRepository($this->database);
+        $studentRepository = new MySqlStudentRepository($this->database);
+        $participantRepository = new MySqlSessionParticipantRepository(
+            $this->database,
+        );
+        $avatarCatalog = new AvatarCatalog();
+
+        return new GameController(
+            gameService: new GameService(
+                sessions: $sessionRepository,
+                students: $studentRepository,
+                participants: $participantRepository,
+                avatarCatalog: $avatarCatalog,
+                participantTokenIssuer: new JwtParticipantTokenIssuer(
+                    secret: $this->config->getParticipantTokenSecret(),
+                    ttlSeconds: $this->config->getParticipantTokenTtlSeconds(),
+                ),
+                transactionManager: new PdoTransactionManager($this->database),
+            ),
+            avatarCatalog: $avatarCatalog,
             responseFactory: new ResponseFactory(),
         );
     }

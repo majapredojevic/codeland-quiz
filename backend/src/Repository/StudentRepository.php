@@ -22,6 +22,10 @@ interface StudentRepository
         int $studentId,
     ): ?StudentOverview;
 
+    public function findActiveByUsernameForUpdate(
+        string $username,
+    ): ?StudentOverview;
+
     public function create(
         string $firstName,
         string $lastName,

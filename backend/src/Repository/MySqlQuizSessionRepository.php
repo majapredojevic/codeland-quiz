@@ -81,7 +81,7 @@ INSERT INTO session_question_options (
 )
 SQL;
 
-    private const FIND_OVERVIEW_BY_ID_SQL = <<<SQL
+    private const SELECT_OVERVIEW_SQL = <<<SQL
 SELECT
     qs.id,
     qs.quiz_id,
@@ -105,11 +105,11 @@ SELECT
         SELECT COUNT(*)
         FROM session_participants sp
         WHERE sp.session_id = qs.id
+          AND sp.is_removed = FALSE
     ) AS participant_count
 FROM quiz_sessions qs
 INNER JOIN users host
     ON host.id = qs.host_user_id
-WHERE qs.id = :session_id
 SQL;
 
     public function __construct(
@@ -220,9 +220,51 @@ SQL;
         int $sessionId,
     ): ?QuizSessionOverview {
         $statement = $this->connection()->prepare(
-            self::FIND_OVERVIEW_BY_ID_SQL,
+            self::SELECT_OVERVIEW_SQL . "\nWHERE qs.id = :session_id",
         );
         $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->execute();
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToOverview($row);
+    }
+
+    public function findOverviewByActiveGamePin(
+        string $gamePin,
+    ): ?QuizSessionOverview {
+        return $this->findOverviewByGamePin(
+            $gamePin,
+            shouldLock: false,
+        );
+    }
+
+    public function findOverviewByActiveGamePinForUpdate(
+        string $gamePin,
+    ): ?QuizSessionOverview {
+        return $this->findOverviewByGamePin(
+            $gamePin,
+            shouldLock: true,
+        );
+    }
+
+    private function findOverviewByGamePin(
+        string $gamePin,
+        bool $shouldLock,
+    ): ?QuizSessionOverview {
+        $sql = self::SELECT_OVERVIEW_SQL
+            . "\nWHERE qs.active_game_pin = :game_pin\nLIMIT 1";
+
+        if ($shouldLock) {
+            $sql .= "\nFOR UPDATE";
+        }
+
+        $statement = $this->connection()->prepare($sql);
+        $statement->bindValue(':game_pin', $gamePin);
         $statement->execute();
 
         $row = $statement->fetch();

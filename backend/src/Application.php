@@ -65,6 +65,19 @@ final class Application
             $this->applicationFactory->createRefreshController(),
         );
 
+        $gameController =
+            $this->applicationFactory->createGameController();
+
+        $this->router->get(
+            '/api/game/session/{gamePin}',
+            $gameController->preview(...),
+        );
+
+        $this->router->post(
+            '/api/game/join',
+            $gameController->join(...),
+        );
+
         $csrfMiddleware =
             $this->applicationFactory->createCsrfMiddleware();
 

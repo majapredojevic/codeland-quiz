@@ -338,23 +338,44 @@ CREATE TABLE session_participants (
 
     student_id BIGINT UNSIGNED NULL,
 
+    active_student_id BIGINT UNSIGNED
+        GENERATED ALWAYS AS (
+            CASE
+                WHEN is_removed = FALSE THEN student_id
+                ELSE NULL
+            END
+        ) STORED,
+
     nickname VARCHAR(100) NOT NULL,
+
+    active_nickname VARCHAR(100)
+        GENERATED ALWAYS AS (
+            CASE
+                WHEN is_removed = FALSE THEN nickname
+                ELSE NULL
+            END
+        ) STORED,
+
     avatar_key VARCHAR(80) NOT NULL,
 
     total_score INT NOT NULL DEFAULT 0,
-    is_connected BOOLEAN NOT NULL DEFAULT TRUE,
 
-    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_connected BOOLEAN NOT NULL DEFAULT FALSE,
     disconnected_at TIMESTAMP NULL DEFAULT NULL,
 
-    UNIQUE KEY uq_session_participants_session_student (
+    is_removed BOOLEAN NOT NULL DEFAULT FALSE,
+    removed_at TIMESTAMP NULL DEFAULT NULL,
+
+    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_session_participants_active_student (
         session_id,
-        student_id
+        active_student_id
     ),
 
-    UNIQUE KEY uq_session_participants_session_nickname (
+    UNIQUE KEY uq_session_participants_active_nickname (
         session_id,
-        nickname
+        active_nickname
     ),
 
     KEY idx_session_participants_session_id (
@@ -363,6 +384,11 @@ CREATE TABLE session_participants (
 
     KEY idx_session_participants_student_id (
         student_id
+    ),
+
+    KEY idx_session_participants_session_removed (
+        session_id,
+        is_removed
     ),
 
     KEY idx_session_participants_joined_at (

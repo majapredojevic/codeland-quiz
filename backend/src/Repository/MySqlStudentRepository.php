@@ -65,6 +65,22 @@ WHERE id = :student_id
 FOR UPDATE
 SQL;
 
+    private const FIND_ACTIVE_BY_USERNAME_FOR_UPDATE_SQL = <<<SQL
+SELECT
+    id,
+    first_name,
+    last_name,
+    username,
+    is_active,
+    created_at,
+    updated_at
+FROM students
+WHERE username = :username
+  AND is_active = TRUE
+  AND is_deleted = FALSE
+FOR UPDATE
+SQL;
+
     private const INSERT_SQL = <<<SQL
 INSERT INTO students (
     first_name,
@@ -165,6 +181,23 @@ SQL;
             self::FIND_OVERVIEW_BY_ID_FOR_UPDATE_SQL,
         );
         $statement->bindValue(':student_id', $studentId, PDO::PARAM_INT);
+        $statement->execute();
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToStudentOverview($row);
+    }
+
+    public function findActiveByUsernameForUpdate(
+        string $username,
+    ): ?StudentOverview {
+        $statement = $this->connection()->prepare(
+            self::FIND_ACTIVE_BY_USERNAME_FOR_UPDATE_SQL,
+        );
+        $statement->bindValue(':username', $username);
         $statement->execute();
         $row = $statement->fetch();
 

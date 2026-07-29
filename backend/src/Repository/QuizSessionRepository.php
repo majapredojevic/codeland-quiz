@@ -39,4 +39,12 @@ interface QuizSessionRepository
     public function findOverviewById(
         int $sessionId,
     ): ?QuizSessionOverview;
+
+    public function findOverviewByActiveGamePin(
+        string $gamePin,
+    ): ?QuizSessionOverview;
+
+    public function findOverviewByActiveGamePinForUpdate(
+        string $gamePin,
+    ): ?QuizSessionOverview;
 }
