@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\DTO;
 
 use CodeLandQuiz\Model\QuizSessionStatus;
+use DateTimeImmutable;
 
 final readonly class ParticipantConnectionResultDTO
 {
@@ -15,6 +16,10 @@ final readonly class ParticipantConnectionResultDTO
         public int $quizVersion,
         public QuizSessionStatus $sessionStatus,
         public ?int $currentQuestionOrder,
+        public ?PublicSessionQuestionDTO $currentQuestion,
+        public ?DateTimeImmutable $currentQuestionStartedAt,
+        public ?DateTimeImmutable $currentQuestionDeadline,
+        public int $questionCount,
     ) {
     }
 }

@@ -5,20 +5,26 @@ declare(strict_types=1);
 namespace CodeLandQuiz\QuizSession;
 
 use CodeLandQuiz\Auth\AuditLogService;
+use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
+use CodeLandQuiz\DTO\StartQuizSessionResultDTO;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\QuestionOverview;
 use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
+use CodeLandQuiz\Model\SessionQuestionOverview;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\GamePinAlreadyExistsException;
 use CodeLandQuiz\QuizSession\Exception\GamePinGenerationFailedException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotStartException;
 use CodeLandQuiz\QuizSession\Exception\QuizInactiveException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionStateConflictException;
 use CodeLandQuiz\Repository\QuestionRepository;
 use CodeLandQuiz\Repository\QuizRepository;
 use CodeLandQuiz\Repository\QuizSessionRepository;
+use CodeLandQuiz\Repository\SessionQuestionRepository;
 use CodeLandQuiz\Support\TransactionManager;
 use InvalidArgumentException;
 use RuntimeException;
@@ -32,6 +38,8 @@ final readonly class QuizSessionService
         private QuizRepository $quizzes,
         private QuestionRepository $questions,
         private QuizSessionRepository $sessions,
+        private SessionQuestionRepository $sessionQuestions,
+        private PublicSessionQuestionMapper $publicQuestionMapper,
         private QuestionContentValidator $questionContentValidator,
         private GamePinGenerator $gamePinGenerator,
         private AuditLogService $auditLogService,
@@ -84,6 +92,90 @@ final readonly class QuizSessionService
         }
 
         return $this->toItem($session);
+    }
+
+    public function startSession(
+        int $actorUserId,
+        int $sessionId,
+    ): StartQuizSessionResultDTO {
+        return $this->transactionManager->transactional(
+            function () use ($actorUserId, $sessionId): StartQuizSessionResultDTO {
+                $session = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if ($session === null) {
+                    throw new QuizSessionNotFoundException(
+                        'Quiz session was not found.',
+                    );
+                }
+
+                if ($session->status === QuizSessionStatus::FINISHED) {
+                    throw new QuizSessionStateConflictException(
+                        'A finished quiz session cannot be started.',
+                    );
+                }
+
+                if ($session->status === QuizSessionStatus::ACTIVE) {
+                    return $this->activeSessionResult($session);
+                }
+
+                if ($session->participantCount < 1) {
+                    throw new QuizSessionCannotStartException(
+                        'Quiz session must contain at least one participant before it can be started.',
+                    );
+                }
+
+                $question = $this->sessionQuestions->findBySessionAndOrder(
+                    sessionId: $sessionId,
+                    questionOrder: 1,
+                );
+
+                if ($question === null) {
+                    throw new QuizSessionCannotStartException(
+                        'Quiz session does not contain a question that can be started.',
+                    );
+                }
+
+                $this->ensureFirstQuestionIsStartable($question);
+
+                $this->sessions->markStarted(
+                    sessionId: $sessionId,
+                    questionOrder: 1,
+                    timeLimitSeconds: $question->timeLimitSeconds,
+                );
+
+                $updatedSession = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if (!$this->wasSessionStarted($updatedSession)) {
+                    throw new RuntimeException(
+                        'Started quiz session state could not be verified.',
+                    );
+                }
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUIZ_SESSION_STARTED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $sessionId,
+                    metadata: [
+                        'quizId' => $updatedSession->quizId,
+                        'questionCount' => $updatedSession->questionCount,
+                        'firstQuestionOrder' => 1,
+                        'participantCount' => $updatedSession->participantCount,
+                    ],
+                );
+
+                return new StartQuizSessionResultDTO(
+                    session: $this->toItem($updatedSession),
+                    currentQuestion: $this->toPublicQuestion($question),
+                    questionCount: $updatedSession->questionCount,
+                    stateChanged: true,
+                );
+            },
+        );
     }
 
     private function createSessionWithPin(
@@ -181,6 +273,64 @@ final readonly class QuizSessionService
         }
     }
 
+    private function activeSessionResult(
+        QuizSessionOverview $session,
+    ): StartQuizSessionResultDTO {
+        if ($session->currentQuestionOrder === null) {
+            throw new RuntimeException(
+                'Active quiz session current question is not set.',
+            );
+        }
+
+        $question = $this->sessionQuestions->findBySessionAndOrder(
+            sessionId: $session->id,
+            questionOrder: $session->currentQuestionOrder,
+        );
+
+        if ($question === null) {
+            throw new RuntimeException(
+                'Active quiz session current question was not found.',
+            );
+        }
+
+        return new StartQuizSessionResultDTO(
+            session: $this->toItem($session),
+            currentQuestion: $this->toPublicQuestion($question),
+            questionCount: $session->questionCount,
+            stateChanged: false,
+        );
+    }
+
+    private function ensureFirstQuestionIsStartable(
+        SessionQuestionOverview $question,
+    ): void {
+        if (
+            $question->timeLimitSeconds < 30
+            || $question->timeLimitSeconds > 300
+            || $question->options === []
+        ) {
+            throw new QuizSessionCannotStartException(
+                'Quiz session contains an invalid first question.',
+            );
+        }
+    }
+
+    private function wasSessionStarted(
+        ?QuizSessionOverview $session,
+    ): bool {
+        return $session !== null
+            && $session->status === QuizSessionStatus::ACTIVE
+            && $session->currentQuestionOrder === 1
+            && $session->currentQuestionStartedAt !== null
+            && $session->currentQuestionDeadline !== null;
+    }
+
+    private function toPublicQuestion(
+        SessionQuestionOverview $question,
+    ): PublicSessionQuestionDTO {
+        return $this->publicQuestionMapper->map($question);
+    }
+
     private function toItem(
         QuizSessionOverview $session,
     ): QuizSessionItemDTO {
@@ -194,6 +344,8 @@ final readonly class QuizSessionService
             gamePin: $session->gamePin,
             status: $session->status,
             currentQuestionOrder: $session->currentQuestionOrder,
+            currentQuestionStartedAt: $session->currentQuestionStartedAt,
+            currentQuestionDeadline: $session->currentQuestionDeadline,
             joinDeadline: $session->joinDeadline,
             startedAt: $session->startedAt,
             endedAt: $session->endedAt,

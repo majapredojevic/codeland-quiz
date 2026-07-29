@@ -30,7 +30,10 @@ final class Application
     ) {
         $this->server = new Server($this->host, $this->port);
         $this->router = new Router();
-        $this->applicationFactory = new ApplicationFactory(dirname(__DIR__));
+        $this->applicationFactory = new ApplicationFactory(
+            projectRootPath: dirname(__DIR__),
+            server: $this->server,
+        );
         $this->webSocketGateway =
             $this->applicationFactory->createWebSocketGatewayRouter();
     }
@@ -402,6 +405,17 @@ final class Application
         );
 
         $this->router->post(
+            '/api/sessions/{id}/start',
+            $quizSessionController->start(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
             '/api/topics',
             $topicController->create(...),
             [
@@ -440,17 +454,6 @@ final class Application
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
-            ],
-        );
-
-        $this->router->post(
-            '/api/admin/users',
-            $this->applicationFactory->createAdminUserController(),
-            [
-                $authenticationMiddleware->handle(...),
-                $csrfMiddleware->handle(...),
-                $passwordChangeRequiredMiddleware->handle(...),
-                $adminOnlyMiddleware->handle(...),
             ],
         );
 

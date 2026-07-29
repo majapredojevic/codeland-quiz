@@ -6,13 +6,16 @@ namespace CodeLandQuiz\Game;
 
 use CodeLandQuiz\DTO\ParticipantConnectionResultDTO;
 use CodeLandQuiz\DTO\ParticipantTokenPayloadDTO;
+use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\SessionParticipantItemDTO;
 use CodeLandQuiz\Game\Exception\GameSessionFinishedException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionParticipantOverview;
+use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\Repository\QuizSessionRepository;
+use CodeLandQuiz\Repository\SessionQuestionRepository;
 use CodeLandQuiz\Repository\SessionParticipantRepository;
 use CodeLandQuiz\Support\TransactionManager;
 
@@ -22,6 +25,8 @@ final readonly class ParticipantConnectionService
         private ParticipantTokenVerifier $participantTokenVerifier,
         private QuizSessionRepository $sessions,
         private SessionParticipantRepository $participants,
+        private SessionQuestionRepository $sessionQuestions,
+        private PublicSessionQuestionMapper $publicQuestionMapper,
         private TransactionManager $transactionManager,
     ) {
     }
@@ -68,11 +73,13 @@ final readonly class ParticipantConnectionService
                 );
 
                 $this->participants->markConnected($participant->id);
+                $currentQuestion = $this->currentQuestion($session);
 
                 return $this->connectionResult(
                     session: $session,
                     participant: $participant,
                     isConnected: true,
+                    currentQuestion: $currentQuestion,
                 );
             },
         );
@@ -127,6 +134,7 @@ final readonly class ParticipantConnectionService
         QuizSessionOverview $session,
         SessionParticipantOverview $participant,
         bool $isConnected,
+        ?PublicSessionQuestionDTO $currentQuestion,
     ): ParticipantConnectionResultDTO {
         return new ParticipantConnectionResultDTO(
             participant: new SessionParticipantItemDTO(
@@ -146,6 +154,41 @@ final readonly class ParticipantConnectionService
             quizVersion: $session->quizVersion,
             sessionStatus: $session->status,
             currentQuestionOrder: $session->currentQuestionOrder,
+            currentQuestion: $currentQuestion,
+            currentQuestionStartedAt: $session->currentQuestionStartedAt,
+            currentQuestionDeadline: $session->currentQuestionDeadline,
+            questionCount: $session->questionCount,
         );
+    }
+
+    private function currentQuestion(
+        QuizSessionOverview $session,
+    ): ?PublicSessionQuestionDTO {
+        if ($session->status === QuizSessionStatus::WAITING) {
+            return null;
+        }
+
+        if (
+            $session->currentQuestionOrder === null
+            || $session->currentQuestionStartedAt === null
+            || $session->currentQuestionDeadline === null
+        ) {
+            throw new ParticipantConnectionRejectedException(
+                'Participant connection was rejected.',
+            );
+        }
+
+        $question = $this->sessionQuestions->findBySessionAndOrder(
+            sessionId: $session->id,
+            questionOrder: $session->currentQuestionOrder,
+        );
+
+        if ($question === null) {
+            throw new ParticipantConnectionRejectedException(
+                'Participant connection was rejected.',
+            );
+        }
+
+        return $this->publicQuestionMapper->map($question);
     }
 }

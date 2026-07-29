@@ -47,6 +47,7 @@ use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
+use CodeLandQuiz\Repository\MySqlSessionQuestionRepository;
 use CodeLandQuiz\Repository\MySqlSessionParticipantRepository;
 use CodeLandQuiz\Repository\MySqlStudentRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
@@ -58,14 +59,18 @@ use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
+use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
 use CodeLandQuiz\Topic\TopicService;
 use CodeLandQuiz\WebSocket\EchoGateway;
 use CodeLandQuiz\WebSocket\ParticipantConnectionRegistry;
 use CodeLandQuiz\WebSocket\ParticipantWebSocketGateway;
+use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
+use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
 use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
 use CodeLandQuiz\WebSocket\WebSocketMessageEncoder;
+use OpenSwoole\WebSocket\Server;
 
 final class ApplicationFactory
 {
@@ -75,11 +80,33 @@ final class ApplicationFactory
 
     private Database $database;
 
-    public function __construct(string $projectRootPath)
+    private Server $server;
+
+    private ParticipantConnectionRegistry $participantConnectionRegistry;
+
+    private WebSocketMessageEncoder $webSocketMessageEncoder;
+
+    private SessionWebSocketBroadcaster $sessionWebSocketBroadcaster;
+
+    private SessionWebSocketPayloadMapper $sessionWebSocketPayloadMapper;
+
+    public function __construct(string $projectRootPath, Server $server)
     {
+        $this->server = $server;
         $this->environment = new Environment($projectRootPath);
         $this->config = new AppConfig($this->environment);
         $this->database = new Database($this->environment);
+        $this->participantConnectionRegistry =
+            new ParticipantConnectionRegistry();
+        $this->webSocketMessageEncoder = new WebSocketMessageEncoder();
+        $this->sessionWebSocketBroadcaster =
+            new SessionWebSocketBroadcaster(
+                server: $this->server,
+                connectionRegistry: $this->participantConnectionRegistry,
+                messageEncoder: $this->webSocketMessageEncoder,
+            );
+        $this->sessionWebSocketPayloadMapper =
+            new SessionWebSocketPayloadMapper();
     }
 
     public function createCsrfMiddleware(): CsrfMiddleware
@@ -247,6 +274,9 @@ final class ApplicationFactory
         $quizRepository = new MySqlQuizRepository($this->database);
         $questionRepository = new MySqlQuestionRepository($this->database);
         $sessionRepository = new MySqlQuizSessionRepository($this->database);
+        $sessionQuestionRepository = new MySqlSessionQuestionRepository(
+            $this->database,
+        );
         $auditLogRepository = new MySqlAuditLogRepository($this->database);
 
         return new QuizSessionController(
@@ -254,12 +284,16 @@ final class ApplicationFactory
                 quizzes: $quizRepository,
                 questions: $questionRepository,
                 sessions: $sessionRepository,
+                sessionQuestions: $sessionQuestionRepository,
+                publicQuestionMapper: new PublicSessionQuestionMapper(),
                 questionContentValidator: new QuestionContentValidator(),
                 gamePinGenerator: new SecureGamePinGenerator(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),
             responseFactory: new ResponseFactory(),
+            sessionWebSocketBroadcaster: $this->sessionWebSocketBroadcaster,
+            webSocketPayloadMapper: $this->sessionWebSocketPayloadMapper,
         );
     }
 
@@ -307,10 +341,12 @@ final class ApplicationFactory
     public function createWebSocketGatewayRouter(): WebSocketGatewayRouter
     {
         $sessionRepository = new MySqlQuizSessionRepository($this->database);
+        $sessionQuestionRepository = new MySqlSessionQuestionRepository(
+            $this->database,
+        );
         $participantRepository = new MySqlSessionParticipantRepository(
             $this->database,
         );
-        $messageEncoder = new WebSocketMessageEncoder();
 
         return new WebSocketGatewayRouter(
             participantGateway: new ParticipantWebSocketGateway(
@@ -320,15 +356,18 @@ final class ApplicationFactory
                     ),
                     sessions: $sessionRepository,
                     participants: $participantRepository,
+                    sessionQuestions: $sessionQuestionRepository,
+                    publicQuestionMapper: new PublicSessionQuestionMapper(),
                     transactionManager: new PdoTransactionManager(
                         $this->database,
                     ),
                 ),
-                connectionRegistry: new ParticipantConnectionRegistry(),
-                messageEncoder: $messageEncoder,
+                connectionRegistry: $this->participantConnectionRegistry,
+                messageEncoder: $this->webSocketMessageEncoder,
+                payloadMapper: $this->sessionWebSocketPayloadMapper,
             ),
             echoGateway: new EchoGateway(),
-            messageEncoder: $messageEncoder,
+            messageEncoder: $this->webSocketMessageEncoder,
         );
     }
 

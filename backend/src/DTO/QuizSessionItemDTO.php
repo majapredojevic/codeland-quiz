@@ -19,6 +19,8 @@ final readonly class QuizSessionItemDTO
         public string $gamePin,
         public QuizSessionStatus $status,
         public ?int $currentQuestionOrder,
+        public ?DateTimeImmutable $currentQuestionStartedAt,
+        public ?DateTimeImmutable $currentQuestionDeadline,
         public ?DateTimeImmutable $joinDeadline,
         public ?DateTimeImmutable $startedAt,
         public ?DateTimeImmutable $endedAt,

@@ -10,6 +10,7 @@ use CodeLandQuiz\Game\Exception\GameSessionFinishedException;
 use CodeLandQuiz\Game\Exception\InvalidParticipantTokenException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Game\ParticipantConnectionService;
+use CodeLandQuiz\Model\QuizSessionStatus;
 use InvalidArgumentException;
 use JsonException;
 use OpenSwoole\Http\Request;
@@ -33,6 +34,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         private readonly ParticipantConnectionService $participantConnectionService,
         private readonly ParticipantConnectionRegistry $connectionRegistry,
         private readonly WebSocketMessageEncoder $messageEncoder,
+        private readonly SessionWebSocketPayloadMapper $payloadMapper,
     ) {
     }
 
@@ -115,6 +117,11 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             unset($this->pendingConnectionIds[$fileDescriptor]);
 
             $this->pushAuthenticated(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                result: $result,
+            );
+            $this->pushReconnectState(
                 server: $server,
                 fileDescriptor: $fileDescriptor,
                 result: $result,
@@ -269,6 +276,34 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 'currentQuestionOrder' => $result->currentQuestionOrder,
             ],
         ]);
+    }
+
+    private function pushReconnectState(
+        Server $server,
+        int $fileDescriptor,
+        ParticipantConnectionResultDTO $result,
+    ): void {
+        if (
+            $result->sessionStatus !== QuizSessionStatus::ACTIVE
+            || $result->currentQuestion === null
+            || $result->currentQuestionStartedAt === null
+            || $result->currentQuestionDeadline === null
+        ) {
+            return;
+        }
+
+        $this->push(
+            server: $server,
+            fileDescriptor: $fileDescriptor,
+            type: 'GAME_STARTED',
+            payload: $this->payloadMapper->participantGameStarted($result),
+        );
+        $this->push(
+            server: $server,
+            fileDescriptor: $fileDescriptor,
+            type: 'QUESTION_STARTED',
+            payload: $this->payloadMapper->participantQuestionStarted($result),
+        );
     }
 
     private function replacePreviousConnection(

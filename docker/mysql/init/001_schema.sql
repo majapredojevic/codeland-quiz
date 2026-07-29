@@ -223,6 +223,8 @@ CREATE TABLE quiz_sessions (
     ) STORED,
 
     current_question_order INT NULL,
+    current_question_started_at TIMESTAMP(3) NULL DEFAULT NULL,
+    current_question_deadline TIMESTAMP(3) NULL DEFAULT NULL,
 
     join_deadline TIMESTAMP NULL DEFAULT NULL,
     started_at TIMESTAMP NULL DEFAULT NULL,

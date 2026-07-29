@@ -92,6 +92,8 @@ SELECT
     qs.game_pin,
     qs.status,
     qs.current_question_order,
+    qs.current_question_started_at,
+    qs.current_question_deadline,
     qs.join_deadline,
     qs.started_at,
     qs.ended_at,
@@ -112,10 +114,27 @@ INNER JOIN users host
     ON host.id = qs.host_user_id
 SQL;
 
+    private const MARK_STARTED_SQL = <<<SQL
+UPDATE quiz_sessions
+SET status = 'ACTIVE',
+    started_at = COALESCE(
+        started_at,
+        CURRENT_TIMESTAMP
+    ),
+    current_question_order = :question_order,
+    current_question_started_at = CURRENT_TIMESTAMP(3),
+    current_question_deadline = TIMESTAMPADD(
+        SECOND,
+        :time_limit_seconds,
+        CURRENT_TIMESTAMP(3)
+    )
+WHERE id = :session_id
+  AND status = 'WAITING'
+SQL;
+
     public function __construct(
         private Database $database,
-    ) {
-    }
+    ) {}
 
     public function create(
         int $quizId,
@@ -271,6 +290,30 @@ SQL;
         );
     }
 
+    public function markStarted(
+        int $sessionId,
+        int $questionOrder,
+        int $timeLimitSeconds,
+    ): void {
+        $statement = $this->connection()->prepare(self::MARK_STARTED_SQL);
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->bindValue(
+            ':question_order',
+            $questionOrder,
+            PDO::PARAM_INT,
+        );
+        $statement->bindValue(
+            ':time_limit_seconds',
+            $timeLimitSeconds,
+            PDO::PARAM_INT,
+        );
+        $statement->execute();
+
+        if ($statement->rowCount() === 0) {
+            throw new RuntimeException('Quiz session was not started.');
+        }
+    }
+
     private function findOverviewByGamePin(
         string $gamePin,
         bool $shouldLock,
@@ -361,6 +404,12 @@ SQL;
             currentQuestionOrder: $row['current_question_order'] === null
                 ? null
                 : (int) $row['current_question_order'],
+            currentQuestionStartedAt: $this->nullableDateTime(
+                $row['current_question_started_at'],
+            ),
+            currentQuestionDeadline: $this->nullableDateTime(
+                $row['current_question_deadline'],
+            ),
             joinDeadline: $this->nullableDateTime($row['join_deadline']),
             startedAt: $this->nullableDateTime($row['started_at']),
             endedAt: $this->nullableDateTime($row['ended_at']),
