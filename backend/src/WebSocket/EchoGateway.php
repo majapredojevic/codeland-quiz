@@ -9,9 +9,9 @@ use OpenSwoole\Http\Request;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
 
-final class EchoGateway
+final class EchoGateway implements WebSocketGateway
 {
-    public function open(Request $request): void
+    public function open(Server $server, Request $request): void
     {
         echo "WebSocket connection opened: {$request->fd}\n";
     }
@@ -31,8 +31,8 @@ final class EchoGateway
         ], JSON_THROW_ON_ERROR));
     }
 
-    public function close(int $fd): void
+    public function close(Server $server, int $fileDescriptor): void
     {
-        echo "WebSocket connection closed: {$fd}\n";
+        echo "WebSocket connection closed: {$fileDescriptor}\n";
     }
 }

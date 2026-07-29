@@ -31,7 +31,9 @@ use CodeLandQuiz\Controller\StudentController;
 use CodeLandQuiz\Controller\TopicController;
 use CodeLandQuiz\Game\AvatarCatalog;
 use CodeLandQuiz\Game\GameService;
+use CodeLandQuiz\Game\JwtParticipantTokenVerifier;
 use CodeLandQuiz\Game\JwtParticipantTokenIssuer;
+use CodeLandQuiz\Game\ParticipantConnectionService;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Middleware\AuthenticationMiddleware;
@@ -59,6 +61,11 @@ use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
 use CodeLandQuiz\Topic\TopicService;
+use CodeLandQuiz\WebSocket\EchoGateway;
+use CodeLandQuiz\WebSocket\ParticipantConnectionRegistry;
+use CodeLandQuiz\WebSocket\ParticipantWebSocketGateway;
+use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
+use CodeLandQuiz\WebSocket\WebSocketMessageEncoder;
 
 final class ApplicationFactory
 {
@@ -294,6 +301,34 @@ final class ApplicationFactory
                 transactionManager: new PdoTransactionManager($this->database),
             ),
             responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createWebSocketGatewayRouter(): WebSocketGatewayRouter
+    {
+        $sessionRepository = new MySqlQuizSessionRepository($this->database);
+        $participantRepository = new MySqlSessionParticipantRepository(
+            $this->database,
+        );
+        $messageEncoder = new WebSocketMessageEncoder();
+
+        return new WebSocketGatewayRouter(
+            participantGateway: new ParticipantWebSocketGateway(
+                participantConnectionService: new ParticipantConnectionService(
+                    participantTokenVerifier: new JwtParticipantTokenVerifier(
+                        secret: $this->config->getParticipantTokenSecret(),
+                    ),
+                    sessions: $sessionRepository,
+                    participants: $participantRepository,
+                    transactionManager: new PdoTransactionManager(
+                        $this->database,
+                    ),
+                ),
+                connectionRegistry: new ParticipantConnectionRegistry(),
+                messageEncoder: $messageEncoder,
+            ),
+            echoGateway: new EchoGateway(),
+            messageEncoder: $messageEncoder,
         );
     }
 

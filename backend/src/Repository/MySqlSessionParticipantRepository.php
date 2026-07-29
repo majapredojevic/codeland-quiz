@@ -58,6 +58,22 @@ INSERT INTO session_participants (
 )
 SQL;
 
+    private const MARK_CONNECTED_SQL = <<<SQL
+UPDATE session_participants
+SET is_connected = TRUE,
+    disconnected_at = NULL
+WHERE id = :participant_id
+  AND is_removed = FALSE
+SQL;
+
+    private const MARK_DISCONNECTED_SQL = <<<SQL
+UPDATE session_participants
+SET is_connected = FALSE,
+    disconnected_at = CURRENT_TIMESTAMP
+WHERE id = :participant_id
+  AND is_removed = FALSE
+SQL;
+
     public function __construct(
         private Database $database,
     ) {
@@ -144,6 +160,34 @@ SQL;
         $statement->execute();
 
         return $this->fetchOverview($statement);
+    }
+
+    public function findOverviewByIdForUpdate(
+        int $participantId,
+    ): ?SessionParticipantOverview {
+        $sql = self::SELECT_OVERVIEW_SQL
+            . "\nWHERE id = :participant_id"
+            . "\n  AND is_removed = FALSE"
+            . "\nFOR UPDATE";
+        $statement = $this->connection()->prepare($sql);
+        $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return $this->fetchOverview($statement);
+    }
+
+    public function markConnected(int $participantId): void
+    {
+        $statement = $this->connection()->prepare(self::MARK_CONNECTED_SQL);
+        $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function markDisconnected(int $participantId): void
+    {
+        $statement = $this->connection()->prepare(self::MARK_DISCONNECTED_SQL);
+        $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
+        $statement->execute();
     }
 
     private function bindNullableInt(

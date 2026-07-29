@@ -8,7 +8,7 @@ use CodeLandQuiz\Bootstrap\ApplicationFactory;
 use CodeLandQuiz\Controller\HealthController;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Support\Router;
-use CodeLandQuiz\WebSocket\EchoGateway;
+use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Frame;
@@ -20,7 +20,7 @@ final class Application
 
     private Router $router;
 
-    private EchoGateway $echoGateway;
+    private WebSocketGatewayRouter $webSocketGateway;
 
     private ApplicationFactory $applicationFactory;
 
@@ -30,8 +30,9 @@ final class Application
     ) {
         $this->server = new Server($this->host, $this->port);
         $this->router = new Router();
-        $this->echoGateway = new EchoGateway();
         $this->applicationFactory = new ApplicationFactory(dirname(__DIR__));
+        $this->webSocketGateway =
+            $this->applicationFactory->createWebSocketGatewayRouter();
     }
 
     public function run(): void
@@ -522,15 +523,15 @@ final class Application
         });
 
         $this->server->on('open', function (Server $server, Request $request): void {
-            $this->echoGateway->open($request);
+            $this->webSocketGateway->open($server, $request);
         });
 
         $this->server->on('message', function (Server $server, Frame $frame): void {
-            $this->echoGateway->message($server, $frame);
+            $this->webSocketGateway->message($server, $frame);
         });
 
         $this->server->on('close', function (Server $server, int $fd): void {
-            $this->echoGateway->close($fd);
+            $this->webSocketGateway->close($server, $fd);
         });
     }
 }

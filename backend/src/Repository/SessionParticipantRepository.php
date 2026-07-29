@@ -30,4 +30,12 @@ interface SessionParticipantRepository
     public function findOverviewById(
         int $participantId,
     ): ?SessionParticipantOverview;
+
+    public function findOverviewByIdForUpdate(
+        int $participantId,
+    ): ?SessionParticipantOverview;
+
+    public function markConnected(int $participantId): void;
+
+    public function markDisconnected(int $participantId): void;
 }
