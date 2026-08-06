@@ -34,14 +34,24 @@ final class Database
     private function connect(): PDO
     {
         try {
-            return new PDO(
+            $connection = new PDO(
                 $this->createDsn(),
                 $this->environment->get('DB_USERNAME'),
                 $this->environment->get('DB_PASSWORD'),
                 self::PDO_OPTIONS,
             );
+
+            $connection->exec(
+                "SET SESSION time_zone = '+00:00'",
+            );
+
+            return $connection;
         } catch (PDOException $exception) {
-            throw new DatabaseException('Unable to connect to the database.', 0, $exception);
+            throw new DatabaseException(
+                'Unable to connect to the database.',
+                0,
+                $exception,
+            );
         }
     }
 

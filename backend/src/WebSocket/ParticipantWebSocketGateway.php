@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\DTO\AnswerSubmissionResultDTO;
 use CodeLandQuiz\DTO\ParticipantConnectionResultDTO;
 use CodeLandQuiz\DTO\SessionParticipantItemDTO;
+use CodeLandQuiz\Game\AnswerSubmissionService;
+use CodeLandQuiz\Game\Exception\AnswerAlreadySubmittedException;
+use CodeLandQuiz\Game\Exception\AnswerDeadlineExpiredException;
+use CodeLandQuiz\Game\Exception\AnswerSubmissionNotAllowedException;
 use CodeLandQuiz\Game\Exception\GameSessionFinishedException;
 use CodeLandQuiz\Game\Exception\InvalidParticipantTokenException;
+use CodeLandQuiz\Game\Exception\InvalidSelectedOptionsException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Game\ParticipantConnectionService;
 use CodeLandQuiz\Model\QuizSessionStatus;
@@ -17,6 +23,7 @@ use OpenSwoole\Http\Request;
 use OpenSwoole\Timer;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
+use stdClass;
 use Throwable;
 
 final class ParticipantWebSocketGateway implements WebSocketGateway
@@ -24,6 +31,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
     private const AUTHENTICATION_TIMEOUT_SECONDS = 10;
     private const POLICY_VIOLATION_CLOSE_CODE = 1008;
     private const AUTHENTICATE_MESSAGE_TYPE = 'PARTICIPANT_AUTHENTICATE';
+    private const ANSWER_SUBMIT_MESSAGE_TYPE = 'ANSWER_SUBMIT';
 
     /**
      * @var array<int, string>
@@ -32,6 +40,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
 
     public function __construct(
         private readonly ParticipantConnectionService $participantConnectionService,
+        private readonly AnswerSubmissionService $answerSubmissionService,
         private readonly ParticipantConnectionRegistry $connectionRegistry,
         private readonly WebSocketMessageEncoder $messageEncoder,
         private readonly SessionWebSocketPayloadMapper $payloadMapper,
@@ -71,12 +80,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         $fileDescriptor = $frame->fd;
 
         if ($this->connectionRegistry->isAuthenticated($fileDescriptor)) {
-            $this->pushError(
-                server: $server,
-                fileDescriptor: $fileDescriptor,
-                code: 'UNSUPPORTED_MESSAGE',
-                message: 'This WebSocket message type is not supported yet.',
-            );
+            $this->handleAuthenticatedMessage($server, $frame);
 
             return;
         }
@@ -172,6 +176,105 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         }
     }
 
+    private function handleAuthenticatedMessage(
+        Server $server,
+        Frame $frame,
+    ): void {
+        $fileDescriptor = $frame->fd;
+        $connection = $this->connectionRegistry->findAuthenticated(
+            $fileDescriptor,
+        );
+
+        if ($connection === null) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'PARTICIPANT_CONNECTION_REJECTED',
+                message: 'Participant connection was rejected.',
+            );
+            $this->disconnect($server, $fileDescriptor);
+
+            return;
+        }
+
+        try {
+            $message = $this->readAuthenticatedMessage($frame->data);
+        } catch (InvalidArgumentException) {
+            $this->pushInvalidAnswerMessage($server, $fileDescriptor);
+
+            return;
+        }
+
+        if ($message['type'] !== self::ANSWER_SUBMIT_MESSAGE_TYPE) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'UNSUPPORTED_MESSAGE',
+                message: 'This WebSocket message type is not supported yet.',
+            );
+
+            return;
+        }
+
+        try {
+            $dto = AnswerSubmitMessage::fromPayload($message['payload']);
+        } catch (InvalidArgumentException) {
+            $this->pushInvalidAnswerMessage($server, $fileDescriptor);
+
+            return;
+        }
+
+        try {
+            $result = $this->answerSubmissionService->submitAnswer(
+                sessionId: $connection->sessionId,
+                participantId: $connection->participantId,
+                dto: $dto,
+            );
+
+            $this->pushAnswerAccepted(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                result: $result,
+            );
+        } catch (AnswerSubmissionNotAllowedException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'ANSWER_SUBMISSION_NOT_ALLOWED',
+                message: 'Answers can only be submitted while the game is active.',
+            );
+        } catch (AnswerDeadlineExpiredException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'ANSWER_DEADLINE_EXPIRED',
+                message: 'The answer deadline has expired.',
+            );
+        } catch (AnswerAlreadySubmittedException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'ANSWER_ALREADY_SUBMITTED',
+                message: 'An answer has already been submitted for this question.',
+            );
+        } catch (InvalidSelectedOptionsException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'INVALID_SELECTED_OPTIONS',
+                message: 'Selected options are invalid for the current question.',
+            );
+        } catch (Throwable $throwable) {
+            error_log($throwable->getMessage());
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'INTERNAL_ERROR',
+                message: 'An unexpected server error occurred.',
+            );
+        }
+    }
+
     public function close(Server $server, int $fileDescriptor): void
     {
         unset($this->pendingConnectionIds[$fileDescriptor]);
@@ -257,6 +360,49 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         return $participantToken;
     }
 
+    /**
+     * @return array{type: string, payload: array<string, mixed>}
+     */
+    private function readAuthenticatedMessage(string $message): array
+    {
+        try {
+            $data = json_decode($message, false, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new InvalidArgumentException(
+                'A valid answer submission message is required.',
+                0,
+                $exception,
+            );
+        }
+
+        if (!$data instanceof stdClass) {
+            throw new InvalidArgumentException(
+                'A valid answer submission message is required.',
+            );
+        }
+
+        $type = $data->type ?? null;
+
+        if (!is_string($type) || trim($type) === '') {
+            throw new InvalidArgumentException(
+                'A valid answer submission message is required.',
+            );
+        }
+
+        $payload = $data->payload ?? null;
+
+        if (!$payload instanceof stdClass) {
+            throw new InvalidArgumentException(
+                'A valid answer submission message is required.',
+            );
+        }
+
+        return [
+            'type' => $type,
+            'payload' => (array) $payload,
+        ];
+    }
+
     private function pushAuthenticated(
         Server $server,
         int $fileDescriptor,
@@ -276,6 +422,30 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 'currentQuestionOrder' => $result->currentQuestionOrder,
             ],
         ]);
+    }
+
+    private function pushAnswerAccepted(
+        Server $server,
+        int $fileDescriptor,
+        AnswerSubmissionResultDTO $result,
+    ): void {
+        $this->push($server, $fileDescriptor, 'ANSWER_ACCEPTED', [
+            'questionOrder' => $result->questionOrder,
+            'responseTimeMs' => $result->responseTimeMs,
+            'answeredAt' => $result->answeredAt->format(DATE_ATOM),
+        ]);
+    }
+
+    private function pushInvalidAnswerMessage(
+        Server $server,
+        int $fileDescriptor,
+    ): void {
+        $this->pushError(
+            server: $server,
+            fileDescriptor: $fileDescriptor,
+            code: 'INVALID_ANSWER_MESSAGE',
+            message: 'A valid answer submission message is required.',
+        );
     }
 
     private function pushReconnectState(

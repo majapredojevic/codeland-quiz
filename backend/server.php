@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+date_default_timezone_set('UTC');
+
 use CodeLandQuiz\Application;
 
 require __DIR__ . '/vendor/autoload.php';

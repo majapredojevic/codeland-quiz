@@ -29,6 +29,8 @@ use CodeLandQuiz\Controller\QuizSessionController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\StudentController;
 use CodeLandQuiz\Controller\TopicController;
+use CodeLandQuiz\Game\AnswerScoreCalculator;
+use CodeLandQuiz\Game\AnswerSubmissionService;
 use CodeLandQuiz\Game\AvatarCatalog;
 use CodeLandQuiz\Game\GameService;
 use CodeLandQuiz\Game\JwtParticipantTokenVerifier;
@@ -43,6 +45,7 @@ use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
+use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
 use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
@@ -358,6 +361,18 @@ final class ApplicationFactory
                     participants: $participantRepository,
                     sessionQuestions: $sessionQuestionRepository,
                     publicQuestionMapper: new PublicSessionQuestionMapper(),
+                    transactionManager: new PdoTransactionManager(
+                        $this->database,
+                    ),
+                ),
+                answerSubmissionService: new AnswerSubmissionService(
+                    sessions: $sessionRepository,
+                    sessionQuestions: $sessionQuestionRepository,
+                    participants: $participantRepository,
+                    answers: new MySqlParticipantAnswerRepository(
+                        $this->database,
+                    ),
+                    scoreCalculator: new AnswerScoreCalculator(),
                     transactionManager: new PdoTransactionManager(
                         $this->database,
                     ),
