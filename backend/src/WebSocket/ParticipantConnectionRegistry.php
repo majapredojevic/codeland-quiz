@@ -94,6 +94,13 @@ final class ParticipantConnectionRegistry
         return $this->authenticatedConnections[$fileDescriptor] ?? null;
     }
 
+    public function findCurrentFileDescriptorByParticipantId(
+        int $participantId,
+    ): ?int {
+        return $this->currentFileDescriptorByParticipantId[$participantId]
+            ?? null;
+    }
+
     public function remove(
         int $fileDescriptor,
     ): ?AuthenticatedParticipantConnection {

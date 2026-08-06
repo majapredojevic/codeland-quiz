@@ -94,6 +94,7 @@ SELECT
     qs.current_question_order,
     qs.current_question_started_at,
     qs.current_question_deadline,
+    qs.current_question_closed_at,
     qs.join_deadline,
     qs.started_at,
     qs.ended_at,
@@ -127,9 +128,18 @@ SET status = 'ACTIVE',
         SECOND,
         :time_limit_seconds,
         CURRENT_TIMESTAMP(3)
-    )
+    ),
+    current_question_closed_at = NULL
 WHERE id = :session_id
   AND status = 'WAITING'
+SQL;
+
+    private const MARK_CURRENT_QUESTION_CLOSED_SQL = <<<SQL
+UPDATE quiz_sessions
+SET current_question_closed_at = CURRENT_TIMESTAMP(3)
+WHERE id = :session_id
+  AND status = 'ACTIVE'
+  AND current_question_closed_at IS NULL
 SQL;
 
     public function __construct(
@@ -314,6 +324,16 @@ SQL;
         }
     }
 
+    public function markCurrentQuestionClosed(
+        int $sessionId,
+    ): void {
+        $statement = $this->connection()->prepare(
+            self::MARK_CURRENT_QUESTION_CLOSED_SQL,
+        );
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
     private function findOverviewByGamePin(
         string $gamePin,
         bool $shouldLock,
@@ -409,6 +429,9 @@ SQL;
             ),
             currentQuestionDeadline: $this->nullableDateTime(
                 $row['current_question_deadline'],
+            ),
+            currentQuestionClosedAt: $this->nullableDateTime(
+                $row['current_question_closed_at'],
             ),
             joinDeadline: $this->nullableDateTime($row['join_deadline']),
             startedAt: $this->nullableDateTime($row['started_at']),

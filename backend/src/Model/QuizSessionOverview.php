@@ -20,6 +20,7 @@ final readonly class QuizSessionOverview
         public ?int $currentQuestionOrder,
         public ?DateTimeImmutable $currentQuestionStartedAt,
         public ?DateTimeImmutable $currentQuestionDeadline,
+        public ?DateTimeImmutable $currentQuestionClosedAt,
         public ?DateTimeImmutable $joinDeadline,
         public ?DateTimeImmutable $startedAt,
         public ?DateTimeImmutable $endedAt,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Game;
 
+use CodeLandQuiz\DTO\ClosedSessionQuestionStateDTO;
 use CodeLandQuiz\DTO\ParticipantConnectionResultDTO;
 use CodeLandQuiz\DTO\ParticipantTokenPayloadDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
@@ -13,6 +14,8 @@ use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionParticipantOverview;
+use CodeLandQuiz\Model\SessionQuestionOverview;
+use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\Repository\QuizSessionRepository;
 use CodeLandQuiz\Repository\SessionQuestionRepository;
@@ -28,6 +31,7 @@ final readonly class ParticipantConnectionService
         private SessionQuestionRepository $sessionQuestions,
         private PublicSessionQuestionMapper $publicQuestionMapper,
         private TransactionManager $transactionManager,
+        private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
     ) {
     }
 
@@ -73,13 +77,30 @@ final readonly class ParticipantConnectionService
                 );
 
                 $this->participants->markConnected($participant->id);
-                $currentQuestion = $this->currentQuestion($session);
+                $question = $this->activeQuestion($session);
+                $currentQuestion = null;
+                $closedQuestion = null;
+
+                if ($question !== null) {
+                    if ($session->currentQuestionClosedAt === null) {
+                        $currentQuestion = $this->publicQuestionMapper->map(
+                            $question,
+                        );
+                    } else {
+                        $closedQuestion = $this->closedQuestionResultAssembler
+                            ->assemble(
+                                question: $question,
+                                closedAt: $session->currentQuestionClosedAt,
+                            );
+                    }
+                }
 
                 return $this->connectionResult(
                     session: $session,
                     participant: $participant,
                     isConnected: true,
                     currentQuestion: $currentQuestion,
+                    closedQuestion: $closedQuestion,
                 );
             },
         );
@@ -135,6 +156,7 @@ final readonly class ParticipantConnectionService
         SessionParticipantOverview $participant,
         bool $isConnected,
         ?PublicSessionQuestionDTO $currentQuestion,
+        ?ClosedSessionQuestionStateDTO $closedQuestion,
     ): ParticipantConnectionResultDTO {
         return new ParticipantConnectionResultDTO(
             participant: new SessionParticipantItemDTO(
@@ -155,15 +177,16 @@ final readonly class ParticipantConnectionService
             sessionStatus: $session->status,
             currentQuestionOrder: $session->currentQuestionOrder,
             currentQuestion: $currentQuestion,
+            closedQuestion: $closedQuestion,
             currentQuestionStartedAt: $session->currentQuestionStartedAt,
             currentQuestionDeadline: $session->currentQuestionDeadline,
             questionCount: $session->questionCount,
         );
     }
 
-    private function currentQuestion(
+    private function activeQuestion(
         QuizSessionOverview $session,
-    ): ?PublicSessionQuestionDTO {
+    ): ?SessionQuestionOverview {
         if ($session->status === QuizSessionStatus::WAITING) {
             return null;
         }
@@ -189,6 +212,6 @@ final readonly class ParticipantConnectionService
             );
         }
 
-        return $this->publicQuestionMapper->map($question);
+        return $question;
     }
 }

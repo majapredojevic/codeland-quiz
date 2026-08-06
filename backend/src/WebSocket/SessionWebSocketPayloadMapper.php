@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\DTO\ClosedSessionQuestionStateDTO;
 use CodeLandQuiz\DTO\ParticipantConnectionResultDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionOptionDTO;
+use CodeLandQuiz\DTO\SessionLeaderboardEntryDTO;
+use CodeLandQuiz\DTO\SessionQuestionParticipantResultDTO;
 use CodeLandQuiz\DTO\StartQuizSessionResultDTO;
 use DateTimeImmutable;
 
@@ -89,6 +92,70 @@ final class SessionWebSocketPayloadMapper
                     $result->currentQuestionDeadline,
                 ),
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function questionClosed(
+        ClosedSessionQuestionStateDTO $state,
+    ): array {
+        return [
+            'questionOrder' => $state->question->questionOrder,
+            'closedAt' => $this->formatDateTime($state->closedAt),
+            'correctOptionIds' => $state->correctOptionIds,
+            'stats' => [
+                'participantCount' => $state->stats->participantCount,
+                'answerCount' => $state->stats->answerCount,
+                'correctAnswerCount' => $state->stats->correctAnswerCount,
+                'incorrectAnswerCount' => $state->stats->incorrectAnswerCount,
+                'unansweredCount' => $state->stats->unansweredCount,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function answerResult(
+        SessionQuestionParticipantResultDTO $result,
+        int $questionOrder,
+    ): array {
+        return [
+            'questionOrder' => $questionOrder,
+            'answered' => $result->answered,
+            'selectedOptionIds' => $result->selectedOptionIds,
+            'isCorrect' => $result->isCorrect,
+            'responseTimeMs' => $result->responseTimeMs,
+            'pointsAwarded' => $result->pointsAwarded,
+            'totalScore' => $result->totalScore,
+            'answeredAt' => $this->formatDateTime($result->answeredAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function leaderboardUpdated(
+        ClosedSessionQuestionStateDTO $state,
+    ): array {
+        return [
+            'questionOrder' => $state->question->questionOrder,
+            'participantCount' => $state->stats->participantCount,
+            'entries' => array_map(
+                static fn(SessionLeaderboardEntryDTO $entry): array => [
+                    'rank' => $entry->rank,
+                    'participantId' => $entry->participantId,
+                    'participantType' => $entry->participantType->value,
+                    'nickname' => $entry->nickname,
+                    'avatarKey' => $entry->avatarKey,
+                    'totalScore' => $entry->totalScore,
+                    'pointsAwardedThisQuestion' =>
+                        $entry->pointsAwardedThisQuestion,
+                ],
+                $state->leaderboard,
+            ),
         ];
     }
 

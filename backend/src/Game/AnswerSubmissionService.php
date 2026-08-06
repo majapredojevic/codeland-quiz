@@ -8,6 +8,7 @@ use CodeLandQuiz\DTO\AnswerSubmissionResultDTO;
 use CodeLandQuiz\DTO\SubmitAnswerDTO;
 use CodeLandQuiz\Game\Exception\AnswerAlreadySubmittedException;
 use CodeLandQuiz\Game\Exception\AnswerDeadlineExpiredException;
+use CodeLandQuiz\Game\Exception\AnswerQuestionClosedException;
 use CodeLandQuiz\Game\Exception\AnswerSubmissionNotAllowedException;
 use CodeLandQuiz\Game\Exception\InvalidSelectedOptionsException;
 use CodeLandQuiz\Model\QuestionType;
@@ -46,6 +47,12 @@ final readonly class AnswerSubmissionService
                 );
 
                 $this->ensureSessionAcceptsAnswers($session);
+
+                if ($session->currentQuestionClosedAt !== null) {
+                    throw new AnswerQuestionClosedException(
+                        'The current question is closed.',
+                    );
+                }
 
                 $participant =
                     $this->participants->findOverviewByIdForUpdate(

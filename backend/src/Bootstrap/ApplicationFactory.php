@@ -49,6 +49,7 @@ use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
 use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
+use CodeLandQuiz\Repository\MySqlQuizSessionResultRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlSessionQuestionRepository;
 use CodeLandQuiz\Repository\MySqlSessionParticipantRepository;
@@ -63,11 +64,14 @@ use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
+use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
 use CodeLandQuiz\Topic\TopicService;
 use CodeLandQuiz\WebSocket\EchoGateway;
+use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\ParticipantConnectionRegistry;
+use CodeLandQuiz\WebSocket\ParticipantWebSocketSender;
 use CodeLandQuiz\WebSocket\ParticipantWebSocketGateway;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
 use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
@@ -93,6 +97,14 @@ final class ApplicationFactory
 
     private SessionWebSocketPayloadMapper $sessionWebSocketPayloadMapper;
 
+    private MySqlQuizSessionResultRepository $quizSessionResultRepository;
+
+    private ClosedQuestionResultAssembler $closedQuestionResultAssembler;
+
+    private ParticipantWebSocketSender $participantWebSocketSender;
+
+    private ClosedQuestionWebSocketNotifier $closedQuestionWebSocketNotifier;
+
     public function __construct(string $projectRootPath, Server $server)
     {
         $this->server = $server;
@@ -110,6 +122,23 @@ final class ApplicationFactory
             );
         $this->sessionWebSocketPayloadMapper =
             new SessionWebSocketPayloadMapper();
+        $this->quizSessionResultRepository =
+            new MySqlQuizSessionResultRepository($this->database);
+        $this->closedQuestionResultAssembler =
+            new ClosedQuestionResultAssembler(
+                results: $this->quizSessionResultRepository,
+            );
+        $this->participantWebSocketSender = new ParticipantWebSocketSender(
+            server: $this->server,
+            connectionRegistry: $this->participantConnectionRegistry,
+            messageEncoder: $this->webSocketMessageEncoder,
+        );
+        $this->closedQuestionWebSocketNotifier =
+            new ClosedQuestionWebSocketNotifier(
+                sessionBroadcaster: $this->sessionWebSocketBroadcaster,
+                participantSender: $this->participantWebSocketSender,
+                payloadMapper: $this->sessionWebSocketPayloadMapper,
+            );
     }
 
     public function createCsrfMiddleware(): CsrfMiddleware
@@ -293,10 +322,14 @@ final class ApplicationFactory
                 gamePinGenerator: new SecureGamePinGenerator(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
+                sessionResults: $this->quizSessionResultRepository,
+                closedQuestionResultAssembler:
+                    $this->closedQuestionResultAssembler,
             ),
             responseFactory: new ResponseFactory(),
             sessionWebSocketBroadcaster: $this->sessionWebSocketBroadcaster,
             webSocketPayloadMapper: $this->sessionWebSocketPayloadMapper,
+            closedQuestionNotifier: $this->closedQuestionWebSocketNotifier,
         );
     }
 
@@ -364,6 +397,8 @@ final class ApplicationFactory
                     transactionManager: new PdoTransactionManager(
                         $this->database,
                     ),
+                    closedQuestionResultAssembler:
+                        $this->closedQuestionResultAssembler,
                 ),
                 answerSubmissionService: new AnswerSubmissionService(
                     sessions: $sessionRepository,

@@ -57,4 +57,8 @@ interface QuizSessionRepository
         int $questionOrder,
         int $timeLimitSeconds,
     ): void;
+
+    public function markCurrentQuestionClosed(
+        int $sessionId,
+    ): void;
 }

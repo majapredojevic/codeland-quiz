@@ -21,6 +21,7 @@ final readonly class QuizSessionItemDTO
         public ?int $currentQuestionOrder,
         public ?DateTimeImmutable $currentQuestionStartedAt,
         public ?DateTimeImmutable $currentQuestionDeadline,
+        public ?DateTimeImmutable $currentQuestionClosedAt,
         public ?DateTimeImmutable $joinDeadline,
         public ?DateTimeImmutable $startedAt,
         public ?DateTimeImmutable $endedAt,

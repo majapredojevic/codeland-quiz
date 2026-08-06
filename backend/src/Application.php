@@ -416,6 +416,17 @@ final class Application
         );
 
         $this->router->post(
+            '/api/sessions/{id}/questions/current/close',
+            $quizSessionController->closeCurrentQuestion(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
             '/api/topics',
             $topicController->create(...),
             [

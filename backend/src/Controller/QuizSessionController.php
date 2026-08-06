@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Controller;
 
+use CodeLandQuiz\DTO\ClosedSessionQuestionStateDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionOptionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
+use CodeLandQuiz\DTO\SessionLeaderboardEntryDTO;
+use CodeLandQuiz\DTO\SessionQuestionParticipantResultDTO;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
@@ -14,8 +17,11 @@ use CodeLandQuiz\QuizSession\Exception\GamePinGenerationFailedException;
 use CodeLandQuiz\QuizSession\Exception\QuizInactiveException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotStartException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionCannotCloseException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionStateConflictException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionStateConflictException;
 use CodeLandQuiz\QuizSession\QuizSessionService;
+use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
 use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
 use DateTimeImmutable;
@@ -31,6 +37,7 @@ final class QuizSessionController
         private readonly ResponseFactory $responseFactory,
         private readonly SessionWebSocketBroadcaster $sessionWebSocketBroadcaster,
         private readonly SessionWebSocketPayloadMapper $webSocketPayloadMapper,
+        private readonly ClosedQuestionWebSocketNotifier $closedQuestionNotifier,
     ) {
     }
 
@@ -184,6 +191,63 @@ final class QuizSessionController
         }
     }
 
+    public function closeCurrentQuestion(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $sessionId = $context->getRouteInt('id');
+            $actorUserId = $context->getCurrentUser()->id;
+            $result = $this->quizSessionService->closeCurrentQuestion(
+                actorUserId: $actorUserId,
+                sessionId: $sessionId,
+            );
+
+            if ($result->stateChanged) {
+                $this->closedQuestionNotifier->notify(
+                    sessionId: $result->session->id,
+                    state: $result->closedQuestion,
+                );
+            }
+
+            $this->responseFactory->json($response, [
+                'session' => $this->sessionResponse($result->session),
+                'questionResult' => $this->closedQuestionResponse(
+                    $result->closedQuestion,
+                ),
+                'stateChanged' => $result->stateChanged,
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizSessionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz session was not found.',
+                404,
+            );
+        } catch (
+            QuizSessionQuestionCannotCloseException
+            | QuizSessionQuestionStateConflictException $exception
+        ) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -208,6 +272,9 @@ final class QuizSessionController
             ),
             'currentQuestionDeadline' => $this->formatDateTime(
                 $session->currentQuestionDeadline,
+            ),
+            'currentQuestionClosedAt' => $this->formatDateTime(
+                $session->currentQuestionClosedAt,
             ),
             'joinDeadline' => $this->formatDateTime($session->joinDeadline),
             'startedAt' => $this->formatDateTime($session->startedAt),
@@ -249,6 +316,73 @@ final class QuizSessionController
             'id' => $option->id,
             'optionText' => $option->optionText,
             'optionOrder' => $option->optionOrder,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function closedQuestionResponse(
+        ClosedSessionQuestionStateDTO $state,
+    ): array {
+        return [
+            'question' => $this->questionResponse($state->question),
+            'closedAt' => $state->closedAt->format(DATE_ATOM),
+            'correctOptionIds' => $state->correctOptionIds,
+            'stats' => [
+                'participantCount' => $state->stats->participantCount,
+                'answerCount' => $state->stats->answerCount,
+                'correctAnswerCount' => $state->stats->correctAnswerCount,
+                'incorrectAnswerCount' => $state->stats->incorrectAnswerCount,
+                'unansweredCount' => $state->stats->unansweredCount,
+            ],
+            'participantResults' => array_map(
+                $this->participantResultResponse(...),
+                $state->participantResults,
+            ),
+            'leaderboard' => array_map(
+                $this->leaderboardEntryResponse(...),
+                $state->leaderboard,
+            ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function participantResultResponse(
+        SessionQuestionParticipantResultDTO $result,
+    ): array {
+        return [
+            'participantId' => $result->participantId,
+            'participantType' => $result->participantType->value,
+            'nickname' => $result->nickname,
+            'avatarKey' => $result->avatarKey,
+            'answered' => $result->answered,
+            'selectedOptionIds' => $result->selectedOptionIds,
+            'isCorrect' => $result->isCorrect,
+            'responseTimeMs' => $result->responseTimeMs,
+            'pointsAwarded' => $result->pointsAwarded,
+            'totalScore' => $result->totalScore,
+            'answeredAt' => $this->formatDateTime($result->answeredAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function leaderboardEntryResponse(
+        SessionLeaderboardEntryDTO $entry,
+    ): array {
+        return [
+            'rank' => $entry->rank,
+            'participantId' => $entry->participantId,
+            'participantType' => $entry->participantType->value,
+            'nickname' => $entry->nickname,
+            'avatarKey' => $entry->avatarKey,
+            'totalScore' => $entry->totalScore,
+            'pointsAwardedThisQuestion' =>
+                $entry->pointsAwardedThisQuestion,
         ];
     }
 

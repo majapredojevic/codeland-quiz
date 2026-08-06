@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\QuizSession;
 
 use CodeLandQuiz\Auth\AuditLogService;
+use CodeLandQuiz\DTO\CloseSessionQuestionResultDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
 use CodeLandQuiz\DTO\StartQuizSessionResultDTO;
@@ -20,10 +21,13 @@ use CodeLandQuiz\QuizSession\Exception\GamePinGenerationFailedException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotStartException;
 use CodeLandQuiz\QuizSession\Exception\QuizInactiveException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionCannotCloseException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionStateConflictException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionStateConflictException;
 use CodeLandQuiz\Repository\QuestionRepository;
 use CodeLandQuiz\Repository\QuizRepository;
 use CodeLandQuiz\Repository\QuizSessionRepository;
+use CodeLandQuiz\Repository\QuizSessionResultRepository;
 use CodeLandQuiz\Repository\SessionQuestionRepository;
 use CodeLandQuiz\Support\TransactionManager;
 use InvalidArgumentException;
@@ -44,6 +48,8 @@ final readonly class QuizSessionService
         private GamePinGenerator $gamePinGenerator,
         private AuditLogService $auditLogService,
         private TransactionManager $transactionManager,
+        private QuizSessionResultRepository $sessionResults,
+        private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
     ) {
     }
 
@@ -172,6 +178,113 @@ final readonly class QuizSessionService
                     session: $this->toItem($updatedSession),
                     currentQuestion: $this->toPublicQuestion($question),
                     questionCount: $updatedSession->questionCount,
+                    stateChanged: true,
+                );
+            },
+        );
+    }
+
+    public function closeCurrentQuestion(
+        int $actorUserId,
+        int $sessionId,
+    ): CloseSessionQuestionResultDTO {
+        return $this->transactionManager->transactional(
+            function () use ($actorUserId, $sessionId): CloseSessionQuestionResultDTO {
+                $session = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if ($session === null) {
+                    throw new QuizSessionNotFoundException(
+                        'Quiz session was not found.',
+                    );
+                }
+
+                if ($session->status !== QuizSessionStatus::ACTIVE) {
+                    throw new QuizSessionQuestionStateConflictException(
+                        'Only an active quiz session can close a question.',
+                    );
+                }
+
+                if (
+                    $session->currentQuestionOrder === null
+                    || $session->currentQuestionStartedAt === null
+                    || $session->currentQuestionDeadline === null
+                ) {
+                    throw new QuizSessionQuestionCannotCloseException(
+                        'Quiz session does not have a current question that can be closed.',
+                    );
+                }
+
+                $question = $this->sessionQuestions->findBySessionAndOrder(
+                    sessionId: $sessionId,
+                    questionOrder: $session->currentQuestionOrder,
+                );
+
+                if ($question === null) {
+                    throw new QuizSessionQuestionCannotCloseException(
+                        'Quiz session does not have a current question that can be closed.',
+                    );
+                }
+
+                if ($session->currentQuestionClosedAt !== null) {
+                    return new CloseSessionQuestionResultDTO(
+                        session: $this->toItem($session),
+                        closedQuestion: $this->closedQuestionResultAssembler
+                            ->assemble(
+                                question: $question,
+                                closedAt: $session->currentQuestionClosedAt,
+                            ),
+                        stateChanged: false,
+                    );
+                }
+
+                $this->sessions->markCurrentQuestionClosed($sessionId);
+                $this->sessionResults->recalculateParticipantTotalScores(
+                    $sessionId,
+                );
+
+                $updatedSession = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if (
+                    $updatedSession === null
+                    || $updatedSession->currentQuestionClosedAt === null
+                ) {
+                    throw new RuntimeException(
+                        'Closed quiz session question state could not be verified.',
+                    );
+                }
+
+                $closedQuestion = $this->closedQuestionResultAssembler
+                    ->assemble(
+                        question: $question,
+                        closedAt: $updatedSession->currentQuestionClosedAt,
+                    );
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUIZ_SESSION_QUESTION_CLOSED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $sessionId,
+                    metadata: [
+                        'quizId' => $updatedSession->quizId,
+                        'questionOrder' => $question->questionOrder,
+                        'participantCount' =>
+                            $closedQuestion->stats->participantCount,
+                        'answerCount' => $closedQuestion->stats->answerCount,
+                        'correctAnswerCount' =>
+                            $closedQuestion->stats->correctAnswerCount,
+                        'closedBeforeDeadline' =>
+                            $updatedSession->currentQuestionClosedAt
+                                < $session->currentQuestionDeadline,
+                    ],
+                );
+
+                return new CloseSessionQuestionResultDTO(
+                    session: $this->toItem($updatedSession),
+                    closedQuestion: $closedQuestion,
                     stateChanged: true,
                 );
             },
@@ -346,6 +459,7 @@ final readonly class QuizSessionService
             currentQuestionOrder: $session->currentQuestionOrder,
             currentQuestionStartedAt: $session->currentQuestionStartedAt,
             currentQuestionDeadline: $session->currentQuestionDeadline,
+            currentQuestionClosedAt: $session->currentQuestionClosedAt,
             joinDeadline: $session->joinDeadline,
             startedAt: $session->startedAt,
             endedAt: $session->endedAt,

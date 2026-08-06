@@ -10,6 +10,7 @@ use CodeLandQuiz\DTO\SessionParticipantItemDTO;
 use CodeLandQuiz\Game\AnswerSubmissionService;
 use CodeLandQuiz\Game\Exception\AnswerAlreadySubmittedException;
 use CodeLandQuiz\Game\Exception\AnswerDeadlineExpiredException;
+use CodeLandQuiz\Game\Exception\AnswerQuestionClosedException;
 use CodeLandQuiz\Game\Exception\AnswerSubmissionNotAllowedException;
 use CodeLandQuiz\Game\Exception\GameSessionFinishedException;
 use CodeLandQuiz\Game\Exception\InvalidParticipantTokenException;
@@ -243,6 +244,13 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 code: 'ANSWER_SUBMISSION_NOT_ALLOWED',
                 message: 'Answers can only be submitted while the game is active.',
             );
+        } catch (AnswerQuestionClosedException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'ANSWER_QUESTION_CLOSED',
+                message: 'The current question is closed.',
+            );
         } catch (AnswerDeadlineExpiredException) {
             $this->pushError(
                 server: $server,
@@ -455,7 +463,6 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
     ): void {
         if (
             $result->sessionStatus !== QuizSessionStatus::ACTIVE
-            || $result->currentQuestion === null
             || $result->currentQuestionStartedAt === null
             || $result->currentQuestionDeadline === null
         ) {
@@ -468,11 +475,62 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             type: 'GAME_STARTED',
             payload: $this->payloadMapper->participantGameStarted($result),
         );
+
+        if ($result->currentQuestion !== null) {
+            $this->push(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                type: 'QUESTION_STARTED',
+                payload: $this->payloadMapper->participantQuestionStarted(
+                    $result,
+                ),
+            );
+
+            return;
+        }
+
+        if ($result->closedQuestion === null) {
+            return;
+        }
+
         $this->push(
             server: $server,
             fileDescriptor: $fileDescriptor,
-            type: 'QUESTION_STARTED',
-            payload: $this->payloadMapper->participantQuestionStarted($result),
+            type: 'QUESTION_CLOSED',
+            payload: $this->payloadMapper->questionClosed(
+                $result->closedQuestion,
+            ),
+        );
+
+        foreach ($result->closedQuestion->participantResults as $participantResult) {
+            if (
+                $participantResult->participantId
+                !== $result->participant->id
+            ) {
+                continue;
+            }
+
+            $this->push(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                type: 'ANSWER_RESULT',
+                payload: $this->payloadMapper->answerResult(
+                    result: $participantResult,
+                    questionOrder:
+                        $result->closedQuestion->question->questionOrder,
+                ),
+            );
+
+            break;
+        }
+
+        $this->push(
+            server: $server,
+            fileDescriptor: $fileDescriptor,
+            type: 'LEADERBOARD_UPDATED',
+            payload: $this->payloadMapper->leaderboardUpdated(
+                $result->closedQuestion,
+            ),
         );
     }
 
@@ -564,7 +622,6 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             'id' => $participant->id,
             'sessionId' => $participant->sessionId,
             'participantType' => $participant->participantType->value,
-            'studentId' => $participant->studentId,
             'nickname' => $participant->nickname,
             'avatarKey' => $participant->avatarKey,
             'totalScore' => $participant->totalScore,
