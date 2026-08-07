@@ -26,6 +26,7 @@ use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuizController;
 use CodeLandQuiz\Controller\QuizSessionController;
+use CodeLandQuiz\Controller\QuizSessionHistoryController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\StudentController;
 use CodeLandQuiz\Controller\TopicController;
@@ -48,6 +49,8 @@ use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
 use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
+use CodeLandQuiz\Repository\MySqlQuizSessionHistoryRepository;
+use CodeLandQuiz\Repository\MySqlQuizSessionReportRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionResultRepository;
 use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
@@ -66,6 +69,8 @@ use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
 use CodeLandQuiz\QuizSession\FinalQuizSessionResultAssembler;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
+use CodeLandQuiz\QuizSession\QuizSessionHistoryService;
+use CodeLandQuiz\QuizSession\QuizSessionReportAssembler;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
 use CodeLandQuiz\Topic\TopicService;
@@ -365,6 +370,30 @@ final class ApplicationFactory
                 $this->finishedSessionWebSocketNotifier,
             participantRemovalNotifier:
                 $this->participantRemovalWebSocketNotifier,
+        );
+    }
+
+    public function createQuizSessionHistoryController(): QuizSessionHistoryController
+    {
+        $sessionRepository = new MySqlQuizSessionRepository($this->database);
+        $historyRepository = new MySqlQuizSessionHistoryRepository(
+            $this->database,
+        );
+        $reportRepository = new MySqlQuizSessionReportRepository(
+            $this->database,
+        );
+
+        return new QuizSessionHistoryController(
+            historyService: new QuizSessionHistoryService(
+                history: $historyRepository,
+                sessions: $sessionRepository,
+                reportAssembler: new QuizSessionReportAssembler(
+                    reports: $reportRepository,
+                    finalResultAssembler:
+                        $this->finalQuizSessionResultAssembler,
+                ),
+            ),
+            responseFactory: new ResponseFactory(),
         );
     }
 

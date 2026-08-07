@@ -118,6 +118,9 @@ final class Application
         $quizSessionController =
             $this->applicationFactory->createQuizSessionController();
 
+        $quizSessionHistoryController =
+            $this->applicationFactory->createQuizSessionHistoryController();
+
         $studentController =
             $this->applicationFactory->createStudentController();
 
@@ -395,8 +398,28 @@ final class Application
         );
 
         $this->router->get(
+            '/api/sessions',
+            $quizSessionHistoryController->list(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
             '/api/sessions/{id}',
             $quizSessionController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/sessions/{id}/results',
+            $quizSessionHistoryController->report(...),
             [
                 $authenticationMiddleware->handle(...),
                 $passwordChangeRequiredMiddleware->handle(...),
