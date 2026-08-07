@@ -30,6 +30,7 @@ use CodeLandQuiz\Controller\QuizSessionController;
 use CodeLandQuiz\Controller\QuizSessionHistoryController;
 use CodeLandQuiz\Controller\RefreshController;
 use CodeLandQuiz\Controller\StudentController;
+use CodeLandQuiz\Controller\StudentStatisticsController;
 use CodeLandQuiz\Controller\TopicController;
 use CodeLandQuiz\Game\AnswerScoreCalculator;
 use CodeLandQuiz\Game\AnswerSubmissionService;
@@ -59,9 +60,12 @@ use CodeLandQuiz\Repository\MySqlRefreshTokenRepository;
 use CodeLandQuiz\Repository\MySqlSessionQuestionRepository;
 use CodeLandQuiz\Repository\MySqlSessionParticipantRepository;
 use CodeLandQuiz\Repository\MySqlStudentRepository;
+use CodeLandQuiz\Repository\MySqlStudentStatisticsRepository;
 use CodeLandQuiz\Repository\MySqlTopicRepository;
 use CodeLandQuiz\Repository\MySqlUserRepository;
 use CodeLandQuiz\Student\StudentService;
+use CodeLandQuiz\Student\StudentStatisticsAssembler;
+use CodeLandQuiz\Student\StudentStatisticsService;
 use CodeLandQuiz\Support\Database;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
@@ -455,6 +459,27 @@ final class ApplicationFactory
                 students: $studentRepository,
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
+            ),
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createStudentStatisticsController():
+        StudentStatisticsController
+    {
+        $studentRepository = new MySqlStudentRepository($this->database);
+        $statisticsRepository = new MySqlStudentStatisticsRepository(
+            $this->database,
+        );
+        $statisticsAssembler = new StudentStatisticsAssembler(
+            statistics: $statisticsRepository,
+        );
+
+        return new StudentStatisticsController(
+            statisticsService: new StudentStatisticsService(
+                students: $studentRepository,
+                statistics: $statisticsRepository,
+                assembler: $statisticsAssembler,
             ),
             responseFactory: new ResponseFactory(),
         );

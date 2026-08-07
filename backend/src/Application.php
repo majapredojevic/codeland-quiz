@@ -127,6 +127,9 @@ final class Application
         $studentController =
             $this->applicationFactory->createStudentController();
 
+        $studentStatisticsController =
+            $this->applicationFactory->createStudentStatisticsController();
+
         $this->router->get(
             '/api/auth/me',
             $this->applicationFactory->createMeController(),
@@ -179,6 +182,26 @@ final class Application
         $this->router->get(
             '/api/students/{id}',
             $studentController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/students/{id}/statistics',
+            $studentStatisticsController->get(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->get(
+            '/api/students/{id}/statistics/sessions',
+            $studentStatisticsController->sessions(...),
             [
                 $authenticationMiddleware->handle(...),
                 $passwordChangeRequiredMiddleware->handle(...),
