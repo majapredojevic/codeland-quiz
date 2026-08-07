@@ -73,6 +73,7 @@ use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\EchoGateway;
 use CodeLandQuiz\WebSocket\FinishedSessionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\ParticipantConnectionRegistry;
+use CodeLandQuiz\WebSocket\ParticipantRemovalWebSocketNotifier;
 use CodeLandQuiz\WebSocket\ParticipantWebSocketGateway;
 use CodeLandQuiz\WebSocket\ParticipantWebSocketSender;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
@@ -106,6 +107,8 @@ final class ApplicationFactory
     private FinalQuizSessionResultAssembler $finalQuizSessionResultAssembler;
 
     private ParticipantWebSocketSender $participantWebSocketSender;
+
+    private ParticipantRemovalWebSocketNotifier $participantRemovalWebSocketNotifier;
 
     private ClosedQuestionWebSocketNotifier $closedQuestionWebSocketNotifier;
 
@@ -143,6 +146,12 @@ final class ApplicationFactory
             connectionRegistry: $this->participantConnectionRegistry,
             messageEncoder: $this->webSocketMessageEncoder,
         );
+        $this->participantRemovalWebSocketNotifier =
+            new ParticipantRemovalWebSocketNotifier(
+                server: $this->server,
+                connectionRegistry: $this->participantConnectionRegistry,
+                participantSender: $this->participantWebSocketSender,
+            );
         $this->closedQuestionWebSocketNotifier =
             new ClosedQuestionWebSocketNotifier(
                 sessionBroadcaster: $this->sessionWebSocketBroadcaster,
@@ -325,6 +334,9 @@ final class ApplicationFactory
         $sessionQuestionRepository = new MySqlSessionQuestionRepository(
             $this->database,
         );
+        $participantRepository = new MySqlSessionParticipantRepository(
+            $this->database,
+        );
         $auditLogRepository = new MySqlAuditLogRepository($this->database);
 
         return new QuizSessionController(
@@ -343,6 +355,7 @@ final class ApplicationFactory
                     $this->closedQuestionResultAssembler,
                 finalResultAssembler:
                     $this->finalQuizSessionResultAssembler,
+                participants: $participantRepository,
             ),
             responseFactory: new ResponseFactory(),
             sessionWebSocketBroadcaster: $this->sessionWebSocketBroadcaster,
@@ -350,6 +363,8 @@ final class ApplicationFactory
             closedQuestionNotifier: $this->closedQuestionWebSocketNotifier,
             finishedSessionNotifier:
                 $this->finishedSessionWebSocketNotifier,
+            participantRemovalNotifier:
+                $this->participantRemovalWebSocketNotifier,
         );
     }
 

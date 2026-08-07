@@ -7,6 +7,7 @@ namespace CodeLandQuiz\Repository;
 use CodeLandQuiz\Game\Exception\ParticipantAlreadyJoinedException;
 use CodeLandQuiz\Game\Exception\ParticipantNicknameAlreadyExistsException;
 use CodeLandQuiz\Model\ParticipantType;
+use CodeLandQuiz\Model\SessionParticipantAdminOverview;
 use CodeLandQuiz\Model\SessionParticipantOverview;
 use CodeLandQuiz\Support\Database;
 use DateTimeImmutable;
@@ -30,6 +31,35 @@ SELECT
     is_removed,
     joined_at
 FROM session_participants
+SQL;
+
+    private const FIND_ACTIVE_BY_SESSION_ID_SQL = <<<SQL
+SELECT
+    sp.id,
+    sp.session_id,
+    sp.participant_type,
+    sp.student_id,
+    student.first_name AS student_first_name,
+    student.last_name AS student_last_name,
+    student.username AS student_username,
+    sp.nickname,
+    sp.avatar_key,
+    sp.total_score,
+    sp.is_connected,
+    sp.disconnected_at,
+    sp.joined_at,
+    pa.id AS current_answer_id
+FROM session_participants sp
+LEFT JOIN students student
+    ON student.id = sp.student_id
+LEFT JOIN participant_answers pa
+    ON pa.session_participant_id = sp.id
+   AND pa.session_question_id = :current_session_question_id
+WHERE sp.session_id = :session_id
+  AND sp.is_removed = FALSE
+ORDER BY
+    sp.joined_at ASC,
+    sp.id ASC
 SQL;
 
     private const INSERT_SQL = <<<SQL
@@ -74,6 +104,20 @@ WHERE id = :participant_id
   AND is_removed = FALSE
 SQL;
 
+    private const MARK_REMOVED_SQL = <<<SQL
+UPDATE session_participants
+SET disconnected_at = CASE
+        WHEN is_connected = TRUE
+            THEN CURRENT_TIMESTAMP(3)
+        ELSE disconnected_at
+    END,
+    is_connected = FALSE,
+    is_removed = TRUE,
+    removed_at = CURRENT_TIMESTAMP(3)
+WHERE id = :participant_id
+  AND is_removed = FALSE
+SQL;
+
     public function __construct(
         private Database $database,
     ) {
@@ -111,6 +155,30 @@ SQL;
         $statement->execute();
 
         return $this->fetchOverview($statement);
+    }
+
+    public function findActiveBySessionId(
+        int $sessionId,
+        ?int $currentSessionQuestionId,
+    ): array {
+        $statement = $this->connection()->prepare(
+            self::FIND_ACTIVE_BY_SESSION_ID_SQL,
+        );
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $this->bindNullableInt(
+            $statement,
+            ':current_session_question_id',
+            $currentSessionQuestionId,
+        );
+        $statement->execute();
+
+        $participants = [];
+
+        while (($row = $statement->fetch()) !== false) {
+            $participants[] = $this->mapRowToAdminOverview($row);
+        }
+
+        return $participants;
     }
 
     public function create(
@@ -176,6 +244,19 @@ SQL;
         return $this->fetchOverview($statement);
     }
 
+    public function findOverviewByIdForUpdateIncludingRemoved(
+        int $participantId,
+    ): ?SessionParticipantOverview {
+        $sql = self::SELECT_OVERVIEW_SQL
+            . "\nWHERE id = :participant_id"
+            . "\nFOR UPDATE";
+        $statement = $this->connection()->prepare($sql);
+        $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return $this->fetchOverview($statement);
+    }
+
     public function markConnected(int $participantId): void
     {
         $statement = $this->connection()->prepare(self::MARK_CONNECTED_SQL);
@@ -186,6 +267,13 @@ SQL;
     public function markDisconnected(int $participantId): void
     {
         $statement = $this->connection()->prepare(self::MARK_DISCONNECTED_SQL);
+        $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
+        $statement->execute();
+    }
+
+    public function markRemoved(int $participantId): void
+    {
+        $statement = $this->connection()->prepare(self::MARK_REMOVED_SQL);
         $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
         $statement->execute();
     }
@@ -264,6 +352,67 @@ SQL;
             isRemoved: (bool) (int) $row['is_removed'],
             joinedAt: new DateTimeImmutable((string) $row['joined_at']),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function mapRowToAdminOverview(
+        array $row,
+    ): SessionParticipantAdminOverview {
+        return new SessionParticipantAdminOverview(
+            id: (int) $row['id'],
+            sessionId: (int) $row['session_id'],
+            participantType: ParticipantType::from(
+                (string) $row['participant_type'],
+            ),
+            studentId: $this->nullableInt($row['student_id']),
+            studentFirstName: $this->nullableString(
+                $row['student_first_name'],
+            ),
+            studentLastName: $this->nullableString(
+                $row['student_last_name'],
+            ),
+            studentUsername: $this->nullableString(
+                $row['student_username'],
+            ),
+            nickname: (string) $row['nickname'],
+            avatarKey: (string) $row['avatar_key'],
+            totalScore: (int) $row['total_score'],
+            isConnected: (bool) (int) $row['is_connected'],
+            disconnectedAt: $this->nullableDateTime(
+                $row['disconnected_at'],
+            ),
+            joinedAt: new DateTimeImmutable((string) $row['joined_at']),
+            hasAnsweredCurrentQuestion: $row['current_answer_id'] !== null,
+        );
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    private function nullableDateTime(mixed $value): ?DateTimeImmutable
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return new DateTimeImmutable((string) $value);
     }
 
     private function connection(): PDO

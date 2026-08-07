@@ -404,6 +404,27 @@ final class Application
             ],
         );
 
+        $this->router->get(
+            '/api/sessions/{id}/participants',
+            $quizSessionController->listParticipants(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->delete(
+            '/api/sessions/{id}/participants/{participantId}',
+            $quizSessionController->removeParticipant(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
         $this->router->post(
             '/api/sessions/{id}/start',
             $quizSessionController->start(...),

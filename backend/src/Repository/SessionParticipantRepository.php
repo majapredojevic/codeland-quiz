@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Repository;
 
 use CodeLandQuiz\Model\ParticipantType;
+use CodeLandQuiz\Model\SessionParticipantAdminOverview;
 use CodeLandQuiz\Model\SessionParticipantOverview;
 
 interface SessionParticipantRepository
@@ -18,6 +19,14 @@ interface SessionParticipantRepository
         int $sessionId,
         string $nickname,
     ): ?SessionParticipantOverview;
+
+    /**
+     * @return SessionParticipantAdminOverview[]
+     */
+    public function findActiveBySessionId(
+        int $sessionId,
+        ?int $currentSessionQuestionId,
+    ): array;
 
     public function create(
         int $sessionId,
@@ -35,7 +44,13 @@ interface SessionParticipantRepository
         int $participantId,
     ): ?SessionParticipantOverview;
 
+    public function findOverviewByIdForUpdateIncludingRemoved(
+        int $participantId,
+    ): ?SessionParticipantOverview;
+
     public function markConnected(int $participantId): void;
 
     public function markDisconnected(int $participantId): void;
+
+    public function markRemoved(int $participantId): void;
 }

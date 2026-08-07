@@ -9,12 +9,16 @@ use CodeLandQuiz\DTO\CloseSessionQuestionResultDTO;
 use CodeLandQuiz\DTO\FinalQuizSessionResultDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
+use CodeLandQuiz\DTO\RemoveSessionParticipantResultDTO;
+use CodeLandQuiz\DTO\SessionParticipantAdminDTO;
+use CodeLandQuiz\DTO\SessionParticipantListDTO;
 use CodeLandQuiz\DTO\StartNextSessionQuestionResultDTO;
 use CodeLandQuiz\DTO\StartQuizSessionResultDTO;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\QuestionOverview;
 use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
+use CodeLandQuiz\Model\SessionParticipantAdminOverview;
 use CodeLandQuiz\Model\SessionQuestionOverview;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
@@ -31,10 +35,13 @@ use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionCannotCloseException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionStateConflictException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionStateConflictException;
+use CodeLandQuiz\QuizSession\Exception\SessionParticipantNotFoundException;
+use CodeLandQuiz\QuizSession\Exception\SessionParticipantRemovalNotAllowedException;
 use CodeLandQuiz\Repository\QuestionRepository;
 use CodeLandQuiz\Repository\QuizRepository;
 use CodeLandQuiz\Repository\QuizSessionRepository;
 use CodeLandQuiz\Repository\QuizSessionResultRepository;
+use CodeLandQuiz\Repository\SessionParticipantRepository;
 use CodeLandQuiz\Repository\SessionQuestionRepository;
 use CodeLandQuiz\Support\TransactionManager;
 use InvalidArgumentException;
@@ -43,6 +50,7 @@ use RuntimeException;
 final readonly class QuizSessionService
 {
     private const AUDIT_ENTITY_TYPE = 'QUIZ_SESSION';
+    private const PARTICIPANT_AUDIT_ENTITY_TYPE = 'SESSION_PARTICIPANT';
     private const MAX_PIN_GENERATION_ATTEMPTS = 10;
 
     public function __construct(
@@ -58,6 +66,7 @@ final readonly class QuizSessionService
         private QuizSessionResultRepository $sessionResults,
         private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
         private FinalQuizSessionResultAssembler $finalResultAssembler,
+        private SessionParticipantRepository $participants,
     ) {
     }
 
@@ -106,6 +115,146 @@ final readonly class QuizSessionService
         }
 
         return $this->toItem($session);
+    }
+
+    public function listSessionParticipants(
+        int $sessionId,
+    ): SessionParticipantListDTO {
+        $session = $this->sessions->findOverviewById($sessionId);
+
+        if ($session === null) {
+            throw new QuizSessionNotFoundException(
+                'Quiz session was not found.',
+            );
+        }
+
+        $currentSessionQuestionId = null;
+
+        if (
+            $session->status === QuizSessionStatus::ACTIVE
+            && $session->currentQuestionOrder !== null
+        ) {
+            $currentQuestion = $this->sessionQuestions
+                ->findBySessionAndOrder(
+                    sessionId: $sessionId,
+                    questionOrder: $session->currentQuestionOrder,
+                );
+
+            if ($currentQuestion === null) {
+                throw new RuntimeException(
+                    'Active quiz session current question was not found.',
+                );
+            }
+
+            $currentSessionQuestionId = $currentQuestion->id;
+        }
+
+        $participantOverviews = $this->participants
+            ->findActiveBySessionId(
+                sessionId: $sessionId,
+                currentSessionQuestionId: $currentSessionQuestionId,
+            );
+        $participants = [];
+        $connectedParticipantCount = 0;
+        $answeredCurrentQuestionCount = 0;
+
+        foreach ($participantOverviews as $participantOverview) {
+            $participant = $this->toAdminParticipant($participantOverview);
+            $participants[] = $participant;
+
+            if ($participant->isConnected) {
+                $connectedParticipantCount++;
+            }
+
+            if ($participant->hasAnsweredCurrentQuestion) {
+                $answeredCurrentQuestionCount++;
+            }
+        }
+
+        return new SessionParticipantListDTO(
+            sessionId: $session->id,
+            sessionStatus: $session->status,
+            currentQuestionOrder: $session->currentQuestionOrder,
+            participants: $participants,
+            participantCount: count($participants),
+            connectedParticipantCount: $connectedParticipantCount,
+            answeredCurrentQuestionCount: $answeredCurrentQuestionCount,
+        );
+    }
+
+    public function removeSessionParticipant(
+        int $actorUserId,
+        int $sessionId,
+        int $participantId,
+    ): RemoveSessionParticipantResultDTO {
+        return $this->transactionManager->transactional(
+            function () use (
+                $actorUserId,
+                $sessionId,
+                $participantId,
+            ): RemoveSessionParticipantResultDTO {
+                $session = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if ($session === null) {
+                    throw new QuizSessionNotFoundException(
+                        'Quiz session was not found.',
+                    );
+                }
+
+                $participant = $this->participants
+                    ->findOverviewByIdForUpdateIncludingRemoved(
+                        $participantId,
+                    );
+
+                if (
+                    $participant === null
+                    || $participant->sessionId !== $sessionId
+                ) {
+                    throw new SessionParticipantNotFoundException(
+                        'Session participant was not found.',
+                    );
+                }
+
+                if ($participant->isRemoved) {
+                    return new RemoveSessionParticipantResultDTO(
+                        sessionId: $sessionId,
+                        participantId: $participantId,
+                        stateChanged: false,
+                    );
+                }
+
+                if ($session->status === QuizSessionStatus::FINISHED) {
+                    throw new SessionParticipantRemovalNotAllowedException(
+                        'Participants cannot be removed from a finished quiz session.',
+                    );
+                }
+
+                $wasConnected = $participant->isConnected;
+                $this->participants->markRemoved($participantId);
+
+                $this->auditLogService->log(
+                    action: AuditAction::SESSION_PARTICIPANT_REMOVED,
+                    userId: $actorUserId,
+                    entityType: self::PARTICIPANT_AUDIT_ENTITY_TYPE,
+                    entityId: $participantId,
+                    metadata: [
+                        'sessionId' => $sessionId,
+                        'participantType' =>
+                            $participant->participantType->value,
+                        'sessionStatus' => $session->status->value,
+                        'wasConnected' => $wasConnected,
+                    ],
+                );
+
+                return new RemoveSessionParticipantResultDTO(
+                    sessionId: $sessionId,
+                    participantId: $participantId,
+                    stateChanged: true,
+                );
+            },
+        );
     }
 
     public function startSession(
@@ -666,6 +815,28 @@ final readonly class QuizSessionService
         SessionQuestionOverview $question,
     ): PublicSessionQuestionDTO {
         return $this->publicQuestionMapper->map($question);
+    }
+
+    private function toAdminParticipant(
+        SessionParticipantAdminOverview $participant,
+    ): SessionParticipantAdminDTO {
+        return new SessionParticipantAdminDTO(
+            id: $participant->id,
+            sessionId: $participant->sessionId,
+            participantType: $participant->participantType,
+            studentId: $participant->studentId,
+            studentFirstName: $participant->studentFirstName,
+            studentLastName: $participant->studentLastName,
+            studentUsername: $participant->studentUsername,
+            nickname: $participant->nickname,
+            avatarKey: $participant->avatarKey,
+            totalScore: $participant->totalScore,
+            isConnected: $participant->isConnected,
+            disconnectedAt: $participant->disconnectedAt,
+            joinedAt: $participant->joinedAt,
+            hasAnsweredCurrentQuestion:
+                $participant->hasAnsweredCurrentQuestion,
+        );
     }
 
     private function toItem(

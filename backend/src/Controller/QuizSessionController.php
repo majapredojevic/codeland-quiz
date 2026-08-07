@@ -11,6 +11,8 @@ use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionOptionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
 use CodeLandQuiz\DTO\SessionLeaderboardEntryDTO;
+use CodeLandQuiz\DTO\SessionParticipantAdminDTO;
+use CodeLandQuiz\DTO\SessionParticipantListDTO;
 use CodeLandQuiz\DTO\SessionQuestionParticipantResultDTO;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
@@ -27,9 +29,12 @@ use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionCannotCloseException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionStateConflictException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionStateConflictException;
+use CodeLandQuiz\QuizSession\Exception\SessionParticipantNotFoundException;
+use CodeLandQuiz\QuizSession\Exception\SessionParticipantRemovalNotAllowedException;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\FinishedSessionWebSocketNotifier;
+use CodeLandQuiz\WebSocket\ParticipantRemovalWebSocketNotifier;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
 use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
 use DateTimeImmutable;
@@ -47,6 +52,7 @@ final class QuizSessionController
         private readonly SessionWebSocketPayloadMapper $webSocketPayloadMapper,
         private readonly ClosedQuestionWebSocketNotifier $closedQuestionNotifier,
         private readonly FinishedSessionWebSocketNotifier $finishedSessionNotifier,
+        private readonly ParticipantRemovalWebSocketNotifier $participantRemovalNotifier,
     ) {
     }
 
@@ -122,6 +128,97 @@ final class QuizSessionController
                 $response,
                 'Quiz session was not found.',
                 404,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function listParticipants(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $sessionId = $context->getRouteInt('id');
+            $result = $this->quizSessionService
+                ->listSessionParticipants($sessionId);
+
+            $this->responseFactory->json(
+                $response,
+                $this->participantListResponse($result),
+            );
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizSessionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz session was not found.',
+                404,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function removeParticipant(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $sessionId = $context->getRouteInt('id');
+            $participantId = $context->getRouteInt('participantId');
+            $actorUserId = $context->getCurrentUser()->id;
+            $result = $this->quizSessionService->removeSessionParticipant(
+                actorUserId: $actorUserId,
+                sessionId: $sessionId,
+                participantId: $participantId,
+            );
+
+            if ($result->stateChanged) {
+                $this->participantRemovalNotifier->notifyAndDisconnect(
+                    $result->participantId,
+                );
+            }
+
+            $response->status(204);
+            $response->end();
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizSessionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz session was not found.',
+                404,
+            );
+        } catch (SessionParticipantNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Session participant was not found.',
+                404,
+            );
+        } catch (SessionParticipantRemovalNotAllowedException) {
+            $this->responseFactory->error(
+                $response,
+                'Participants cannot be removed from a finished quiz session.',
+                409,
             );
         } catch (Throwable) {
             $this->responseFactory->error(
@@ -403,6 +500,64 @@ final class QuizSessionController
             'createdAt' => $session->createdAt->format(DATE_ATOM),
             'questionCount' => $session->questionCount,
             'participantCount' => $session->participantCount,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function participantListResponse(
+        SessionParticipantListDTO $result,
+    ): array {
+        return [
+            'session' => [
+                'id' => $result->sessionId,
+                'status' => $result->sessionStatus->value,
+                'currentQuestionOrder' => $result->currentQuestionOrder,
+            ],
+            'participants' => array_map(
+                $this->adminParticipantResponse(...),
+                $result->participants,
+            ),
+            'participantCount' => $result->participantCount,
+            'connectedParticipantCount' =>
+                $result->connectedParticipantCount,
+            'answeredCurrentQuestionCount' =>
+                $result->answeredCurrentQuestionCount,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function adminParticipantResponse(
+        SessionParticipantAdminDTO $participant,
+    ): array {
+        $student = null;
+
+        if ($participant->studentId !== null) {
+            $student = [
+                'id' => $participant->studentId,
+                'firstName' => $participant->studentFirstName,
+                'lastName' => $participant->studentLastName,
+                'username' => $participant->studentUsername,
+            ];
+        }
+
+        return [
+            'id' => $participant->id,
+            'participantType' => $participant->participantType->value,
+            'student' => $student,
+            'nickname' => $participant->nickname,
+            'avatarKey' => $participant->avatarKey,
+            'totalScore' => $participant->totalScore,
+            'isConnected' => $participant->isConnected,
+            'disconnectedAt' => $this->formatDateTime(
+                $participant->disconnectedAt,
+            ),
+            'joinedAt' => $participant->joinedAt->format(DATE_ATOM),
+            'hasAnsweredCurrentQuestion' =>
+                $participant->hasAnsweredCurrentQuestion,
         ];
     }
 
