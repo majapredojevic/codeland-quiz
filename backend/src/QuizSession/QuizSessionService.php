@@ -6,8 +6,10 @@ namespace CodeLandQuiz\QuizSession;
 
 use CodeLandQuiz\Auth\AuditLogService;
 use CodeLandQuiz\DTO\CloseSessionQuestionResultDTO;
+use CodeLandQuiz\DTO\FinalQuizSessionResultDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
+use CodeLandQuiz\DTO\StartNextSessionQuestionResultDTO;
 use CodeLandQuiz\DTO\StartQuizSessionResultDTO;
 use CodeLandQuiz\Model\AuditAction;
 use CodeLandQuiz\Model\QuestionOverview;
@@ -19,7 +21,12 @@ use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\GamePinAlreadyExistsException;
 use CodeLandQuiz\QuizSession\Exception\GamePinGenerationFailedException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotStartException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotFinishException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionCurrentQuestionNotClosedException;
 use CodeLandQuiz\QuizSession\Exception\QuizInactiveException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionLastQuestionNotClosedException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionNextQuestionCannotStartException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionNoNextQuestionException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionCannotCloseException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionStateConflictException;
@@ -50,6 +57,7 @@ final readonly class QuizSessionService
         private TransactionManager $transactionManager,
         private QuizSessionResultRepository $sessionResults,
         private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
+        private FinalQuizSessionResultAssembler $finalResultAssembler,
     ) {
     }
 
@@ -287,6 +295,222 @@ final readonly class QuizSessionService
                     closedQuestion: $closedQuestion,
                     stateChanged: true,
                 );
+            },
+        );
+    }
+
+    public function startNextQuestion(
+        int $actorUserId,
+        int $sessionId,
+    ): StartNextSessionQuestionResultDTO {
+        return $this->transactionManager->transactional(
+            function () use ($actorUserId, $sessionId): StartNextSessionQuestionResultDTO {
+                $session = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if ($session === null) {
+                    throw new QuizSessionNotFoundException(
+                        'Quiz session was not found.',
+                    );
+                }
+
+                if (
+                    $session->status !== QuizSessionStatus::ACTIVE
+                    || $session->currentQuestionOrder === null
+                    || $session->currentQuestionStartedAt === null
+                    || $session->currentQuestionDeadline === null
+                ) {
+                    throw new QuizSessionNextQuestionCannotStartException(
+                        'Only an active quiz session can start the next question.',
+                    );
+                }
+
+                if ($session->currentQuestionClosedAt === null) {
+                    throw new QuizSessionCurrentQuestionNotClosedException(
+                        'The current question must be closed before the next question can start.',
+                    );
+                }
+
+                $previousQuestionOrder = $session->currentQuestionOrder;
+                $nextQuestionOrder = $previousQuestionOrder + 1;
+                $nextQuestion = $this->sessionQuestions
+                    ->findBySessionAndOrder(
+                        sessionId: $sessionId,
+                        questionOrder: $nextQuestionOrder,
+                    );
+
+                if ($nextQuestion === null) {
+                    throw new QuizSessionNoNextQuestionException(
+                        'The quiz session does not have another question.',
+                    );
+                }
+
+                if (
+                    $nextQuestion->timeLimitSeconds < 30
+                    || $nextQuestion->timeLimitSeconds > 300
+                    || $nextQuestion->options === []
+                ) {
+                    throw new QuizSessionNextQuestionCannotStartException(
+                        'The next quiz question is invalid.',
+                    );
+                }
+
+                $wasStarted = $this->sessions->markNextQuestionStarted(
+                    sessionId: $sessionId,
+                    expectedCurrentQuestionOrder: $previousQuestionOrder,
+                    nextQuestionOrder: $nextQuestionOrder,
+                    timeLimitSeconds: $nextQuestion->timeLimitSeconds,
+                );
+
+                if (!$wasStarted) {
+                    throw new RuntimeException(
+                        'Next quiz session question was not started.',
+                    );
+                }
+
+                $updatedSession = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if (
+                    $updatedSession === null
+                    || $updatedSession->status !== QuizSessionStatus::ACTIVE
+                    || $updatedSession->currentQuestionOrder
+                        !== $nextQuestionOrder
+                    || $updatedSession->currentQuestionStartedAt === null
+                    || $updatedSession->currentQuestionDeadline === null
+                    || $updatedSession->currentQuestionClosedAt !== null
+                ) {
+                    throw new RuntimeException(
+                        'Started next quiz session question state could not be verified.',
+                    );
+                }
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUIZ_SESSION_NEXT_QUESTION_STARTED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $sessionId,
+                    metadata: [
+                        'quizId' => $updatedSession->quizId,
+                        'previousQuestionOrder' => $previousQuestionOrder,
+                        'questionOrder' => $nextQuestionOrder,
+                        'questionCount' => $updatedSession->questionCount,
+                    ],
+                );
+
+                return new StartNextSessionQuestionResultDTO(
+                    session: $this->toItem($updatedSession),
+                    currentQuestion: $this->toPublicQuestion($nextQuestion),
+                    questionCount: $updatedSession->questionCount,
+                    previousQuestionOrder: $previousQuestionOrder,
+                );
+            },
+        );
+    }
+
+    public function finishSession(
+        int $actorUserId,
+        int $sessionId,
+    ): FinalQuizSessionResultDTO {
+        return $this->transactionManager->transactional(
+            function () use ($actorUserId, $sessionId): FinalQuizSessionResultDTO {
+                $session = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if ($session === null) {
+                    throw new QuizSessionNotFoundException(
+                        'Quiz session was not found.',
+                    );
+                }
+
+                if ($session->status === QuizSessionStatus::WAITING) {
+                    throw new QuizSessionCannotFinishException(
+                        'Only an active or finished quiz session can be finished.',
+                    );
+                }
+
+                if ($session->status === QuizSessionStatus::FINISHED) {
+                    return $this->finalResultAssembler->assemble(
+                        session: $this->toItem($session),
+                        stateChanged: false,
+                    );
+                }
+
+                if (
+                    $session->currentQuestionOrder === null
+                    || $session->currentQuestionClosedAt === null
+                ) {
+                    throw new QuizSessionLastQuestionNotClosedException(
+                        'The last quiz question must be closed before the session can finish.',
+                    );
+                }
+
+                if ($session->currentQuestionOrder !== $session->questionCount) {
+                    throw new QuizSessionCannotFinishException(
+                        'The quiz session has not reached its final question.',
+                    );
+                }
+
+                $questionAfterFinal = $this->sessionQuestions
+                    ->findBySessionAndOrder(
+                        sessionId: $sessionId,
+                        questionOrder: $session->currentQuestionOrder + 1,
+                    );
+
+                if ($questionAfterFinal !== null) {
+                    throw new QuizSessionCannotFinishException(
+                        'The quiz session has not reached its final question.',
+                    );
+                }
+
+                $this->sessionResults->recalculateParticipantTotalScores(
+                    $sessionId,
+                );
+
+                if (!$this->sessions->markFinished($sessionId)) {
+                    throw new RuntimeException(
+                        'Quiz session was not finished.',
+                    );
+                }
+
+                $updatedSession = $this->sessions->findOverviewByIdForUpdate(
+                    $sessionId,
+                );
+
+                if (
+                    $updatedSession === null
+                    || $updatedSession->status !== QuizSessionStatus::FINISHED
+                    || $updatedSession->endedAt === null
+                ) {
+                    throw new RuntimeException(
+                        'Finished quiz session state could not be verified.',
+                    );
+                }
+
+                $result = $this->finalResultAssembler->assemble(
+                    session: $this->toItem($updatedSession),
+                    stateChanged: true,
+                );
+
+                $this->auditLogService->log(
+                    action: AuditAction::QUIZ_SESSION_FINISHED,
+                    userId: $actorUserId,
+                    entityType: self::AUDIT_ENTITY_TYPE,
+                    entityId: $sessionId,
+                    metadata: [
+                        'quizId' => $updatedSession->quizId,
+                        'questionCount' => $updatedSession->questionCount,
+                        'participantCount' => $result->participantCount,
+                        'totalAnswerCount' => $result->totalAnswerCount,
+                        'totalCorrectAnswerCount' =>
+                            $result->totalCorrectAnswerCount,
+                    ],
+                );
+
+                return $result;
             },
         );
     }

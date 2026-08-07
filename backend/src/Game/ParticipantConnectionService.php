@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Game;
 
 use CodeLandQuiz\DTO\ClosedSessionQuestionStateDTO;
+use CodeLandQuiz\DTO\FinalQuizSessionResultDTO;
 use CodeLandQuiz\DTO\ParticipantConnectionResultDTO;
 use CodeLandQuiz\DTO\ParticipantTokenPayloadDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
+use CodeLandQuiz\DTO\QuizSessionItemDTO;
 use CodeLandQuiz\DTO\SessionParticipantItemDTO;
-use CodeLandQuiz\Game\Exception\GameSessionFinishedException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionParticipantOverview;
 use CodeLandQuiz\Model\SessionQuestionOverview;
 use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
+use CodeLandQuiz\QuizSession\FinalQuizSessionResultAssembler;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\Repository\QuizSessionRepository;
 use CodeLandQuiz\Repository\SessionQuestionRepository;
@@ -32,6 +34,7 @@ final readonly class ParticipantConnectionService
         private PublicSessionQuestionMapper $publicQuestionMapper,
         private TransactionManager $transactionManager,
         private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
+        private FinalQuizSessionResultAssembler $finalResultAssembler,
     ) {
     }
 
@@ -54,12 +57,6 @@ final readonly class ParticipantConnectionService
                     );
                 }
 
-                if ($session->status === QuizSessionStatus::FINISHED) {
-                    throw new GameSessionFinishedException(
-                        'The game session has finished.',
-                    );
-                }
-
                 $participant =
                     $this->participants->findOverviewByIdForUpdate(
                         $payload->participantId,
@@ -77,21 +74,31 @@ final readonly class ParticipantConnectionService
                 );
 
                 $this->participants->markConnected($participant->id);
-                $question = $this->activeQuestion($session);
                 $currentQuestion = null;
                 $closedQuestion = null;
+                $finalResult = null;
 
-                if ($question !== null) {
-                    if ($session->currentQuestionClosedAt === null) {
-                        $currentQuestion = $this->publicQuestionMapper->map(
-                            $question,
-                        );
-                    } else {
-                        $closedQuestion = $this->closedQuestionResultAssembler
-                            ->assemble(
-                                question: $question,
-                                closedAt: $session->currentQuestionClosedAt,
+                if ($session->status === QuizSessionStatus::FINISHED) {
+                    $finalResult = $this->finalResultAssembler->assemble(
+                        session: $this->sessionItem($session),
+                        stateChanged: false,
+                    );
+                } else {
+                    $question = $this->activeQuestion($session);
+
+                    if ($question !== null) {
+                        if ($session->currentQuestionClosedAt === null) {
+                            $currentQuestion = $this->publicQuestionMapper->map(
+                                $question,
                             );
+                        } else {
+                            $closedQuestion =
+                                $this->closedQuestionResultAssembler->assemble(
+                                    question: $question,
+                                    closedAt:
+                                        $session->currentQuestionClosedAt,
+                                );
+                        }
                     }
                 }
 
@@ -101,6 +108,7 @@ final readonly class ParticipantConnectionService
                     isConnected: true,
                     currentQuestion: $currentQuestion,
                     closedQuestion: $closedQuestion,
+                    finalResult: $finalResult,
                 );
             },
         );
@@ -157,6 +165,7 @@ final readonly class ParticipantConnectionService
         bool $isConnected,
         ?PublicSessionQuestionDTO $currentQuestion,
         ?ClosedSessionQuestionStateDTO $closedQuestion,
+        ?FinalQuizSessionResultDTO $finalResult,
     ): ParticipantConnectionResultDTO {
         return new ParticipantConnectionResultDTO(
             participant: new SessionParticipantItemDTO(
@@ -178,6 +187,7 @@ final readonly class ParticipantConnectionService
             currentQuestionOrder: $session->currentQuestionOrder,
             currentQuestion: $currentQuestion,
             closedQuestion: $closedQuestion,
+            finalResult: $finalResult,
             currentQuestionStartedAt: $session->currentQuestionStartedAt,
             currentQuestionDeadline: $session->currentQuestionDeadline,
             questionCount: $session->questionCount,
@@ -213,5 +223,30 @@ final readonly class ParticipantConnectionService
         }
 
         return $question;
+    }
+
+    private function sessionItem(
+        QuizSessionOverview $session,
+    ): QuizSessionItemDTO {
+        return new QuizSessionItemDTO(
+            id: $session->id,
+            quizId: $session->quizId,
+            hostUserId: $session->hostUserId,
+            hostUserName: $session->hostUserName,
+            quizTitle: $session->quizTitle,
+            quizVersion: $session->quizVersion,
+            gamePin: $session->gamePin,
+            status: $session->status,
+            currentQuestionOrder: $session->currentQuestionOrder,
+            currentQuestionStartedAt: $session->currentQuestionStartedAt,
+            currentQuestionDeadline: $session->currentQuestionDeadline,
+            currentQuestionClosedAt: $session->currentQuestionClosedAt,
+            joinDeadline: $session->joinDeadline,
+            startedAt: $session->startedAt,
+            endedAt: $session->endedAt,
+            createdAt: $session->createdAt,
+            questionCount: $session->questionCount,
+            participantCount: $session->participantCount,
+        );
     }
 }

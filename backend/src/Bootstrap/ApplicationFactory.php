@@ -63,16 +63,18 @@ use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
-use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
+use CodeLandQuiz\QuizSession\FinalQuizSessionResultAssembler;
+use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
 use CodeLandQuiz\Topic\TopicService;
-use CodeLandQuiz\WebSocket\EchoGateway;
 use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
+use CodeLandQuiz\WebSocket\EchoGateway;
+use CodeLandQuiz\WebSocket\FinishedSessionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\ParticipantConnectionRegistry;
-use CodeLandQuiz\WebSocket\ParticipantWebSocketSender;
 use CodeLandQuiz\WebSocket\ParticipantWebSocketGateway;
+use CodeLandQuiz\WebSocket\ParticipantWebSocketSender;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
 use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
 use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
@@ -101,9 +103,13 @@ final class ApplicationFactory
 
     private ClosedQuestionResultAssembler $closedQuestionResultAssembler;
 
+    private FinalQuizSessionResultAssembler $finalQuizSessionResultAssembler;
+
     private ParticipantWebSocketSender $participantWebSocketSender;
 
     private ClosedQuestionWebSocketNotifier $closedQuestionWebSocketNotifier;
+
+    private FinishedSessionWebSocketNotifier $finishedSessionWebSocketNotifier;
 
     public function __construct(string $projectRootPath, Server $server)
     {
@@ -128,6 +134,10 @@ final class ApplicationFactory
             new ClosedQuestionResultAssembler(
                 results: $this->quizSessionResultRepository,
             );
+        $this->finalQuizSessionResultAssembler =
+            new FinalQuizSessionResultAssembler(
+                results: $this->quizSessionResultRepository,
+            );
         $this->participantWebSocketSender = new ParticipantWebSocketSender(
             server: $this->server,
             connectionRegistry: $this->participantConnectionRegistry,
@@ -135,6 +145,12 @@ final class ApplicationFactory
         );
         $this->closedQuestionWebSocketNotifier =
             new ClosedQuestionWebSocketNotifier(
+                sessionBroadcaster: $this->sessionWebSocketBroadcaster,
+                participantSender: $this->participantWebSocketSender,
+                payloadMapper: $this->sessionWebSocketPayloadMapper,
+            );
+        $this->finishedSessionWebSocketNotifier =
+            new FinishedSessionWebSocketNotifier(
                 sessionBroadcaster: $this->sessionWebSocketBroadcaster,
                 participantSender: $this->participantWebSocketSender,
                 payloadMapper: $this->sessionWebSocketPayloadMapper,
@@ -325,11 +341,15 @@ final class ApplicationFactory
                 sessionResults: $this->quizSessionResultRepository,
                 closedQuestionResultAssembler:
                     $this->closedQuestionResultAssembler,
+                finalResultAssembler:
+                    $this->finalQuizSessionResultAssembler,
             ),
             responseFactory: new ResponseFactory(),
             sessionWebSocketBroadcaster: $this->sessionWebSocketBroadcaster,
             webSocketPayloadMapper: $this->sessionWebSocketPayloadMapper,
             closedQuestionNotifier: $this->closedQuestionWebSocketNotifier,
+            finishedSessionNotifier:
+                $this->finishedSessionWebSocketNotifier,
         );
     }
 
@@ -399,6 +419,8 @@ final class ApplicationFactory
                     ),
                     closedQuestionResultAssembler:
                         $this->closedQuestionResultAssembler,
+                    finalResultAssembler:
+                        $this->finalQuizSessionResultAssembler,
                 ),
                 answerSubmissionService: new AnswerSubmissionService(
                     sessions: $sessionRepository,

@@ -12,7 +12,6 @@ use CodeLandQuiz\Game\Exception\AnswerAlreadySubmittedException;
 use CodeLandQuiz\Game\Exception\AnswerDeadlineExpiredException;
 use CodeLandQuiz\Game\Exception\AnswerQuestionClosedException;
 use CodeLandQuiz\Game\Exception\AnswerSubmissionNotAllowedException;
-use CodeLandQuiz\Game\Exception\GameSessionFinishedException;
 use CodeLandQuiz\Game\Exception\InvalidParticipantTokenException;
 use CodeLandQuiz\Game\Exception\InvalidSelectedOptionsException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
@@ -158,13 +157,6 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 fileDescriptor: $fileDescriptor,
                 code: 'PARTICIPANT_CONNECTION_REJECTED',
                 message: 'Participant connection was rejected.',
-            );
-        } catch (GameSessionFinishedException) {
-            $this->failAuthentication(
-                server: $server,
-                fileDescriptor: $fileDescriptor,
-                code: 'GAME_SESSION_FINISHED',
-                message: 'The game session has finished.',
             );
         } catch (Throwable $throwable) {
             error_log($throwable->getMessage());
@@ -461,6 +453,39 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         int $fileDescriptor,
         ParticipantConnectionResultDTO $result,
     ): void {
+        if (
+            $result->sessionStatus === QuizSessionStatus::FINISHED
+            && $result->finalResult !== null
+        ) {
+            $this->push(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                type: 'GAME_FINISHED',
+                payload: $this->payloadMapper->gameFinished(
+                    $result->finalResult,
+                ),
+            );
+
+            foreach ($result->finalResult->leaderboard as $entry) {
+                if ($entry->participantId !== $result->participant->id) {
+                    continue;
+                }
+
+                $this->push(
+                    server: $server,
+                    fileDescriptor: $fileDescriptor,
+                    type: 'FINAL_RESULT',
+                    payload: $this->payloadMapper->finalParticipantResult(
+                        $entry,
+                    ),
+                );
+
+                break;
+            }
+
+            return;
+        }
+
         if (
             $result->sessionStatus !== QuizSessionStatus::ACTIVE
             || $result->currentQuestionStartedAt === null

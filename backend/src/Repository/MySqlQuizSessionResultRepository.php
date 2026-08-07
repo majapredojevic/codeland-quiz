@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Repository;
 
+use CodeLandQuiz\Model\FinalSessionParticipantResultOverview;
 use CodeLandQuiz\Model\ParticipantType;
 use CodeLandQuiz\Model\SessionQuestionParticipantResultOverview;
 use CodeLandQuiz\Support\Database;
@@ -54,6 +55,49 @@ ORDER BY
     sp.id ASC
 SQL;
 
+    private const FIND_FINAL_PARTICIPANT_RESULTS_SQL = <<<SQL
+SELECT
+    sp.id AS participant_id,
+    sp.participant_type,
+    sp.nickname,
+    sp.avatar_key,
+    sp.total_score,
+    sp.joined_at,
+    COUNT(pa.id) AS answer_count,
+    COALESCE(
+        SUM(
+            CASE
+                WHEN pa.is_correct = TRUE THEN 1
+                ELSE 0
+            END
+        ),
+        0
+    ) AS correct_answer_count,
+    COALESCE(
+        SUM(pa.response_time_ms),
+        0
+    ) AS total_response_time_ms
+FROM session_participants sp
+LEFT JOIN participant_answers pa
+    ON pa.session_participant_id = sp.id
+WHERE sp.session_id = :session_id
+  AND sp.is_removed = FALSE
+GROUP BY
+    sp.id,
+    sp.participant_type,
+    sp.nickname,
+    sp.avatar_key,
+    sp.total_score,
+    sp.joined_at
+ORDER BY
+    sp.total_score DESC,
+    correct_answer_count DESC,
+    answer_count DESC,
+    total_response_time_ms ASC,
+    sp.joined_at ASC,
+    sp.id ASC
+SQL;
+
     public function __construct(
         private Database $database,
     ) {
@@ -100,6 +144,45 @@ SQL;
         }
 
         return $results;
+    }
+
+    public function findFinalParticipantResults(
+        int $sessionId,
+    ): array {
+        $statement = $this->connection()->prepare(
+            self::FIND_FINAL_PARTICIPANT_RESULTS_SQL,
+        );
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->execute();
+
+        $results = [];
+
+        while (($row = $statement->fetch()) !== false) {
+            $results[] = $this->mapRowToFinalOverview($row);
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function mapRowToFinalOverview(
+        array $row,
+    ): FinalSessionParticipantResultOverview {
+        return new FinalSessionParticipantResultOverview(
+            participantId: (int) $row['participant_id'],
+            participantType: ParticipantType::from(
+                (string) $row['participant_type'],
+            ),
+            nickname: (string) $row['nickname'],
+            avatarKey: (string) $row['avatar_key'],
+            totalScore: (int) $row['total_score'],
+            answerCount: (int) $row['answer_count'],
+            correctAnswerCount: (int) $row['correct_answer_count'],
+            totalResponseTimeMs: (int) $row['total_response_time_ms'],
+            joinedAt: new DateTimeImmutable((string) $row['joined_at']),
+        );
     }
 
     /**

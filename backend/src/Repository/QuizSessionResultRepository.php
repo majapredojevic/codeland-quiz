@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Repository;
 
+use CodeLandQuiz\Model\FinalSessionParticipantResultOverview;
 use CodeLandQuiz\Model\SessionQuestionParticipantResultOverview;
 
 interface QuizSessionResultRepository
@@ -18,5 +19,12 @@ interface QuizSessionResultRepository
     public function findQuestionParticipantResults(
         int $sessionId,
         int $sessionQuestionId,
+    ): array;
+
+    /**
+     * @return FinalSessionParticipantResultOverview[]
+     */
+    public function findFinalParticipantResults(
+        int $sessionId,
     ): array;
 }

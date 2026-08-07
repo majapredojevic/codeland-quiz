@@ -18,6 +18,7 @@ final readonly class ParticipantConnectionResultDTO
         public ?int $currentQuestionOrder,
         public ?PublicSessionQuestionDTO $currentQuestion,
         public ?ClosedSessionQuestionStateDTO $closedQuestion,
+        public ?FinalQuizSessionResultDTO $finalResult,
         public ?DateTimeImmutable $currentQuestionStartedAt,
         public ?DateTimeImmutable $currentQuestionDeadline,
         public int $questionCount,

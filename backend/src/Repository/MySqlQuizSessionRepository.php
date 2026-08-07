@@ -142,6 +142,31 @@ WHERE id = :session_id
   AND current_question_closed_at IS NULL
 SQL;
 
+    private const MARK_NEXT_QUESTION_STARTED_SQL = <<<SQL
+UPDATE quiz_sessions
+SET current_question_order = :next_question_order,
+    current_question_started_at = CURRENT_TIMESTAMP(3),
+    current_question_deadline = TIMESTAMPADD(
+        SECOND,
+        :time_limit_seconds,
+        CURRENT_TIMESTAMP(3)
+    ),
+    current_question_closed_at = NULL
+WHERE id = :session_id
+  AND status = 'ACTIVE'
+  AND current_question_order = :expected_current_question_order
+  AND current_question_closed_at IS NOT NULL
+SQL;
+
+    private const MARK_FINISHED_SQL = <<<SQL
+UPDATE quiz_sessions
+SET status = 'FINISHED',
+    ended_at = CURRENT_TIMESTAMP(3)
+WHERE id = :session_id
+  AND status = 'ACTIVE'
+  AND current_question_closed_at IS NOT NULL
+SQL;
+
     public function __construct(
         private Database $database,
     ) {}
@@ -332,6 +357,45 @@ SQL;
         );
         $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
         $statement->execute();
+    }
+
+    public function markNextQuestionStarted(
+        int $sessionId,
+        int $expectedCurrentQuestionOrder,
+        int $nextQuestionOrder,
+        int $timeLimitSeconds,
+    ): bool {
+        $statement = $this->connection()->prepare(
+            self::MARK_NEXT_QUESTION_STARTED_SQL,
+        );
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->bindValue(
+            ':expected_current_question_order',
+            $expectedCurrentQuestionOrder,
+            PDO::PARAM_INT,
+        );
+        $statement->bindValue(
+            ':next_question_order',
+            $nextQuestionOrder,
+            PDO::PARAM_INT,
+        );
+        $statement->bindValue(
+            ':time_limit_seconds',
+            $timeLimitSeconds,
+            PDO::PARAM_INT,
+        );
+        $statement->execute();
+
+        return $statement->rowCount() === 1;
+    }
+
+    public function markFinished(int $sessionId): bool
+    {
+        $statement = $this->connection()->prepare(self::MARK_FINISHED_SQL);
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->execute();
+
+        return $statement->rowCount() === 1;
     }
 
     private function findOverviewByGamePin(

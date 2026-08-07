@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Controller;
 
 use CodeLandQuiz\DTO\ClosedSessionQuestionStateDTO;
+use CodeLandQuiz\DTO\FinalQuizSessionResultDTO;
+use CodeLandQuiz\DTO\FinalSessionLeaderboardEntryDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionOptionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
@@ -16,12 +18,18 @@ use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\GamePinGenerationFailedException;
 use CodeLandQuiz\QuizSession\Exception\QuizInactiveException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotStartException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionCannotFinishException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionCurrentQuestionNotClosedException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionLastQuestionNotClosedException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionNextQuestionCannotStartException;
+use CodeLandQuiz\QuizSession\Exception\QuizSessionNoNextQuestionException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionCannotCloseException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionQuestionStateConflictException;
 use CodeLandQuiz\QuizSession\Exception\QuizSessionStateConflictException;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
+use CodeLandQuiz\WebSocket\FinishedSessionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
 use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
 use DateTimeImmutable;
@@ -38,6 +46,7 @@ final class QuizSessionController
         private readonly SessionWebSocketBroadcaster $sessionWebSocketBroadcaster,
         private readonly SessionWebSocketPayloadMapper $webSocketPayloadMapper,
         private readonly ClosedQuestionWebSocketNotifier $closedQuestionNotifier,
+        private readonly FinishedSessionWebSocketNotifier $finishedSessionNotifier,
     ) {
     }
 
@@ -248,6 +257,118 @@ final class QuizSessionController
         }
     }
 
+    public function startNextQuestion(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $sessionId = $context->getRouteInt('id');
+            $actorUserId = $context->getCurrentUser()->id;
+            $result = $this->quizSessionService->startNextQuestion(
+                actorUserId: $actorUserId,
+                sessionId: $sessionId,
+            );
+
+            $this->sessionWebSocketBroadcaster->broadcast(
+                sessionId: $result->session->id,
+                type: 'QUESTION_STARTED',
+                payload: $this->webSocketPayloadMapper->nextQuestionStarted(
+                    $result,
+                ),
+            );
+
+            $this->responseFactory->json($response, [
+                'session' => $this->sessionResponse($result->session),
+                'currentQuestion' => $this->questionResponse(
+                    $result->currentQuestion,
+                ),
+                'questionCount' => $result->questionCount,
+                'previousQuestionOrder' => $result->previousQuestionOrder,
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizSessionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz session was not found.',
+                404,
+            );
+        } catch (
+            QuizSessionNextQuestionCannotStartException
+            | QuizSessionCurrentQuestionNotClosedException
+            | QuizSessionNoNextQuestionException $exception
+        ) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
+    public function finish(
+        Request $request,
+        Response $response,
+        RequestContext $context,
+    ): void {
+        try {
+            $sessionId = $context->getRouteInt('id');
+            $actorUserId = $context->getCurrentUser()->id;
+            $result = $this->quizSessionService->finishSession(
+                actorUserId: $actorUserId,
+                sessionId: $sessionId,
+            );
+
+            if ($result->stateChanged) {
+                $this->finishedSessionNotifier->notify($result);
+            }
+
+            $this->responseFactory->json($response, [
+                'session' => $this->sessionResponse($result->session),
+                'finalResult' => $this->finalResultResponse($result),
+                'stateChanged' => $result->stateChanged,
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                400,
+            );
+        } catch (QuizSessionNotFoundException) {
+            $this->responseFactory->error(
+                $response,
+                'Quiz session was not found.',
+                404,
+            );
+        } catch (
+            QuizSessionCannotFinishException
+            | QuizSessionLastQuestionNotClosedException $exception
+        ) {
+            $this->responseFactory->error(
+                $response,
+                $exception->getMessage(),
+                409,
+            );
+        } catch (Throwable) {
+            $this->responseFactory->error(
+                $response,
+                'Internal server error.',
+                500,
+            );
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -383,6 +504,45 @@ final class QuizSessionController
             'totalScore' => $entry->totalScore,
             'pointsAwardedThisQuestion' =>
                 $entry->pointsAwardedThisQuestion,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function finalResultResponse(
+        FinalQuizSessionResultDTO $result,
+    ): array {
+        return [
+            'participantCount' => $result->participantCount,
+            'totalAnswerCount' => $result->totalAnswerCount,
+            'totalCorrectAnswerCount' => $result->totalCorrectAnswerCount,
+            'topThree' => array_map(
+                $this->finalLeaderboardEntryResponse(...),
+                $result->topThree,
+            ),
+            'leaderboard' => array_map(
+                $this->finalLeaderboardEntryResponse(...),
+                $result->leaderboard,
+            ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function finalLeaderboardEntryResponse(
+        FinalSessionLeaderboardEntryDTO $entry,
+    ): array {
+        return [
+            'rank' => $entry->rank,
+            'participantId' => $entry->participantId,
+            'participantType' => $entry->participantType->value,
+            'nickname' => $entry->nickname,
+            'avatarKey' => $entry->avatarKey,
+            'totalScore' => $entry->totalScore,
+            'answerCount' => $entry->answerCount,
+            'correctAnswerCount' => $entry->correctAnswerCount,
         ];
     }
 

@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace CodeLandQuiz\WebSocket;
 
 use CodeLandQuiz\DTO\ClosedSessionQuestionStateDTO;
+use CodeLandQuiz\DTO\FinalQuizSessionResultDTO;
+use CodeLandQuiz\DTO\FinalSessionLeaderboardEntryDTO;
 use CodeLandQuiz\DTO\ParticipantConnectionResultDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionOptionDTO;
 use CodeLandQuiz\DTO\SessionLeaderboardEntryDTO;
 use CodeLandQuiz\DTO\SessionQuestionParticipantResultDTO;
+use CodeLandQuiz\DTO\StartNextSessionQuestionResultDTO;
 use CodeLandQuiz\DTO\StartQuizSessionResultDTO;
 use DateTimeImmutable;
 
@@ -37,20 +40,26 @@ final class SessionWebSocketPayloadMapper
      */
     public function questionStarted(StartQuizSessionResultDTO $result): array
     {
-        return [
-            'question' => $this->question(
-                question: $result->currentQuestion,
-                questionCount: $result->questionCount,
-            ),
-            'timing' => [
-                'startedAt' => $this->formatDateTime(
-                    $result->session->currentQuestionStartedAt,
-                ),
-                'answerDeadline' => $this->formatDateTime(
-                    $result->session->currentQuestionDeadline,
-                ),
-            ],
-        ];
+        return $this->questionStartedPayload(
+            question: $result->currentQuestion,
+            questionCount: $result->questionCount,
+            startedAt: $result->session->currentQuestionStartedAt,
+            answerDeadline: $result->session->currentQuestionDeadline,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function nextQuestionStarted(
+        StartNextSessionQuestionResultDTO $result,
+    ): array {
+        return $this->questionStartedPayload(
+            question: $result->currentQuestion,
+            questionCount: $result->questionCount,
+            startedAt: $result->session->currentQuestionStartedAt,
+            answerDeadline: $result->session->currentQuestionDeadline,
+        );
     }
 
     /**
@@ -77,22 +86,12 @@ final class SessionWebSocketPayloadMapper
     public function participantQuestionStarted(
         ParticipantConnectionResultDTO $result,
     ): array {
-        return [
-            'question' => $result->currentQuestion === null
-                ? null
-                : $this->question(
-                    question: $result->currentQuestion,
-                    questionCount: $result->questionCount,
-                ),
-            'timing' => [
-                'startedAt' => $this->formatDateTime(
-                    $result->currentQuestionStartedAt,
-                ),
-                'answerDeadline' => $this->formatDateTime(
-                    $result->currentQuestionDeadline,
-                ),
-            ],
-        ];
+        return $this->questionStartedPayload(
+            question: $result->currentQuestion,
+            questionCount: $result->questionCount,
+            startedAt: $result->currentQuestionStartedAt,
+            answerDeadline: $result->currentQuestionDeadline,
+        );
     }
 
     /**
@@ -156,6 +155,71 @@ final class SessionWebSocketPayloadMapper
                 ],
                 $state->leaderboard,
             ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function gameFinished(FinalQuizSessionResultDTO $result): array
+    {
+        return [
+            'session' => [
+                'id' => $result->session->id,
+                'status' => $result->session->status->value,
+                'endedAt' => $this->formatDateTime(
+                    $result->session->endedAt,
+                ),
+                'participantCount' => $result->participantCount,
+                'totalAnswerCount' => $result->totalAnswerCount,
+                'totalCorrectAnswerCount' =>
+                    $result->totalCorrectAnswerCount,
+            ],
+            'topThree' => array_map(
+                $this->finalParticipantResult(...),
+                $result->topThree,
+            ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function finalParticipantResult(
+        FinalSessionLeaderboardEntryDTO $entry,
+    ): array {
+        return [
+            'rank' => $entry->rank,
+            'participantId' => $entry->participantId,
+            'participantType' => $entry->participantType->value,
+            'nickname' => $entry->nickname,
+            'avatarKey' => $entry->avatarKey,
+            'totalScore' => $entry->totalScore,
+            'answerCount' => $entry->answerCount,
+            'correctAnswerCount' => $entry->correctAnswerCount,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function questionStartedPayload(
+        ?PublicSessionQuestionDTO $question,
+        int $questionCount,
+        ?DateTimeImmutable $startedAt,
+        ?DateTimeImmutable $answerDeadline,
+    ): array {
+        return [
+            'question' => $question === null
+                ? null
+                : $this->question(
+                    question: $question,
+                    questionCount: $questionCount,
+                ),
+            'timing' => [
+                'startedAt' => $this->formatDateTime($startedAt),
+                'answerDeadline' => $this->formatDateTime($answerDeadline),
+            ],
         ];
     }
 

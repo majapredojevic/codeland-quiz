@@ -61,4 +61,13 @@ interface QuizSessionRepository
     public function markCurrentQuestionClosed(
         int $sessionId,
     ): void;
+
+    public function markNextQuestionStarted(
+        int $sessionId,
+        int $expectedCurrentQuestionOrder,
+        int $nextQuestionOrder,
+        int $timeLimitSeconds,
+    ): bool;
+
+    public function markFinished(int $sessionId): bool;
 }
