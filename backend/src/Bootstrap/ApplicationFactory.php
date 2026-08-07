@@ -25,6 +25,7 @@ use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuizController;
+use CodeLandQuiz\Controller\QuizStatisticsController;
 use CodeLandQuiz\Controller\QuizSessionController;
 use CodeLandQuiz\Controller\QuizSessionHistoryController;
 use CodeLandQuiz\Controller\RefreshController;
@@ -49,6 +50,7 @@ use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
 use CodeLandQuiz\Repository\MySqlQuestionRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
+use CodeLandQuiz\Repository\MySqlQuizStatisticsRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionHistoryRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionReportRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionRepository;
@@ -66,6 +68,8 @@ use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
 use CodeLandQuiz\Quiz\QuizService;
+use CodeLandQuiz\Quiz\QuizStatisticsAssembler;
+use CodeLandQuiz\Quiz\QuizStatisticsService;
 use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
 use CodeLandQuiz\QuizSession\FinalQuizSessionResultAssembler;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
@@ -310,6 +314,24 @@ final class ApplicationFactory
             ),
             responseFactory: new ResponseFactory(),
             config: $this->config,
+        );
+    }
+
+    public function createQuizStatisticsController(): QuizStatisticsController
+    {
+        $quizRepository = new MySqlQuizRepository($this->database);
+        $statisticsRepository = new MySqlQuizStatisticsRepository(
+            $this->database,
+        );
+
+        return new QuizStatisticsController(
+            statisticsService: new QuizStatisticsService(
+                quizzes: $quizRepository,
+                statisticsAssembler: new QuizStatisticsAssembler(
+                    statistics: $statisticsRepository,
+                ),
+            ),
+            responseFactory: new ResponseFactory(),
         );
     }
 
