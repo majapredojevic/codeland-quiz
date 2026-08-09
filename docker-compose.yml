@@ -21,8 +21,9 @@ services:
     image: mysql:8.4
     container_name: codeland_mysql
     command:
-     --character-set-server=utf8mb4
-     --collation-server=utf8mb4_unicode_ci
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
     restart: unless-stopped
     environment:
       TZ: Europe/Sarajevo

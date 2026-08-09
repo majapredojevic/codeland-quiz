@@ -239,6 +239,12 @@ CREATE TABLE quiz_sessions (
     KEY idx_quiz_sessions_host_user_id (host_user_id),
     KEY idx_quiz_sessions_status (status),
     KEY idx_quiz_sessions_created_at (created_at),
+    KEY idx_quiz_sessions_quiz_status_created (
+        quiz_id,
+        status,
+        created_at,
+        id
+    ),
 
     CONSTRAINT fk_quiz_sessions_quiz_id
         FOREIGN KEY (quiz_id) REFERENCES quizzes (id)
@@ -398,6 +404,13 @@ CREATE TABLE session_participants (
         joined_at
     ),
 
+    KEY idx_session_participants_student_statistics (
+        student_id,
+        participant_type,
+        is_removed,
+        session_id
+    ),
+
     CONSTRAINT chk_session_participants_identity
         CHECK (
             (
@@ -468,7 +481,12 @@ CREATE TABLE login_attempts (
     attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     KEY idx_login_attempts_email (email),
-    KEY idx_login_attempts_attempted_at (attempted_at)
+    KEY idx_login_attempts_attempted_at (attempted_at),
+    KEY idx_login_attempts_email_success_time (
+        email,
+        successful,
+        attempted_at
+    )
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;

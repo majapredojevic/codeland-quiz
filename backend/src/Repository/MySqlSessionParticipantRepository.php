@@ -129,8 +129,7 @@ SQL;
     ): ?SessionParticipantOverview {
         $sql = self::SELECT_OVERVIEW_SQL
             . "\nWHERE session_id = :session_id"
-            . "\n  AND student_id = :student_id"
-            . "\n  AND is_removed = FALSE"
+            . "\n  AND active_student_id = :student_id"
             . "\nLIMIT 1";
         $statement = $this->connection()->prepare($sql);
         $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
@@ -146,8 +145,7 @@ SQL;
     ): ?SessionParticipantOverview {
         $sql = self::SELECT_OVERVIEW_SQL
             . "\nWHERE session_id = :session_id"
-            . "\n  AND nickname = :nickname"
-            . "\n  AND is_removed = FALSE"
+            . "\n  AND active_nickname = :nickname"
             . "\nLIMIT 1";
         $statement = $this->connection()->prepare($sql);
         $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
