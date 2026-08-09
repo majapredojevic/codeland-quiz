@@ -21,4 +21,15 @@ final class CookieReader
 
         return $value;
     }
+
+    public function getOptionalCookie(Request $request, string $name): ?string
+    {
+        $value = $request->cookie[$name] ?? null;
+
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        return $value;
+    }
 }

@@ -565,7 +565,6 @@ final class Application
             '/api/auth/logout',
             $this->applicationFactory->createLogoutController(),
             [
-                $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),
             ],
         );

@@ -12,6 +12,8 @@ interface RefreshTokenRepository
 
     public function findValidByTokenHash(string $tokenHash): ?RefreshToken;
 
+    public function findValidByTokenHashForUpdate(string $tokenHash): ?RefreshToken;
+
     public function revoke(int $refreshTokenId, ?int $replacedByTokenId = null): void;
 
     public function revokeAllForUser(int $userId): int;

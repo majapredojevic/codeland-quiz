@@ -32,7 +32,7 @@ final readonly class AuthService
     {
         $this->loginAttemptService->ensureLoginAllowed($dto->email);
 
-        $user = $this->users->findByEmail($dto->email);
+        $user = $this->users->findByEmailIncludingInactive($dto->email);
 
         if ($user === null) {
             $this->loginAttemptService->recordFailure($dto->email, $userAgent);
@@ -47,6 +47,19 @@ final readonly class AuthService
         }
 
         if (!$this->passwordHasher->verify($dto->password, $user->getPasswordHash())) {
+            $this->loginAttemptService->recordFailure($dto->email, $userAgent);
+            $this->auditLogService->log(
+                action: AuditAction::LOGIN_FAILED,
+                userId: $user->getId(),
+                metadata: [
+                    'email' => $dto->email,
+                ],
+            );
+
+            throw new RuntimeException('Invalid credentials.');
+        }
+
+        if (!$user->isActive() || !$user->canUseNormalLogin()) {
             $this->loginAttemptService->recordFailure($dto->email, $userAgent);
             $this->auditLogService->log(
                 action: AuditAction::LOGIN_FAILED,

@@ -28,6 +28,16 @@ INSERT INTO refresh_tokens (
 )
 SQL;
 
+    private const FIND_VALID_BY_TOKEN_HASH_FOR_UPDATE_SQL = <<<SQL
+SELECT id, user_id, token_hash, expires_at, revoked_at, replaced_by_token_id
+FROM refresh_tokens
+WHERE token_hash = :token_hash
+  AND revoked_at IS NULL
+  AND expires_at > CURRENT_TIMESTAMP
+LIMIT 1
+FOR UPDATE
+SQL;
+
     private const FIND_VALID_BY_TOKEN_HASH_SQL = <<<SQL
 SELECT id, user_id, token_hash, expires_at, revoked_at, replaced_by_token_id
 FROM refresh_tokens
@@ -84,9 +94,26 @@ SQL;
 
     public function findValidByTokenHash(string $tokenHash): ?RefreshToken
     {
-        $statement = $this->connection()->prepare(
+        return $this->findValidByTokenHashUsingQuery(
+            $tokenHash,
             self::FIND_VALID_BY_TOKEN_HASH_SQL,
         );
+    }
+
+    public function findValidByTokenHashForUpdate(string $tokenHash): ?RefreshToken
+    {
+        return $this->findValidByTokenHashUsingQuery(
+            $tokenHash,
+            self::FIND_VALID_BY_TOKEN_HASH_FOR_UPDATE_SQL,
+        );
+    }
+
+    private function findValidByTokenHashUsingQuery(
+        string $tokenHash,
+        string $query,
+    ): ?RefreshToken
+    {
+        $statement = $this->connection()->prepare($query);
 
         $statement->execute([
             'token_hash' => $tokenHash,

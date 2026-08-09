@@ -11,6 +11,7 @@ use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Support\Environment;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 use ValueError;
@@ -19,17 +20,34 @@ final readonly class JwtTokenService implements JwtService
 {
     private const SECONDS_PER_MINUTE = 60;
 
+    private string $secret;
+
+    private string $algorithm;
+
     public function __construct(
         private readonly AppConfig $config,
-        private readonly Environment $environment,
-    ) {}
+        Environment $environment,
+    ) {
+        $this->secret = $environment->get('JWT_SECRET');
+        $this->algorithm = $environment->get('JWT_ALGORITHM');
+
+        if (strlen($this->secret) < 32) {
+            throw new InvalidArgumentException(
+                'JWT secret must contain at least 32 characters.',
+            );
+        }
+
+        if ($this->algorithm !== 'HS256') {
+            throw new InvalidArgumentException('JWT algorithm must be HS256.');
+        }
+    }
 
     public function createAccessToken(User $user): string
     {
         return JWT::encode(
             $this->createPayload($user),
-            $this->environment->get('JWT_SECRET'),
-            $this->environment->get('JWT_ALGORITHM'),
+            $this->secret,
+            $this->algorithm,
         );
     }
 
@@ -38,8 +56,8 @@ final readonly class JwtTokenService implements JwtService
         $decoded = JWT::decode(
             $jwt,
             new Key(
-                $this->environment->get('JWT_SECRET'),
-                $this->environment->get('JWT_ALGORITHM'),
+                $this->secret,
+                $this->algorithm,
             ),
         );
 

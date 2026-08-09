@@ -217,6 +217,7 @@ final class ApplicationFactory
             refreshTokenService: new DatabaseRefreshTokenService(
                 refreshTokens: $refreshTokenRepository,
                 config: $this->config,
+                transactionManager: new PdoTransactionManager($this->database),
             ),
             authCookieService: $this->createAuthCookieService(),
             cookieReader: new CookieReader(),
@@ -578,6 +579,7 @@ final class ApplicationFactory
             refreshTokenService: new DatabaseRefreshTokenService(
                 refreshTokens: $refreshTokenRepository,
                 config: $this->config,
+                transactionManager: new PdoTransactionManager($this->database),
             ),
             csrfTokenService: new DefaultCsrfTokenService(),
             loginAttemptService: new LoginAttemptService(

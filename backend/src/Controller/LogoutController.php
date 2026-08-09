@@ -10,10 +10,8 @@ use CodeLandQuiz\Config\AppConfig;
 use CodeLandQuiz\Http\CookieReader;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
-use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
-use RuntimeException;
 use Throwable;
 
 final class LogoutController
@@ -33,29 +31,21 @@ final class LogoutController
         RequestContext $context,
     ): void {
         try {
-            $refreshToken = $this->cookieReader->getCookie(
+            $refreshToken = $this->cookieReader->getOptionalCookie(
                 $request,
                 $this->config->getRefreshTokenCookieName(),
             );
 
-            $this->refreshTokenService->revoke($refreshToken);
+            if ($refreshToken !== null) {
+                $this->refreshTokenService->revoke($refreshToken);
+            }
+
             $this->authCookieService->clearAuthenticationCookies($response);
 
             $response->status(204);
             $response->end();
-        } catch (InvalidArgumentException $exception) {
-            $this->responseFactory->error(
-                $response,
-                $exception->getMessage(),
-                400,
-            );
-        } catch (RuntimeException $exception) {
-            $this->responseFactory->error(
-                $response,
-                $exception->getMessage(),
-                401,
-            );
         } catch (Throwable) {
+            $this->authCookieService->clearAuthenticationCookies($response);
             $this->responseFactory->error(
                 $response,
                 'Internal server error.',

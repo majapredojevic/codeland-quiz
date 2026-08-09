@@ -9,6 +9,7 @@ use CodeLandQuiz\DTO\RefreshTokenResult;
 use CodeLandQuiz\Model\RefreshToken;
 use CodeLandQuiz\Model\User;
 use CodeLandQuiz\Repository\RefreshTokenRepository;
+use CodeLandQuiz\Support\TransactionManager;
 use DateTimeImmutable;
 use RuntimeException;
 
@@ -17,6 +18,7 @@ final readonly class DatabaseRefreshTokenService implements RefreshTokenService
     public function __construct(
         private RefreshTokenRepository $refreshTokens,
         private AppConfig $config,
+        private TransactionManager $transactionManager,
     ) {
     }
 
@@ -27,25 +29,29 @@ final readonly class DatabaseRefreshTokenService implements RefreshTokenService
 
     public function rotate(string $refreshToken): RefreshTokenResult
     {
-        $existingToken = $this->refreshTokens->findValidByTokenHash(
-            $this->hashToken($refreshToken),
-        );
+        return $this->transactionManager->transactional(function () use (
+            $refreshToken,
+        ): RefreshTokenResult {
+            $existingToken = $this->refreshTokens->findValidByTokenHashForUpdate(
+                $this->hashToken($refreshToken),
+            );
 
-        if ($existingToken === null) {
-            throw new RuntimeException('Refresh token is invalid or expired.');
-        }
+            if ($existingToken === null) {
+                throw new RuntimeException('Refresh token is invalid or expired.');
+            }
 
-        $newToken = $this->createForUserId($existingToken->getUserId());
+            $newToken = $this->createForUserId($existingToken->getUserId());
 
-        $this->refreshTokens->revoke(
-            $this->existingTokenId($existingToken),
-            $newToken['id'],
-        );
+            $this->refreshTokens->revoke(
+                $this->existingTokenId($existingToken),
+                $newToken['id'],
+            );
 
-        return new RefreshTokenResult(
-            userId: $existingToken->getUserId(),
-            refreshToken: $newToken['plainToken'],
-        );
+            return new RefreshTokenResult(
+                userId: $existingToken->getUserId(),
+                refreshToken: $newToken['plainToken'],
+            );
+        });
     }
 
     public function revoke(string $refreshToken): void

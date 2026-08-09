@@ -304,6 +304,21 @@ final readonly class UserManagementService
 
             $this->users->updateTeacherStatus($teacher);
 
+            $revokedRefreshTokens = $shouldBeActive
+                ? null
+                : $this->refreshTokens->revokeAllForUser($teacher->getId());
+
+            $metadata = [
+                'status' => [
+                    'from' => $wasActive,
+                    'to' => $shouldBeActive,
+                ],
+            ];
+
+            if ($revokedRefreshTokens !== null) {
+                $metadata['revokedRefreshTokens'] = $revokedRefreshTokens;
+            }
+
             $this->auditLogService->log(
                 action: $shouldBeActive
                     ? AuditAction::TEACHER_ACTIVATED
@@ -311,12 +326,7 @@ final readonly class UserManagementService
                 userId: $performedByUserId,
                 entityType: self::AUDIT_ENTITY_TYPE,
                 entityId: $teacher->getId(),
-                metadata: [
-                    'status' => [
-                        'from' => $wasActive,
-                        'to' => $shouldBeActive,
-                    ],
-                ],
+                metadata: $metadata,
             );
 
             return $this->toUserListItem($teacher);
