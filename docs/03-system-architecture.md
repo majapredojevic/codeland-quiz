@@ -37,17 +37,20 @@ Teacher lifecycle commands use HTTP. Their service transaction commits before th
 
 ```mermaid
 sequenceDiagram
-    participant T as Teacher HTTP client
+    participant C as HTTP client
+    participant HC as QuizSessionController
     participant S as QuizSessionService
     participant DB as MySQL
     participant N as WebSocket notifier
     participant P as Participants
-    T->>S: start / close / next / finish
+    C->>HC: lifecycle HTTP request
+    HC->>S: start / close / next / finish
     S->>DB: transactional mutation
     DB-->>S: COMMIT
-    S-->>T: result
-    T->>N: notify after committed service result
-    N-->>P: broadcast/personalized events
+    S-->>HC: committed result
+    HC->>N: notify / broadcast
+    N-->>P: WebSocket events
+    HC-->>C: HTTP response
 ```
 
 Notification after commit prevents clients from observing an event whose database state could still roll back.

@@ -98,13 +98,13 @@ Join example:
 {
   "gamePin": "123456",
   "participantType": "REGISTERED",
-  "studentUsername": "student01",
+  "username": "student01",
   "nickname": "Maja",
-  "avatarKey": "avatar-1"
+  "avatarKey": "koda-blue"
 }
 ```
 
-For `GUEST`, student identity is omitted.
+For `GUEST`, `username` is omitted.
 
 ## Sessions, lifecycle and reporting
 
