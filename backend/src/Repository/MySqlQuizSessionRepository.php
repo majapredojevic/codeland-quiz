@@ -344,6 +344,25 @@ SQL;
         );
     }
 
+    public function findOverviewByActiveGamePinForShare(
+        string $gamePin,
+    ): ?QuizSessionOverview {
+        $statement = $this->connection()->prepare(
+            self::SELECT_OVERVIEW_SQL
+                . "\nWHERE qs.active_game_pin = :game_pin\nLIMIT 1\nFOR SHARE",
+        );
+        $statement->bindValue(':game_pin', $gamePin);
+        $statement->execute();
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToOverview($row);
+    }
+
     public function markStarted(
         int $sessionId,
         int $questionOrder,

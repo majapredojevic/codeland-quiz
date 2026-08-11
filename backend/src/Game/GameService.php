@@ -65,7 +65,7 @@ final readonly class GameService
         return $this->transactionManager->transactional(
             function () use ($dto): JoinGameResultDTO {
                 $session = $this->sessions
-                    ->findOverviewByActiveGamePinForUpdate($dto->gamePin);
+                    ->findOverviewByActiveGamePinForShare($dto->gamePin);
 
                 if ($session === null) {
                     throw new GameSessionNotFoundException(

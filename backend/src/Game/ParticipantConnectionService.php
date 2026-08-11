@@ -47,7 +47,7 @@ final readonly class ParticipantConnectionService
 
         return $this->transactionManager->transactional(
             function () use ($payload): ParticipantConnectionResultDTO {
-                $session = $this->sessions->findOverviewByIdForUpdate(
+                $session = $this->sessions->findOverviewByIdForShare(
                     $payload->sessionId,
                 );
 
@@ -118,7 +118,7 @@ final readonly class ParticipantConnectionService
     {
         $this->transactionManager->transactional(
             function () use ($sessionId, $participantId): void {
-                $session = $this->sessions->findOverviewByIdForUpdate(
+                $session = $this->sessions->findOverviewByIdForShare(
                     $sessionId,
                 );
 

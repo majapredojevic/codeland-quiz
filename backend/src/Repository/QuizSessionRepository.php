@@ -56,6 +56,10 @@ interface QuizSessionRepository
         string $gamePin,
     ): ?QuizSessionOverview;
 
+    public function findOverviewByActiveGamePinForShare(
+        string $gamePin,
+    ): ?QuizSessionOverview;
+
     public function markStarted(
         int $sessionId,
         int $questionOrder,
