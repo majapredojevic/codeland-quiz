@@ -7,7 +7,7 @@ JSON responses use `Content-Type: application/json; charset=utf-8`. In the table
 ## Health and authentication
 
 | Method | Path | Authentication / role | CSRF | Purpose | Typical success |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | GET | `/health` | Public | No | Health check | 200 |
 | POST | `/api/auth/login` | Public | No | Staff login and cookie issuance | 200 |
 | POST | `/api/auth/refresh` | Refresh cookie | No | Atomic refresh rotation and new cookies | 200 |
@@ -26,7 +26,7 @@ Login example:
 All routes require authenticated ADMIN with completed password change; mutations require CSRF.
 
 | Method | Path | Purpose | Typical success |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | POST | `/api/admin/users` | Create teacher with temporary password | 201 |
 | GET | `/api/admin/users` | Paginated teacher list | 200 |
 | GET | `/api/admin/users/{id}` | Teacher detail | 200 |
@@ -42,7 +42,7 @@ Create example: `{"name":"Nastavnik","email":"teacher@example.com"}`.
 All routes require Staff; mutations require CSRF.
 
 | Method | Path | Purpose | Typical success |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | GET | `/api/students` | Paginated student list | 200 |
 | GET | `/api/students/{id}` | Student detail | 200 |
 | POST | `/api/students` | Create student | 201 |
@@ -57,7 +57,7 @@ All routes require Staff; mutations require CSRF.
 All routes require Staff; mutations require CSRF.
 
 | Method | Path | Purpose | Typical success |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | GET | `/api/topics` | Paginated topic list | 200 |
 | GET | `/api/topics/{id}` | Topic detail | 200 |
 | POST | `/api/topics` | Create topic | 201 |
@@ -69,7 +69,7 @@ All routes require Staff; mutations require CSRF.
 All routes require Staff; mutations require CSRF.
 
 | Method | Path | Purpose | Typical success |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | GET | `/api/quizzes` | Paginated quiz list | 200 |
 | GET | `/api/quizzes/{id}` | Quiz detail | 200 |
 | POST | `/api/quizzes` | Create quiz | 201 |
@@ -88,7 +88,7 @@ All routes require Staff; mutations require CSRF.
 ## Public game
 
 | Method | Path | Authentication / role | CSRF | Purpose | Typical success |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | GET | `/api/game/session/{gamePin}` | Public | No | Safe session preview | 200 |
 | POST | `/api/game/join` | Public | No | Join as registered participant or guest; issue participant JWT | 201 |
 
@@ -111,7 +111,7 @@ For `GUEST`, `username` is omitted.
 All routes require Staff; lifecycle/removal mutations require CSRF.
 
 | Method | Path | Purpose | Typical success |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | POST | `/api/quizzes/{quizId}/sessions` | Create session and snapshots | 201 |
 | GET | `/api/sessions` | Paginated session history | 200 |
 | GET | `/api/sessions/{id}` | Session state/detail | 200 |

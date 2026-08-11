@@ -5,7 +5,7 @@
 ## Docker services
 
 | Service | Purpose | Host port | Mounts |
-|---|---|---:|---|
+| --- | --- | ---: | --- |
 | `backend` | PHP 8.3/OpenSwoole application | `9501` | `./backend:/var/www/backend` |
 | `mysql` | MySQL 8.4 | `3307` → container `3306` | `./docker/mysql/data`, `./docker/mysql/init`, read-only host localtime |
 | `phpmyadmin` | Local database administration | `8081` | None |
