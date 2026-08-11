@@ -16,7 +16,7 @@ final class ResponseFactory
     public function json(Response $response, array $payload, int $status = 200): void
     {
         $response->status($status);
-        $response->header('Content-Type', 'application/json');
+        $response->header('Content-Type', 'application/json; charset=utf-8');
         $response->end($this->encode($payload));
     }
 

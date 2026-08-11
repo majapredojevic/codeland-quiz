@@ -17,7 +17,7 @@ final class JsonResponse
     public static function send(Response $response, array $payload, int $status = 200): void
     {
         $response->status($status);
-        $response->header('Content-Type', 'application/json');
+        $response->header('Content-Type', 'application/json; charset=utf-8');
         $response->end(json_encode($payload, JSON_THROW_ON_ERROR));
     }
 }

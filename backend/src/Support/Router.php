@@ -11,6 +11,14 @@ use RuntimeException;
 
 final class Router
 {
+    private const METHOD_ORDER = [
+        'GET',
+        'POST',
+        'PUT',
+        'PATCH',
+        'DELETE',
+    ];
+
     /**
      * @var array<string, array<int, array{
      *     path: string,
@@ -320,32 +328,42 @@ final class Router
 
     private function sendRouteError(Response $response, string $path): void
     {
-        if ($this->pathExists($path)) {
+        $allowedMethods = $this->allowedMethodsForPath($path);
+
+        if ($allowedMethods !== []) {
+            $response->header('Allow', implode(', ', $allowedMethods));
             JsonResponse::send($response, [
-                'error' => 'Method not allowed',
+                'error' => 'Method not allowed.',
             ], 405);
 
             return;
         }
 
         JsonResponse::send($response, [
-            'error' => 'Not found',
+            'error' => 'Not found.',
         ], 404);
     }
 
-    private function pathExists(string $path): bool
+    /**
+     * @return string[]
+     */
+    private function allowedMethodsForPath(string $path): array
     {
-        foreach ($this->routes as $routesByMethod) {
-            foreach ($routesByMethod as $route) {
+        $allowedMethods = [];
+
+        foreach (self::METHOD_ORDER as $method) {
+            foreach ($this->routes[$method] ?? [] as $route) {
                 if (
                     $route['path'] === $path
                     || preg_match($route['pattern'], $path) === 1
                 ) {
-                    return true;
+                    $allowedMethods[] = $method;
+
+                    break;
                 }
             }
         }
 
-        return false;
+        return $allowedMethods;
     }
 }
