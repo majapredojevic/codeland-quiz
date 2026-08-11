@@ -307,6 +307,25 @@ SQL;
         return $this->mapRowToOverview($row);
     }
 
+    public function findOverviewByIdForShare(
+        int $sessionId,
+    ): ?QuizSessionOverview {
+        $statement = $this->connection()->prepare(
+            self::SELECT_OVERVIEW_SQL
+                . "\nWHERE qs.id = :session_id\nFOR SHARE",
+        );
+        $statement->bindValue(':session_id', $sessionId, PDO::PARAM_INT);
+        $statement->execute();
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRowToOverview($row);
+    }
+
     public function findOverviewByActiveGamePin(
         string $gamePin,
     ): ?QuizSessionOverview {

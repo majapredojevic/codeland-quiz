@@ -42,7 +42,7 @@ final readonly class AnswerSubmissionService
     ): AnswerSubmissionResultDTO {
         return $this->transactionManager->transactional(
             function () use ($sessionId, $participantId, $dto): AnswerSubmissionResultDTO {
-                $session = $this->sessions->findOverviewByIdForUpdate(
+                $session = $this->sessions->findOverviewByIdForShare(
                     $sessionId,
                 );
 

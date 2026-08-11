@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Support;
 
+use OpenSwoole\Coroutine;
 use PDO;
 use PDOException;
 
 final class Database
 {
+    private const COROUTINE_CONNECTION_KEY = 'codeland_quiz.database.connection';
+
     private const PDO_OPTIONS = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
 
-    private ?PDO $connection = null;
+    private ?PDO $fallbackConnection = null;
 
     public function __construct(
         private readonly Environment $environment,
@@ -24,11 +27,25 @@ final class Database
 
     public function getConnection(): PDO
     {
-        if ($this->connection === null) {
-            $this->connection = $this->connect();
+        if (Coroutine::getCid() >= 0) {
+            $context = Coroutine::getContext();
+            $connection = $context[self::COROUTINE_CONNECTION_KEY] ?? null;
+
+            if ($connection instanceof PDO) {
+                return $connection;
+            }
+
+            $connection = $this->connect();
+            $context[self::COROUTINE_CONNECTION_KEY] = $connection;
+
+            return $connection;
         }
 
-        return $this->connection;
+        if ($this->fallbackConnection === null) {
+            $this->fallbackConnection = $this->connect();
+        }
+
+        return $this->fallbackConnection;
     }
 
     private function connect(): PDO
