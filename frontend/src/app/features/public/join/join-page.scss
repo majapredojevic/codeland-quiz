@@ -1,0 +1,227 @@
+@use '../../../../styles/breakpoints' as bp;
+
+:host {
+  display: block;
+}
+
+.join-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 100dvh;
+  overflow-x: clip;
+  background:
+    radial-gradient(
+      ellipse at 4% 16%,
+      color-mix(in srgb, var(--clq-color-primary) 24%, transparent),
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 98% 24%,
+      color-mix(in srgb, var(--clq-color-pink) 42%, transparent),
+      transparent 30%
+    ),
+    radial-gradient(
+      ellipse at 92% 94%,
+      color-mix(in srgb, var(--clq-color-accent) 25%, transparent),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 5% 92%,
+      color-mix(in srgb, var(--clq-color-orange) 21%, transparent),
+      transparent 28%
+    ),
+    linear-gradient(145deg, var(--clq-color-background), var(--clq-color-surface));
+}
+
+.public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 120rem;
+  margin-inline: auto;
+  padding: var(--clq-space-4);
+  gap: var(--clq-space-3);
+}
+
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  border-radius: var(--clq-radius-md);
+}
+
+.brand-picture {
+  position: relative;
+  display: block;
+  width: 2.75rem;
+  height: 2.2rem;
+}
+
+.brand-logo {
+  object-fit: contain;
+}
+
+.login-link {
+  display: inline-grid;
+  min-height: 2.75rem;
+  padding-inline: var(--clq-space-4);
+  border: 2px solid var(--clq-color-primary);
+  border-radius: var(--clq-radius-pill);
+  background: color-mix(in srgb, var(--clq-color-surface-raised) 90%, transparent);
+  color: var(--clq-color-primary);
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  place-items: center;
+}
+
+.login-link:hover {
+  background: color-mix(in srgb, var(--clq-color-primary) 9%, var(--clq-color-surface-raised));
+}
+
+.public-main {
+  display: grid;
+  min-width: 0;
+  padding: var(--clq-space-4) var(--clq-space-4) clamp(2rem, 8vh, 5rem);
+  place-items: center;
+}
+
+.join-hero {
+  display: grid;
+  width: min(100%, 32rem);
+  gap: var(--clq-space-6);
+  text-align: center;
+}
+
+.hero-copy {
+  display: grid;
+  gap: var(--clq-space-3);
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  color: var(--clq-color-primary);
+  font-size: clamp(2.15rem, 7vw, 3.5rem);
+  font-weight: var(--clq-font-weight-heading);
+  letter-spacing: -0.03em;
+  line-height: var(--clq-line-height-heading);
+}
+
+.hero-copy p {
+  max-width: 30rem;
+  margin-inline: auto;
+  color: var(--clq-color-text-muted);
+  font-size: clamp(1rem, 4.5vw, 1.125rem);
+}
+
+.join-card {
+  display: grid;
+  width: 100%;
+  padding: var(--clq-space-5);
+  gap: var(--clq-space-3);
+  border: 1px solid var(--clq-color-border-subtle);
+  border-radius: var(--clq-radius-xl);
+  background: var(--clq-color-surface-raised);
+  box-shadow: var(--clq-shadow-md);
+  text-align: left;
+}
+
+label {
+  color: var(--clq-color-text);
+  font-size: var(--clq-font-size-small);
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  min-height: 3.75rem;
+  padding: var(--clq-space-3) var(--clq-space-4);
+  border: 2px solid var(--clq-color-border);
+  border-radius: var(--clq-radius-lg);
+  background: var(--clq-color-surface-raised);
+  color: var(--clq-color-text);
+  font-size: clamp(1.3rem, 6vw, 1.65rem);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-align: center;
+}
+
+input:focus-visible {
+  border-color: var(--clq-color-primary);
+  outline: 0;
+  box-shadow: 0 0 0 var(--clq-space-1) color-mix(in srgb, var(--clq-color-primary) 18%, transparent);
+}
+
+input::placeholder {
+  color: var(--clq-color-text-muted);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+.pin-help {
+  color: var(--clq-color-text-muted);
+  font-size: var(--clq-font-size-small);
+  line-height: var(--clq-line-height-small);
+}
+
+button {
+  min-height: 3.25rem;
+  margin-top: var(--clq-space-2);
+  padding: var(--clq-space-3) var(--clq-space-5);
+  border: 0;
+  border-radius: var(--clq-radius-lg);
+  background: var(--clq-color-primary);
+  color: var(--clq-color-surface-raised);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+  background: var(--clq-color-primary-hover);
+}
+
+button:disabled {
+  background: var(--clq-color-disabled-surface);
+  color: var(--clq-color-disabled);
+  cursor: not-allowed;
+}
+
+@include bp.tablet-up {
+  .public-header {
+    padding: var(--clq-space-5) var(--clq-space-6);
+  }
+
+  .brand-picture {
+    width: 11.5rem;
+    height: 4.4rem;
+  }
+
+  .login-link {
+    padding-inline: var(--clq-space-5);
+  }
+
+  .public-main {
+    padding-inline: var(--clq-space-8);
+  }
+
+  .join-hero {
+    gap: var(--clq-space-8);
+  }
+
+  .join-card {
+    padding: var(--clq-space-6);
+  }
+}
+
+@include bp.desktop-up {
+  .public-header {
+    padding-inline: clamp(1.75rem, 2.5vw, 2.25rem);
+  }
+}

@@ -1,0 +1,41 @@
+<div class="join-page">
+  <header class="public-header">
+    <a class="brand-link" routerLink="/" aria-label="CodeLand početna stranica">
+      <picture class="brand-picture">
+        <source media="(min-width: 600px)" srcset="/brand/logo.png" width="2088" height="796" />
+        <img class="brand-logo" ngSrc="/brand/logo-small.png" fill priority alt="CodeLand" />
+      </picture>
+    </a>
+
+    <a class="login-link" routerLink="/login">Prijavi se</a>
+  </header>
+
+  <main class="public-main">
+    <section class="join-hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <h1 id="page-title">CodeLand Quiz</h1>
+        <p>Unesi PIN i pridruži se kvizu.</p>
+      </div>
+
+      <form class="join-card" (submit)="joinGame($event)" novalidate>
+        <label for="game-pin">PIN igre</label>
+        <input
+          id="game-pin"
+          type="text"
+          inputmode="numeric"
+          maxlength="6"
+          pattern="[0-9]*"
+          autocomplete="off"
+          placeholder="Unesi PIN"
+          aria-describedby="game-pin-help"
+          [value]="gamePin()"
+          [attr.aria-invalid]="gamePin().length > 0 && !isGamePinValid()"
+          (input)="updateGamePin($event)"
+        />
+        <p id="game-pin-help" class="pin-help">PIN se sastoji od 6 cifara.</p>
+
+        <button type="submit" [disabled]="!isGamePinValid()">Pridruži se</button>
+      </form>
+    </section>
+  </main>
+</div>

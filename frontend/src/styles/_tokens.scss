@@ -1,18 +1,25 @@
 :root {
-  --clq-color-primary: #625df5;
-  --clq-color-primary-hover: #514ce0;
-  --clq-color-secondary: #ab9fd5;
-  --clq-color-accent: #69baa5;
-  --clq-color-text: #44474e;
-  --clq-color-text-muted: #62656d;
-  --clq-color-background: #ffffff;
-  --clq-color-surface: #f7f7f8;
-  --clq-color-border: #d9d8e0;
-  --clq-color-disabled: #a9a8af;
-  --clq-color-disabled-surface: #ececef;
-  --clq-color-success: #287d5f;
-  --clq-color-warning: #9a6700;
-  --clq-color-error: #ba1a1a;
+  --clq-color-primary: #37008e;
+  --clq-color-primary-hover: #2c0072;
+  --clq-color-secondary: #ffb4c2;
+  --clq-color-accent: #00c9b7;
+  --clq-color-highlight: #fcd300;
+  --clq-color-pink: #ffb4c2;
+  --clq-color-orange: #ea9a33;
+  --clq-color-text: #1a1a1a;
+  --clq-color-text-muted: #5c5760;
+  --clq-color-background: #fdfcfe;
+  --clq-color-surface: #f7f5f8;
+  --clq-color-surface-raised: #ffffff;
+  --clq-color-neutral: #e2dfe5;
+  --clq-color-border: #918c95;
+  --clq-color-border-subtle: #d2cdd6;
+  --clq-color-disabled: #78727d;
+  --clq-color-disabled-surface: #ebe8ed;
+  --clq-color-success: #007d72;
+  --clq-color-warning: #8b5400;
+  --clq-color-error: #fe5e54;
+  --clq-color-error-text: #9a302d;
 
   --clq-space-1: 0.25rem;
   --clq-space-2: 0.5rem;
@@ -28,15 +35,15 @@
   --clq-radius-xl: 1.25rem;
   --clq-radius-pill: 9999px;
 
-  --clq-shadow-sm: 0 1px 2px rgb(68 71 78 / 8%);
-  --clq-shadow-md: 0 4px 12px rgb(68 71 78 / 10%);
-  --clq-shadow-lg: 0 10px 24px rgb(68 71 78 / 12%);
+  --clq-shadow-sm: 0 1px 2px rgb(55 0 142 / 7%);
+  --clq-shadow-md: 0 4px 14px rgb(55 0 142 / 10%);
+  --clq-shadow-lg: 0 10px 26px rgb(55 0 142 / 12%);
 
   --clq-font-family-body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --clq-font-family-heading: var(--clq-font-family-body);
   --clq-font-size-body: 1rem;
   --clq-font-size-small: 0.875rem;
-  --clq-font-weight-heading: 650;
+  --clq-font-weight-heading: 600;
   --clq-line-height-body: 1.5;
   --clq-line-height-heading: 1.2;
   --clq-line-height-small: 1.4;
