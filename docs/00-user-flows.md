@@ -1,180 +1,37 @@
-# User Flows
+# Tokovi korisnika
 
-> Status: Draft  
-> Version: 1.0  
-> Project: CodeLand Quiz
+> Status: Implemented
 
-## Purpose
+Ovaj dokument opisuje implementirani backend. Angular korisničko sučelje je planirano.
 
-This document describes the main user flows of the CodeLand Quiz platform.
+## Administrator
 
-The goal is to define how administrators, teachers, and students interact with the system before implementation begins.
+1. Prijavljuje se e-mail adresom i lozinkom. Ako je `mustChangePassword` postavljen, prvo mijenja lozinku.
+2. Upravlja nastavničkim računima: kreiranje, pregled, izmjena, aktivacija/deaktivacija i reset privremene lozinke. Backend nema rutu za kreiranje drugih administratora.
+3. Upravlja učenicima, zajedničkim temama, kvizovima i pitanjima.
+4. Aktivira kviz, kreira sesiju i ručno vodi njen životni ciklus.
+5. Prati učesnike REST endpointom, uklanja učesnika te pregleda historiju, izvještaje i statistike.
 
-The platform uses REST APIs for management operations and WebSockets for real-time quiz communication.
+## Nastavnik
 
-## Communication Types
+Nastavnik koristi isti staff login i obaveznu promjenu lozinke. Može upravljati učenicima, temama, kvizovima i pitanjima, kreirati i ručno voditi sesije, upravljati učesnicima te pregledati historiju i statistike. Ne može koristiti administratorske rute za nastavničke račune.
 
-| Type | Description |
-| --- | --- |
-| REST | HTTP REST API |
-| WS | WebSocket communication |
-| DB | Database operation |
-| ASYNC | OpenSwoole internal asynchronous processing |
+## Registrovani učesnik
 
-## Teacher Flow
+1. Poziva `GET /api/game/session/{gamePin}` za javni pregled sesije.
+2. Poziva `POST /api/game/join` sa tipom `REGISTERED`, korisničkim imenom učenika, nadimkom i avatarom.
+3. Dobija participant JWT i otvara `/ws/game`.
+4. Nakon `AUTHENTICATION_REQUIRED` šalje `PARTICIPANT_AUTHENTICATE`.
+5. Prima trenutno stanje, a odgovor šalje porukom `ANSWER_SUBMIT`.
+6. `ANSWER_ACCEPTED` potvrđuje prijem bez otkrivanja tačnosti. Nakon nastavnikovog zatvaranja pitanja stižu zajednički rezultat pitanja, personalizirani rezultat i tabela poretka.
+7. Ponovno povezivanje je podržano u stanjima WAITING, ACTIVE sa otvorenim ili zatvorenim pitanjem, i FINISHED.
 
-```mermaid
-flowchart TD
-    A["Teacher Login [REST]"]
-    --> B["Dashboard [REST]"]
-    --> C["Manage Quizzes [REST]"]
-    --> D["Create/Edit Quiz [REST]"]
-    --> E["Manage Questions [REST]"]
-    --> F["Start Quiz Session [REST]"]
-    --> G["Waiting Room [WS]"]
-    --> H["Start Question [WS]"]
-    --> I["Live Teacher Dashboard [WS]"]
-    --> J["Show Leaderboard [WS]"]
-    --> K["Next Question [WS]"]
-    --> L["Finish Quiz [WS]"]
-    --> M["Session Statistics [REST]"]
-```
+## Gost
 
-## Student Flow
+Tok je isti, ali je `participantType` vrijednosti `GUEST`, ne šalje se identitet iz registra učenika i ne kreira se red u tabeli `students`. Gost bira nadimak i avatar samo za konkretnu sesiju.
 
-```mermaid
-flowchart TD
-    A["Scan QR Code or Enter Game PIN [REST]"]
-    --> B["Enter Username [REST]"]
-    --> C["Choose Nickname [REST]"]
-    --> D["Choose Kode Avatar [REST]"]
-    --> E["Join Waiting Room [WS]"]
-    --> F["Receive Question [WS]"]
-    --> G["Submit Answer [WS]"]
-    --> H["Receive Score [WS]"]
-    --> I["View Leaderboard [WS]"]
-    --> J["View Final Results [WS]"]
-```
+## Tok sesije
 
-## Administrator Flow
+Sve nastavničke operacije su REST: kreiranje sesije, start, zatvaranje trenutnog pitanja, pokretanje sljedećeg pitanja, završetak i uklanjanje učesnika. Sve tranzicije su ručne; nema automatskog timera koji mijenja stanje. Učesničke real-time operacije koriste WebSocket.
 
-```mermaid
-flowchart TD
-    A["Administrator Login [REST]"]
-    --> B["Dashboard [REST]"]
-    --> C["Administration [REST]"]
-    --> D["Create Administrator [REST]"]
-    --> E["Create Teacher [REST]"]
-    --> F["Deactivate User [REST]"]
-```
-
-## Quiz Session Flow
-
-```mermaid
-flowchart TD
-    A["Teacher creates session [REST]"]
-    --> B["Server creates Game PIN [DB]"]
-    --> C["Students join session [WS]"]
-    --> D["Teacher starts quiz [WS]"]
-    --> E["OpenSwoole broadcasts question [WS + ASYNC]"]
-    --> F["Students submit answers [WS]"]
-    --> G["OpenSwoole calculates scores [ASYNC]"]
-    --> H["OpenSwoole broadcasts leaderboard [WS]"]
-    --> I["Teacher starts next question [WS]"]
-    --> J["Session is finished [WS]"]
-    --> K["Results are persisted [DB]"]
-```
-
-## Real-Time Communication Flow
-
-```mermaid
-sequenceDiagram
-    participant T as Teacher
-    participant S as OpenSwoole Server
-    participant A as Student A
-    participant B as Student B
-    participant C as Student C
-
-    T->>S: start_question
-    S-->>A: question_started
-    S-->>B: question_started
-    S-->>C: question_started
-
-    A->>S: student_answer
-    B->>S: student_answer
-    C->>S: student_answer
-
-    S->>S: calculate scores
-    S-->>T: live_statistics_updated
-    S-->>A: answer_result
-    S-->>B: answer_result
-    S-->>C: answer_result
-    S-->>T: leaderboard_updated
-```
-
-## Error Flows
-
-### Invalid Game PIN
-
-```mermaid
-flowchart TD
-    A["Student enters invalid Game PIN [REST]"]
-    --> B["System displays validation error [REST]"]
-    --> C["Student tries again [REST]"]
-```
-
-### Invalid Student Username
-
-```mermaid
-flowchart TD
-    A["Student enters username [REST]"]
-    --> B["System checks student existence [DB]"]
-    --> C{"Username valid?"}
-    C -->|Yes| D["Student continues"]
-    C -->|No| E["Access denied"]
-```
-
-### Student Disconnects
-
-```mermaid
-flowchart TD
-    A["Student WebSocket connection closes [WS]"]
-    --> B["OpenSwoole detects disconnect [ASYNC]"]
-    --> C["Teacher dashboard is updated [WS]"]
-    --> D["Student may reconnect [WS]"]
-```
-
-## Dashboard Modes
-
-### Classroom Mode
-
-Classroom Mode is the default teacher dashboard mode.
-
-It displays:
-
-- connected students;
-- submitted answers;
-- pending answers;
-- countdown timer;
-- leaderboard;
-- connection warnings.
-
-### Developer Mode
-
-Developer Mode is available only to administrators.
-
-It may display:
-
-- active WebSocket connections;
-- server uptime;
-- memory usage;
-- recent WebSocket events;
-- average latency.
-
-Developer Mode is used for technical monitoring and thesis demonstration.
-
-## Key Design Decision
-
-The platform uses REST APIs for actions that happen once, such as login, quiz creation, question management, and viewing statistics.
-
-The platform uses WebSocket communication for actions that require real-time updates, such as joining a live session, broadcasting questions, submitting answers, updating the leaderboard, and monitoring live classroom state.
+Nastavnički live pregled učesnika je `GET /api/sessions/{id}/participants`, ne nastavnički WebSocket. Backend ne generiše QR sliku; frontend je kasnije može napraviti kodiranjem PIN-a ili join URL-a.

@@ -1,199 +1,48 @@
-# CodeLand Quiz — Projektna specifikacija
+# Specifikacija projekta CodeLand Quiz
 
-## 1. Cilj sistema
+> Status: Implemented
 
-CodeLand Quiz je real-time kviz platforma za izvođenje edukativnih kvizova u učionici ili online nastavi. Sistem omogućava nastavniku da kreira kviz, pokrene sesiju, prikaže pitanja učenicima u realnom vremenu i prati rezultate tokom igre.
+## Svrha i korisnici
 
-## 2. Korisničke uloge
+CodeLand Quiz je backend za kreiranje i ručno vođenje kvizova u učionici. Staff korisnici su `ADMIN` i `TEACHER`; imaju e-mail, hash lozinke i JWT autentikaciju. Učenici su poseban registar bez e-maila, lozinke ili staff JWT prijave. U sesiji učestvuju registrovani učenici (`REGISTERED`) ili gosti (`GUEST`).
 
-### ADMIN
+Administrator upravlja nastavničkim računima. Administrator i nastavnik upravljaju učenicima, zajedničkim temama, kvizovima, pitanjima i sesijama te pregledaju rezultate i statistike.
 
-Admin može:
+## Kvizovi i pitanja
 
-- prijaviti se u sistem;
-- dodavati druge admine;
-- dodavati nastavnike;
-- deaktivirati korisnike;
-- kreirati, uređivati i brisati sve kvizove;
-- dodavati učenike;
-- pokretati kviz sesije;
-- pregledati istoriju i statistiku.
+Kviz pripada opcionalnoj temi, ima naslov, verziju, opis, status aktivnosti i soft-delete životni ciklus. Aktivni kviz se može snimiti u novu sesiju.
 
-### TEACHER
+Pravila pitanja:
 
-Nastavnik može:
+- `TRUE_FALSE`: tačno dvije opcije redom „Tačno“ i „Netačno“; tačno jedna je ispravna.
+- `SINGLE_CHOICE`: dvije ili četiri opcije; tačno jedna je ispravna.
+- `MULTIPLE_CHOICE`: četiri opcije; dvije ili tri su ispravne.
+- Vrijeme odgovora je 30–300 sekundi, a `maxPoints` 1–10000.
 
-- prijaviti se u sistem;
-- kreirati, uređivati i brisati kvizove;
-- dodavati učenike;
-- pokretati kviz sesije;
-- pregledati rezultate i statistiku.
+Putanja slike je podatak pitanja, ali endpoint za upload/generisanje slike nije implementiran.
 
-### STUDENT
+## Sesija i snapshot
 
-Učenik nema klasičan login. Učenik može učestvovati u kvizu samo ako postoji u sistemu i ima dodijeljen username.
+Kreiranje sesije kopira naslov/verziju kviza, pitanja i opcije u snapshot tabele. Kasnije izmjene ili brisanje izvornog sadržaja zato ne mijenjaju historijski tok i izvještaj sesije. Statusi su `WAITING`, `ACTIVE` i `FINISHED`.
 
-Učenik se pridružuje kvizu pomoću:
+Nastavnik ručno pokreće sesiju, zatvara trenutno pitanje, pokreće sljedeće i završava sesiju. Nema automatskih prijelaza ni automatskog završetka.
 
-- Game PIN-a ili QR koda;
-- svog username-a;
-- nickname-a za konkretnu igru;
-- izabranog Kode avatara.
+## Bodovanje
 
-## 3. Glavne funkcionalnosti
+Netačan odgovor donosi 0 bodova. Za tačan odgovor:
 
-### Upravljanje korisnicima
+```text
+remainingRatio = remaining time / time limit
+multiplier = 0.5 + 0.5 * remainingRatio
+points = round(maxPoints * multiplier)
+```
 
-- admin može dodavati nove admine;
-- admin može dodavati nastavnike;
-- admin/nastavnik može dodavati učenike;
-- učenici imaju username;
-- samo registrovani učenici mogu igrati kviz.
+Tačan odgovor donosi približno 100% bodova na početku, 75% na polovini i 50% na roku. Bodovanje koristi vrijeme odgovora ograničeno na interval pitanja.
 
-### Upravljanje kvizovima
+## Izvještaji
 
-- prikaz liste svih kvizova;
-- kreiranje novog kviza;
-- izmjena kviza;
-- brisanje kviza;
-- dodavanje pitanja;
-- dodavanje slike uz pitanje;
-- definisanje vremena za odgovor;
-- definisanje broja bodova;
-- definisanje tipa pitanja.
+Implementirani su historija sesija, završni izvještaj sesije, agregatna statistika kviza i dugoročna statistika registrovanog učenika. Live distribucija opcija i najbrži odgovor nisu zaseban nastavnički WebSocket proizvod.
 
-### Tipovi pitanja
+## Granice trenutne verzije
 
-Sistem podržava:
-
-- tačno/netačno;
-- jedan tačan odgovor;
-- više tačnih odgovora.
-
-Kod ponuđenih odgovora koriste se četiri opcije.
-
-### Pokretanje igre
-
-Nastavnik:
-
-- bira kviz;
-- kreira novu sesiju;
-- dobija Game PIN;
-- dobija QR kod;
-- čeka da se učenici pridruže;
-- ručno pokreće kviz;
-- ručno prelazi na sljedeće pitanje.
-
-### Tok igre
-
-1. Nastavnik pokreće sesiju.
-2. Učenici se pridružuju preko PIN-a ili QR koda.
-3. Učenik unosi username.
-4. Učenik bira nickname i Kode avatar.
-5. Nastavnik pokreće pitanje.
-6. Pitanje se prikazuje svim učenicima istovremeno.
-7. Učenici odgovaraju u zadatom vremenu.
-8. Server računa tačnost, vrijeme i bodove.
-9. Nastavnik vidi statistiku uživo.
-10. Nakon pitanja prikazuje se rang-lista.
-11. Nastavnik prelazi na sljedeće pitanje.
-12. Na kraju se prikazuje konačan poredak.
-
-## 4. Bodovanje
-
-Bodovanje zavisi od:
-
-- tačnosti odgovora;
-- brzine odgovora;
-- maksimalnog broja bodova za pitanje.
-
-Netačan odgovor nosi 0 bodova.
-
-Tačan odgovor dobija bodove prema preostalom vremenu.
-
-## 5. Real-time statistika
-
-Tokom pitanja nastavnik vidi:
-
-- broj prijavljenih učenika;
-- broj učenika koji su odgovorili;
-- broj učenika koji nisu odgovorili;
-- preostalo vrijeme;
-- najbrži odgovor;
-- prosječno vrijeme odgovora;
-- raspodjelu odgovora po opcijama;
-- rang-listu nakon pitanja.
-
-## 6. Istorija i statistika
-
-Nakon završetka kviza nastavnik vidi:
-
-- ko je učestvovao;
-- konačan broj bodova;
-- plasman;
-- broj tačnih odgovora po učeniku;
-- broj netačnih odgovora po učeniku;
-- prosječno vrijeme odgovora;
-- odgovore po pitanju;
-- procenat tačnih odgovora po pitanju;
-- najteže pitanje.
-
-## 7. Responzivnost
-
-Učenički dio aplikacije mora biti mobile-first.
-
-To znači:
-
-- prilagođen telefonima;
-- velika dugmad za odgovore;
-- jasno vidljiv tajmer;
-- jednostavan prikaz pitanja;
-- slika prilagođena širini ekrana;
-- minimalan broj klikova;
-- prikaz prilagođen djeci.
-
-Profesorski dio je desktop-first, jer nastavnik najčešće koristi laptop ili računar.
-
-## 8. Tehnologije
-
-Backend:
-
-- PHP 8.3;
-- OpenSwoole;
-- Composer;
-- MySQL.
-
-Frontend:
-
-- Angular;
-- TypeScript;
-- responsive UI.
-
-Infrastruktura:
-
-- Docker;
-- phpMyAdmin;
-- GitHub.
-
-Sigurnost:
-
-- HTTPS;
-- hashovanje lozinki;
-- JWT autentikacija;
-- validacija podataka;
-- CORS konfiguracija;
-- zaštita upload-a slika;
-- `.env` fajl van GitHub-a.
-
-## 9. Van opsega prve verzije
-
-U prvoj verziji ne radimo:
-
-- video pozive;
-- Scratch editor;
-- AI analizu časa;
-- roditeljski portal;
-- plaćanja;
-- email notifikacije;
-- mobilnu aplikaciju.
-  
+Backend ne generiše QR slike. Frontend kasnije može kodirati join URL ili PIN. Nisu implementirani posebni razvojni režimi, AI mogućnosti, e-mail obavijesti, CAPTCHA ni automatsko vođenje pitanja.
