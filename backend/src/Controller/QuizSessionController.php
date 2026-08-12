@@ -112,10 +112,22 @@ final class QuizSessionController
     ): void {
         try {
             $sessionId = $context->getRouteInt('id');
-            $session = $this->quizSessionService->getSession($sessionId);
+            $state = $this->quizSessionService
+                ->getSessionPresentationState($sessionId);
 
             $this->responseFactory->json($response, [
-                'session' => $this->sessionResponse($session),
+                'session' => $this->sessionResponse($state->session),
+                'currentQuestion' => $state->currentQuestion === null
+                    ? null
+                    : $this->questionResponse($state->currentQuestion),
+                'questionResult' => $state->questionResult === null
+                    ? null
+                    : $this->closedQuestionResponse(
+                        $state->questionResult,
+                    ),
+                'finalResult' => $state->finalResult === null
+                    ? null
+                    : $this->finalResultResponse($state->finalResult),
             ]);
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(

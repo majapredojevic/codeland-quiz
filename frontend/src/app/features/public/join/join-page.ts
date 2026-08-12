@@ -1,6 +1,6 @@
 import { NgOptimizedImage } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 @Component({
   selector: 'clq-join-page',
@@ -8,11 +8,18 @@ import { Router, RouterLink } from '@angular/router';
   templateUrl: './join-page.html',
   styleUrl: './join-page.scss',
 })
-export class JoinPage {
+export class JoinPage implements OnInit {
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly gamePin = signal('');
   protected readonly isGamePinValid = computed(() => /^\d{6}$/.test(this.gamePin()));
+
+  ngOnInit(): void {
+    const queryPin = this.route.snapshot.queryParamMap.get('pin');
+    if (queryPin === null) return;
+    this.gamePin.set(this.normalizedPin(queryPin));
+  }
 
   protected updateGamePin(event: Event): void {
     const input = event.target;
@@ -21,7 +28,7 @@ export class JoinPage {
       return;
     }
 
-    const normalizedPin = input.value.replace(/\D/g, '').slice(0, 6);
+    const normalizedPin = this.normalizedPin(input.value);
     input.value = normalizedPin;
     this.gamePin.set(normalizedPin);
   }
@@ -34,5 +41,9 @@ export class JoinPage {
     }
 
     void this.router.navigate(['/join', this.gamePin()]);
+  }
+
+  private normalizedPin(value: string): string {
+    return value.replace(/\D/g, '').slice(0, 6);
   }
 }

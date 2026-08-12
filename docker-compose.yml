@@ -16,6 +16,7 @@ services:
       DB_DATABASE: codeland_quiz
       DB_USERNAME: codeland
       DB_PASSWORD: secret
+      QUESTION_IMAGE_STORAGE_PATH: storage/question-images
 
   mysql:
     image: mysql:8.4

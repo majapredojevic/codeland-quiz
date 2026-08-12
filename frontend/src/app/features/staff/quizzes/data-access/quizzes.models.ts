@@ -73,3 +73,22 @@ export interface QuizListQuery {
   status: QuizStatusFilter;
   sort: QuizSort;
 }
+
+export interface QuizResponse {
+  quiz: QuizItem;
+}
+
+export interface CreateQuizRequest {
+  title: string;
+  version: number;
+  description: string | null;
+  topicId: number | null;
+}
+
+export type UpdateQuizRequest = Partial<CreateQuizRequest> &
+  (
+    | { title: string }
+    | { version: number }
+    | { description: string | null }
+    | { topicId: number | null }
+  );

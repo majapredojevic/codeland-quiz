@@ -1,0 +1,18 @@
+:host {
+  display: block;
+}
+
+.entity-audit-meta {
+  display: flex;
+  padding-top: var(--clq-space-4);
+  border-top: 1px solid color-mix(in srgb, var(--clq-color-border-subtle) 55%, white);
+  color: var(--clq-color-text-muted);
+  flex-wrap: wrap;
+  gap: var(--clq-space-2) var(--clq-space-5);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+p {
+  margin: 0;
+}

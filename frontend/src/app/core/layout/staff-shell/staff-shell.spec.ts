@@ -42,6 +42,8 @@ describe('StaffShell', () => {
           { path: 'app/dashboard', component: EmptyPage },
           { path: 'app/students', component: EmptyPage },
           { path: 'app/quizzes', component: EmptyPage },
+          { path: 'app/sessions/:sessionId', component: EmptyPage },
+          { path: 'app/results/sessions/:sessionId', component: EmptyPage },
           { path: 'app/users', component: EmptyPage },
           { path: 'app/account/password', component: EmptyPage },
           { path: 'change-password', component: EmptyPage },
@@ -107,7 +109,7 @@ describe('StaffShell', () => {
     return button;
   }
 
-  it('renders semantic common navigation without unfinished links', async () => {
+  it('renders semantic common navigation with the Results feature enabled', async () => {
     const { fixture, element } = createShell();
     await TestBed.inject(Router).navigateByUrl('/app/dashboard');
     fixture.detectChanges();
@@ -121,11 +123,12 @@ describe('StaffShell', () => {
     expect(home?.textContent).toContain('Početna');
     expect(home?.getAttribute('href')).toBe('/app/dashboard');
     expect(home?.getAttribute('aria-current')).toBe('page');
-    expect(disabledItems.map((item) => item.textContent)).toEqual([
-      expect.stringContaining('Rezultati'),
-    ]);
-    expect(disabledItems).toHaveLength(1);
-    expect(disabledItems.every((item) => !item.hasAttribute('href'))).toBe(true);
+    const resultsLink = Array.from(navigation?.querySelectorAll<HTMLAnchorElement>('a') ?? []).find(
+      (link) => link.textContent?.trim() === 'Rezultati',
+    );
+    expect(resultsLink?.getAttribute('href')).toBe('/app/results');
+    expect(resultsLink?.textContent).not.toContain('Uskoro');
+    expect(disabledItems).toHaveLength(0);
     expect(navigation?.textContent).not.toContain('Teme');
     expect(navigation?.textContent).not.toContain('Sesije');
   });
@@ -304,6 +307,46 @@ describe('StaffShell', () => {
     expect(document.activeElement).toBe(menuButton);
     expect(element.querySelector('header')?.hasAttribute('inert')).toBe(false);
     expect(element.querySelector('main')?.hasAttribute('inert')).toBe(false);
+  });
+
+  it('scopes the overlay navigation presentation mode to session routes', async () => {
+    const { fixture, element } = createShell();
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/app/sessions/41');
+    fixture.detectChanges();
+    expect(element.querySelector('.staff-shell')?.classList).toContain('is-presentation');
+    expect(element.querySelector('.sidebar')?.classList).not.toContain('is-open');
+    expect(element.querySelector('.profile-trigger')).not.toBeNull();
+
+    const menuButton = element.querySelector<HTMLButtonElement>('.menu-toggle');
+    menuButton?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(element.querySelector('.sidebar')?.classList).toContain('is-open');
+    expect(element.querySelector('.navigation-backdrop')).not.toBeNull();
+    expect(element.querySelector('main')?.hasAttribute('inert')).toBe(true);
+
+    element.querySelector<HTMLButtonElement>('.navigation-backdrop')?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(element.querySelector('.sidebar')?.classList).not.toContain('is-open');
+    expect(element.querySelector('.navigation-backdrop')).toBeNull();
+
+    menuButton?.click();
+    fixture.detectChanges();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(element.querySelector('.sidebar')?.classList).not.toContain('is-open');
+
+    await router.navigateByUrl('/app/dashboard');
+    fixture.detectChanges();
+    expect(element.querySelector('.staff-shell')?.classList).not.toContain('is-presentation');
+
+    await router.navigateByUrl('/app/results/sessions/41');
+    fixture.detectChanges();
+    expect(element.querySelector('.staff-shell')?.classList).not.toContain('is-presentation');
   });
 
   it('keeps the account visible and reports a safe logout failure in the workspace', async () => {

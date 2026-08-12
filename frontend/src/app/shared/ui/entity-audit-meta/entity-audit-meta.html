@@ -1,0 +1,10 @@
+@if (createdLabel(); as created) {
+  <footer class="entity-audit-meta" aria-label="Podaci o izmjenama">
+    <p>Kreirao: {{ createdBy().name }} · {{ created }}</p>
+    @if (hasMeaningfulUpdate()) {
+      @if (updatedLabel(); as updated) {
+        <p>Posljednja izmjena: {{ updatedBy().name }} · {{ updated }}</p>
+      }
+    }
+  </footer>
+}

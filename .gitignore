@@ -9,6 +9,7 @@ Thumbs.db
 # PHP
 backend/vendor/
 backend/.env
+backend/storage/question-images/
 
 # Angular
 frontend/node_modules/

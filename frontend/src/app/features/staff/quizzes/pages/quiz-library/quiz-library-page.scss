@@ -92,7 +92,7 @@ h2 {
 }
 .toolbar-controls {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto auto auto;
   gap: var(--clq-space-3);
   align-items: end;
 }

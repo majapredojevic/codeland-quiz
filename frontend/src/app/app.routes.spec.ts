@@ -6,6 +6,7 @@ import { passwordChangeGuard } from './core/auth/password-change.guard';
 import { StaffShell } from './core/layout/staff-shell/staff-shell';
 import { ChangePasswordPage } from './features/public/change-password/change-password-page';
 import { AccountPasswordPage } from './features/staff/account/password/account-password-page';
+import { QuizLobbyPage } from './features/staff/play/pages/quiz-lobby/quiz-lobby-page';
 import { routes } from './app.routes';
 
 describe('password route structure', () => {
@@ -87,6 +88,44 @@ describe('staff quizzes route structure', () => {
     expect(staffRoute?.canActivateChild).toEqual([authGuard, passwordChangeGuard]);
 
     const childRoutes = (await quizzesRoute?.loadChildren?.()) as Route[];
-    expect(childRoutes.map(({ path }) => path)).toEqual(['']);
+    expect(childRoutes.map(({ path }) => path)).toEqual([
+      '',
+      'new',
+      ':quizId/questions/new',
+      ':quizId/questions/:questionId',
+      ':id',
+    ]);
+  });
+});
+
+describe('staff play route structure', () => {
+  it('lazy-loads the teacher lobby behind the existing staff guards', async () => {
+    const staffRoute = routes.find(({ path }) => path === 'app');
+    const lobbyRoute = staffRoute?.children?.find(({ path }) => path === 'sessions/:sessionId');
+
+    expect(lobbyRoute).toBeDefined();
+    expect(staffRoute?.canActivate).toEqual([authGuard, passwordChangeGuard]);
+    expect(staffRoute?.canActivateChild).toEqual([authGuard, passwordChangeGuard]);
+    expect(await lobbyRoute?.loadComponent?.()).toBe(QuizLobbyPage);
+  });
+});
+
+describe('staff results route structure', () => {
+  it('lazy-loads every Results view inside the guarded StaffShell', async () => {
+    const staffRoute = routes.find(({ path }) => path === 'app');
+    const resultsRoute = staffRoute?.children?.find(({ path }) => path === 'results');
+
+    expect(resultsRoute).toBeDefined();
+    expect(resultsRoute?.canActivate).toBeUndefined();
+    expect(staffRoute?.canActivate).toEqual([authGuard, passwordChangeGuard]);
+    expect(staffRoute?.canActivateChild).toEqual([authGuard, passwordChangeGuard]);
+
+    const childRoutes = (await resultsRoute?.loadChildren?.()) as Route[];
+    expect(childRoutes.map(({ path }) => path)).toEqual([
+      '',
+      'sessions/:id',
+      'quizzes/:id',
+      'students/:id',
+    ]);
   });
 });

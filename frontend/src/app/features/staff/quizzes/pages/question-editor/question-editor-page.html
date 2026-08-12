@@ -1,0 +1,400 @@
+<section class="question-editor-page quiz-editor-page" aria-labelledby="question-editor-title">
+  @if (
+    invalidQuiz() ||
+    mutationQuizMissing() ||
+    quizStore.error() === 'not-found' ||
+    questionsStore.detailError() === 'quiz-not-found'
+  ) {
+    <div class="page-state" role="alert">
+      <h1 id="question-editor-title">Kviz nije pronađen.</h1>
+      <p>Moguće je da je kviz obrisan ili više nije dostupan.</p>
+      <a routerLink="/app/quizzes">Nazad na kvizove</a>
+    </div>
+  } @else if (
+    invalidQuestion() || mutationQuestionMissing() || questionsStore.detailError() === 'not-found'
+  ) {
+    <div class="page-state" role="alert">
+      <h1 id="question-editor-title">Pitanje nije pronađeno.</h1>
+      <p>Moguće je da je pitanje obrisano ili više nije dostupno.</p>
+      @if (quizId(); as currentQuizId) {
+        <a [routerLink]="['/app/quizzes', currentQuizId]" [queryParams]="{ tab: 'questions' }">
+          Nazad na pitanja
+        </a>
+      } @else {
+        <a routerLink="/app/quizzes">Nazad na kvizove</a>
+      }
+    </div>
+  } @else if (quizStore.loading() || (editMode() && questionsStore.detailLoading())) {
+    <div class="page-state" role="status">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <h1 id="question-editor-title">
+        {{ editMode() ? 'Učitavanje pitanja…' : 'Učitavanje kviza…' }}
+      </h1>
+    </div>
+  } @else if (quizStore.error() === 'load' || questionsStore.detailError() === 'load') {
+    <div class="page-state" role="alert">
+      <h1 id="question-editor-title">Podaci nisu dostupni</h1>
+      <p>Nije moguće učitati podatke potrebne za uređivanje pitanja.</p>
+      <div class="page-state-actions">
+        <a routerLink="/app/quizzes">Nazad na kvizove</a>
+        <button type="button" (click)="retry()">Pokušaj ponovo</button>
+      </div>
+    </div>
+  } @else if (quizStore.detail(); as quiz) {
+    <header class="page-header">
+      <a
+        class="back-link"
+        [class.is-disabled]="saving()"
+        [routerLink]="saving() ? null : ['/app/quizzes', quiz.id]"
+        [queryParams]="{ tab: 'questions' }"
+        [attr.aria-disabled]="saving() ? 'true' : null"
+        [attr.tabindex]="saving() ? -1 : null"
+        (click)="guardPendingNavigation($event)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m15 5-7 7 7 7" />
+        </svg>
+        Pitanja kviza
+      </a>
+      <div>
+        <h1 id="question-editor-title">{{ editMode() ? 'Uredi pitanje' : 'Novo pitanje' }}</h1>
+        <p>
+          @if (editMode() && questionsStore.detail(); as question) {
+            Pitanje {{ question.questionOrder }} · {{ quiz.title }}
+          } @else {
+            {{ quiz.title }}
+          }
+        </p>
+      </div>
+    </header>
+
+    <form novalidate [attr.aria-busy]="saving()" (submit)="submit($event)">
+      <section class="content-card question-type-section" aria-labelledby="question-type-title">
+        <header class="card-header">
+          <div>
+            <h2 id="question-type-title">Tip pitanja</h2>
+            <p>Odaberite način na koji učenici odgovaraju.</p>
+          </div>
+        </header>
+        <div class="question-type-grid" role="radiogroup" aria-labelledby="question-type-title">
+          @for (type of typeChoices; track type.value) {
+            <button
+              class="type-choice"
+              type="button"
+              role="radio"
+              [class.is-selected]="formModel().questionType === type.value"
+              [attr.aria-checked]="formModel().questionType === type.value"
+              [disabled]="saving()"
+              (click)="selectType(type.value)"
+            >
+              <span class="type-choice-indicator" aria-hidden="true"></span>
+              {{ type.label }}
+            </button>
+          }
+        </div>
+      </section>
+
+      <section class="content-card" aria-labelledby="question-content-title">
+        <header class="card-header">
+          <div>
+            <h2 id="question-content-title">Sadržaj pitanja</h2>
+            <p>Unesite pitanje i označite tačne odgovore.</p>
+          </div>
+        </header>
+
+        <div class="field-group">
+          <div class="label-row">
+            <label for="question-text">Tekst pitanja</label>
+            <span>{{ questionTextLength() }} / 1000</span>
+          </div>
+          <textarea
+            id="question-text"
+            rows="4"
+            [formField]="questionForm.questionText"
+            [attr.aria-invalid]="questionTextError() !== null"
+            [attr.aria-describedby]="questionTextError() ? 'question-text-error' : null"
+            (input)="clearRequestError()"
+          ></textarea>
+          @if (questionTextError(); as error) {
+            <p id="question-text-error" class="field-error">{{ error }}</p>
+          }
+        </div>
+
+        <section class="question-image-section" aria-labelledby="question-image-title">
+          <div class="question-image-heading">
+            <h3 id="question-image-title">Slika pitanja</h3>
+            <p>Opcionalno dodajte sliku uz pitanje.</p>
+          </div>
+
+          <label class="visually-hidden" for="question-image">Odaberite sliku pitanja</label>
+          <input
+            #questionImageInput
+            id="question-image"
+            class="visually-hidden"
+            type="file"
+            tabindex="-1"
+            [accept]="imageAccept"
+            [disabled]="saving()"
+            [attr.aria-invalid]="imageSelectionError() !== null"
+            [attr.aria-describedby]="
+              imageSelectionError()
+                ? 'question-image-help question-image-error'
+                : 'question-image-help'
+            "
+            (change)="selectImage($event)"
+          />
+
+          @if (previewSource(); as imageSource) {
+            <div class="question-image-preview">
+              <div class="question-image-frame">
+                @if (imagePreviewFailed()) {
+                  <div class="question-image-fallback" role="status">
+                    <span aria-hidden="true">!</span>
+                    <p>Slika nije dostupna.</p>
+                  </div>
+                } @else {
+                  <img
+                    [src]="imageSource"
+                    alt="Slika uz pitanje"
+                    (error)="markImagePreviewUnavailable()"
+                  />
+                }
+              </div>
+              <div class="question-image-details">
+                @if (selectedImage(); as selected) {
+                  <p class="question-image-file-name">{{ selected.file.name }}</p>
+                }
+                <p id="question-image-help" class="field-help">JPG, PNG ili WebP · najviše 5 MB</p>
+                <div class="question-image-actions">
+                  <button
+                    class="secondary-button"
+                    type="button"
+                    [disabled]="saving()"
+                    aria-controls="question-image"
+                    (click)="openImagePicker(questionImageInput)"
+                  >
+                    Promijeni sliku
+                  </button>
+                  <button
+                    class="question-image-remove"
+                    type="button"
+                    [disabled]="saving()"
+                    (click)="removeImage()"
+                  >
+                    Ukloni sliku
+                  </button>
+                </div>
+              </div>
+            </div>
+          } @else {
+            <div class="question-image-empty" [class.has-error]="imageSelectionError() !== null">
+              <div>
+                <p>Dodajte ilustraciju koja pomaže učenicima da razumiju pitanje.</p>
+                <p id="question-image-help" class="field-help">JPG, PNG ili WebP · najviše 5 MB</p>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                [disabled]="saving()"
+                aria-controls="question-image"
+                (click)="openImagePicker(questionImageInput)"
+              >
+                Odaberi sliku
+              </button>
+            </div>
+          }
+          @if (imageSelectionError(); as error) {
+            <p id="question-image-error" class="field-error" role="alert">{{ error }}</p>
+          }
+        </section>
+
+        <section class="answers-section" aria-labelledby="answers-title">
+          <div class="answers-heading">
+            <div>
+              <h3 id="answers-title">Odgovori</h3>
+              @if (formModel().questionType === 'SINGLE_CHOICE') {
+                <p>Označite jedan tačan odgovor.</p>
+              } @else if (formModel().questionType === 'MULTIPLE_CHOICE') {
+                <p>Označite dva ili tri tačna odgovora.</p>
+              } @else {
+                <p>Označite koji je odgovor tačan.</p>
+              }
+            </div>
+            @if (formModel().questionType === 'SINGLE_CHOICE') {
+              <div class="option-count" aria-label="Broj odgovora">
+                <span>Broj odgovora</span>
+                <div role="group" aria-label="Odaberite broj odgovora">
+                  <button
+                    type="button"
+                    [disabled]="saving()"
+                    [class.is-selected]="formModel().options.length === 2"
+                    [attr.aria-pressed]="formModel().options.length === 2"
+                    (click)="setSingleOptionCount(2)"
+                  >
+                    2
+                  </button>
+                  <button
+                    type="button"
+                    [disabled]="saving()"
+                    [class.is-selected]="formModel().options.length === 4"
+                    [attr.aria-pressed]="formModel().options.length === 4"
+                    (click)="setSingleOptionCount(4)"
+                  >
+                    4
+                  </button>
+                </div>
+              </div>
+            } @else if (formModel().questionType === 'MULTIPLE_CHOICE') {
+              <span class="selected-count">{{ correctCount() }} odabrana</span>
+            }
+          </div>
+
+          <div class="answer-list">
+            @for (option of formModel().options; track $index; let index = $index) {
+              <div class="answer-row" [class.is-correct]="option.isCorrect">
+                <span class="answer-letter" aria-hidden="true">{{ optionLetters[index] }}</span>
+                @if (formModel().questionType === 'TRUE_FALSE') {
+                  <span class="fixed-answer">{{ option.optionText }}</span>
+                } @else {
+                  <div class="answer-input">
+                    <label class="visually-hidden" [for]="'answer-' + index">
+                      Odgovor {{ optionLetters[index] }}
+                    </label>
+                    <input
+                      [id]="'answer-' + index"
+                      type="text"
+                      autocomplete="off"
+                      [value]="option.optionText"
+                      [disabled]="saving()"
+                      [attr.aria-invalid]="optionError(index) !== null"
+                      [attr.aria-describedby]="optionError(index) ? 'answer-error-' + index : null"
+                      (input)="updateOptionText(index, $event)"
+                    />
+                    @if (optionError(index); as error) {
+                      <p [id]="'answer-error-' + index" class="field-error">{{ error }}</p>
+                    }
+                  </div>
+                }
+
+                @if (formModel().questionType === 'MULTIPLE_CHOICE') {
+                  <label class="correct-control">
+                    <input
+                      type="checkbox"
+                      [checked]="option.isCorrect"
+                      [disabled]="saving() || (!option.isCorrect && correctCount() >= 3)"
+                      [attr.aria-label]="'Označi odgovor ' + optionLetters[index] + ' kao tačan'"
+                      (change)="toggleMultipleCorrect(index)"
+                    />
+                    <span>Tačan</span>
+                  </label>
+                } @else {
+                  <label class="correct-control">
+                    <input
+                      type="radio"
+                      name="correct-answer"
+                      [checked]="option.isCorrect"
+                      [disabled]="saving()"
+                      [attr.aria-label]="
+                        formModel().questionType === 'TRUE_FALSE'
+                          ? option.optionText + ' je tačan odgovor'
+                          : 'Označi odgovor ' + optionLetters[index] + ' kao tačan'
+                      "
+                      (change)="selectSingleCorrect(index)"
+                    />
+                    <span>Tačan</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+          @if (duplicateOptions() && submitted()) {
+            <p class="field-error" role="alert">Odgovori moraju imati različit tekst.</p>
+          }
+          @if (correctnessError(); as error) {
+            <p class="field-error" role="alert">{{ error }}</p>
+          }
+        </section>
+      </section>
+
+      <section class="content-card" aria-labelledby="question-settings-title">
+        <header class="card-header">
+          <div>
+            <h2 id="question-settings-title">Postavke</h2>
+            <p>Podesite vrijeme za odgovor i maksimalan broj bodova.</p>
+          </div>
+        </header>
+        <div class="settings-grid">
+          <div class="field-group">
+            <label for="time-limit">Vrijeme za odgovor</label>
+            <div class="input-with-suffix">
+              <input
+                id="time-limit"
+                type="number"
+                step="1"
+                inputmode="numeric"
+                [formField]="questionForm.timeLimitSeconds"
+                [attr.aria-invalid]="timeError() !== null"
+                [attr.aria-describedby]="timeError() ? 'time-limit-error' : 'time-limit-help'"
+                (input)="clearRequestError()"
+              />
+              <span>sekundi</span>
+            </div>
+            <p id="time-limit-help" class="field-help">30–300 sekundi</p>
+            @if (timeError(); as error) {
+              <p id="time-limit-error" class="field-error">{{ error }}</p>
+            }
+          </div>
+          <div class="field-group">
+            <label for="max-points">Maksimalan broj bodova</label>
+            <input
+              id="max-points"
+              type="number"
+              step="1"
+              inputmode="numeric"
+              [formField]="questionForm.maxPoints"
+              [attr.aria-invalid]="pointsError() !== null"
+              [attr.aria-describedby]="pointsError() ? 'max-points-error' : 'max-points-help'"
+              (input)="clearRequestError()"
+            />
+            <p id="max-points-help" class="field-help">1–10000 bodova</p>
+            @if (pointsError(); as error) {
+              <p id="max-points-error" class="field-error">{{ error }}</p>
+            }
+          </div>
+        </div>
+      </section>
+
+      @if (requestError(); as error) {
+        <p class="request-error" role="alert">{{ error }}</p>
+      }
+      <div class="form-actions">
+        <a
+          class="secondary-button"
+          [class.is-disabled]="saving()"
+          [routerLink]="saving() ? null : ['/app/quizzes', quiz.id]"
+          [queryParams]="{ tab: 'questions' }"
+          [attr.aria-disabled]="saving() ? 'true' : null"
+          [attr.tabindex]="saving() ? -1 : null"
+          (click)="guardPendingNavigation($event)"
+        >
+          Otkaži
+        </a>
+        <button
+          class="primary-button"
+          type="submit"
+          [disabled]="
+            !formValid() || imageSelectionError() !== null || saving() || (editMode() && !dirty())
+          "
+        >
+          @if (saving()) {
+            Čuvanje…
+          } @else if (editMode()) {
+            Sačuvaj izmjene
+          } @else {
+            Dodaj pitanje
+          }
+        </button>
+      </div>
+    </form>
+  }
+</section>

@@ -1,0 +1,388 @@
+<section class="quiz-details-page quiz-editor-page" aria-labelledby="quiz-details-title">
+  @if (invalidId() || quizStore.error() === 'not-found') {
+    <div class="page-state" role="alert">
+      <h1 id="quiz-details-title">Kviz nije pronađen.</h1>
+      <p>Moguće je da je kviz obrisan ili više nije dostupan.</p>
+      <a routerLink="/app/quizzes">Nazad na kvizove</a>
+    </div>
+  } @else if (quizStore.loading() && !quizStore.detail()) {
+    <div class="page-state" role="status">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <h1 id="quiz-details-title">Učitavanje kviza…</h1>
+    </div>
+  } @else if (quizStore.error() === 'load') {
+    <div class="page-state" role="alert">
+      <h1 id="quiz-details-title">Kviz nije dostupan</h1>
+      <p>Nije moguće učitati podatke kviza.</p>
+      <div class="page-state-actions">
+        <a routerLink="/app/quizzes">Nazad na kvizove</a
+        ><button type="button" (click)="retry()">Pokušaj ponovo</button>
+      </div>
+    </div>
+  } @else if (quizStore.detail(); as quiz) {
+    <header class="page-header">
+      <a class="back-link" routerLink="/app/quizzes"
+        ><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m15 5-7 7 7 7" /></svg
+        >Kvizovi</a
+      >
+      <div class="summary">
+        <div>
+          <h1 id="quiz-details-title">{{ quiz.title }}</h1>
+          <p>
+            Verzija v{{ quiz.version }} · {{ quiz.topic?.name || 'Bez teme' }} ·
+            {{ questionCountLabel(quiz.questionCount) }}
+          </p>
+        </div>
+        <clq-active-status-badge [isActive]="quiz.isActive" />
+      </div>
+    </header>
+
+    <nav class="details-tabs" aria-label="Sadržaj kviza">
+      <a
+        class="details-tab"
+        [class.is-active]="activeTab() === 'basic'"
+        [attr.aria-current]="activeTab() === 'basic' ? 'page' : null"
+        [routerLink]="['/app/quizzes', quiz.id]"
+      >
+        Osnovni podaci
+      </a>
+      <a
+        class="details-tab"
+        [class.is-active]="activeTab() === 'questions'"
+        [attr.aria-current]="activeTab() === 'questions' ? 'page' : null"
+        [routerLink]="['/app/quizzes', quiz.id]"
+        [queryParams]="{ tab: 'questions' }"
+      >
+        Pitanja
+      </a>
+    </nav>
+
+    @if (activeTab() === 'basic') {
+      <div class="sections">
+        <section class="content-card" aria-labelledby="quiz-data-title">
+          <header class="card-header">
+            <div>
+              <h2 id="quiz-data-title">Podaci kviza</h2>
+              <p>Izmijenite osnovne podatke kviza.</p>
+            </div>
+          </header>
+          <form novalidate [attr.aria-busy]="saving()" (submit)="save($event)">
+            <div class="quiz-form-grid">
+              <div class="field-group title-field">
+                <label for="quiz-title">Naziv kviza</label
+                ><input
+                  id="quiz-title"
+                  type="text"
+                  autocomplete="off"
+                  [formField]="quizForm.title"
+                  [attr.aria-invalid]="titleError() !== null"
+                  [attr.aria-describedby]="titleError() ? 'quiz-title-error' : null"
+                  (input)="clearSaveErrors()"
+                />
+                @if (titleError(); as error) {
+                  <p id="quiz-title-error" class="field-error">{{ error }}</p>
+                }
+              </div>
+              <div class="field-group version-field">
+                <label for="quiz-version">Verzija</label
+                ><input
+                  id="quiz-version"
+                  type="number"
+                  step="1"
+                  inputmode="numeric"
+                  [formField]="quizForm.version"
+                  [attr.aria-invalid]="versionError() !== null"
+                  [attr.aria-describedby]="versionError() ? 'quiz-version-error' : null"
+                  (input)="clearSaveErrors()"
+                />
+                @if (versionError(); as error) {
+                  <p id="quiz-version-error" class="field-error">{{ error }}</p>
+                }
+              </div>
+              <div class="field-group topic-field">
+                <label for="quiz-topic">Tema</label
+                ><select
+                  id="quiz-topic"
+                  [formField]="quizForm.topicSelection"
+                  (change)="clearSaveErrors()"
+                >
+                  <option value="none">Bez teme</option>
+                  @for (topic of topics.topics(); track topic.id) {
+                    <option [value]="topic.id">{{ topic.name }}</option>
+                  }
+                </select>
+                @if (topics.loading()) {
+                  <p class="field-help" role="status">Učitavanje tema…</p>
+                }
+                @if (topics.error(); as error) {
+                  <div class="reference-error" role="alert">
+                    <span>{{ error }}</span
+                    ><button type="button" (click)="topics.loadAll(true)">Pokušaj ponovo</button>
+                  </div>
+                }
+              </div>
+              <div class="field-group description-field">
+                <label for="quiz-description">Opis</label
+                ><textarea
+                  id="quiz-description"
+                  rows="5"
+                  [formField]="quizForm.description"
+                  [attr.aria-invalid]="descriptionError() !== null"
+                  [attr.aria-describedby]="descriptionError() ? 'quiz-description-error' : null"
+                  (input)="clearSaveErrors()"
+                ></textarea>
+                @if (descriptionError(); as error) {
+                  <p id="quiz-description-error" class="field-error">{{ error }}</p>
+                }
+              </div>
+            </div>
+            @if (compoundConflict()) {
+              <p class="request-error" role="alert">Kviz sa ovim nazivom i verzijom već postoji.</p>
+            }
+            @if (saveError(); as error) {
+              <p class="request-error" role="alert">{{ error }}</p>
+            }
+            <div class="form-actions">
+              <button
+                class="secondary-button"
+                type="button"
+                [disabled]="saving() || !isDirty()"
+                (click)="restoreForm()"
+              >
+                Otkaži</button
+              ><button
+                class="primary-button"
+                type="submit"
+                [disabled]="!quizForm().valid() || !isDirty() || saving()"
+              >
+                {{ saving() ? 'Čuvanje…' : 'Sačuvaj izmjene' }}
+              </button>
+            </div>
+          </form>
+          <clq-entity-audit-meta
+            [createdBy]="quiz.createdBy"
+            [updatedBy]="quiz.updatedBy"
+            [createdAt]="quiz.createdAt"
+            [updatedAt]="quiz.updatedAt"
+          />
+        </section>
+
+        <section class="content-card" aria-labelledby="quiz-status-title">
+          <header class="card-header">
+            <div><h2 id="quiz-status-title">Status kviza</h2></div>
+            <clq-active-status-badge [isActive]="quiz.isActive" />
+          </header>
+          <div class="action-row">
+            <div>
+              @if (quiz.isActive) {
+                <p class="action-title">Kviz je dostupan za pokretanje novih sesija.</p>
+              } @else if (quiz.questionCount === 0) {
+                <p class="action-title">Dodajte najmanje jedno pitanje prije aktivacije kviza.</p>
+                <p class="action-description">
+                  Kviz mora imati najmanje jedno pitanje prije aktivacije.
+                </p>
+              } @else {
+                <p class="action-title">
+                  Kviz se može aktivirati kada su sva pitanja ispravno podešena.
+                </p>
+              }
+            </div>
+            @if (quiz.isActive) {
+              <button
+                class="destructive-button"
+                type="button"
+                [disabled]="changingStatus()"
+                (click)="confirmDeactivation()"
+              >
+                {{ changingStatus() ? 'Deaktiviranje…' : 'Deaktiviraj kviz' }}
+              </button>
+            } @else {
+              <button
+                class="positive-button"
+                type="button"
+                [disabled]="quiz.questionCount === 0 || changingStatus()"
+                (click)="activate()"
+              >
+                {{ changingStatus() ? 'Aktiviranje…' : 'Aktiviraj kviz' }}
+              </button>
+            }
+          </div>
+          @if (statusError(); as error) {
+            <p class="request-error" role="alert">{{ error }}</p>
+          }
+        </section>
+
+        <section class="content-card delete-card" aria-labelledby="quiz-delete-title">
+          <header class="card-header">
+            <div>
+              <h2 id="quiz-delete-title">Brisanje kviza</h2>
+              <p>Obrišite kviz kada vam više nije potreban u biblioteci.</p>
+            </div>
+          </header>
+          <div class="action-row">
+            <p class="action-description">Kviz će biti uklonjen iz biblioteke.</p>
+            <button
+              class="destructive-button"
+              type="button"
+              [disabled]="deleting()"
+              (click)="confirmDelete()"
+            >
+              {{ deleting() ? 'Brisanje…' : 'Obriši kviz' }}
+            </button>
+          </div>
+          @if (deleteError(); as error) {
+            <p class="request-error" role="alert">{{ error }}</p>
+          }
+        </section>
+      </div>
+    } @else {
+      <section class="content-card questions-panel" aria-labelledby="questions-title">
+        <header class="questions-panel-header">
+          <div>
+            <h2 id="questions-title">Pitanja ({{ questionsStore.questionCount() }})</h2>
+            <p>Dodajte pitanja i podesite njihov redoslijed.</p>
+          </div>
+          <a class="primary-button" [routerLink]="['/app/quizzes', quiz.id, 'questions', 'new']">
+            Dodaj pitanje
+          </a>
+        </header>
+
+        @if (questionsStore.listLoading() && questionsStore.questions().length === 0) {
+          <div class="question-local-state" role="status">
+            <span class="loading-indicator" aria-hidden="true"></span>
+            <p>Učitavanje pitanja…</p>
+          </div>
+        } @else if (questionsStore.listError() === 'load') {
+          <div class="question-local-state question-local-state--error" role="alert">
+            <p>Pitanja nije moguće učitati.</p>
+            <button type="button" (click)="questionsStore.loadList(quiz.id)">Pokušaj ponovo</button>
+          </div>
+        } @else if (questionsStore.questions().length === 0) {
+          <div class="question-empty">
+            <h3>Još nema pitanja.</h3>
+            <p>Dodajte prvo pitanje kako biste mogli aktivirati kviz.</p>
+            <a class="primary-button" [routerLink]="['/app/quizzes', quiz.id, 'questions', 'new']">
+              Dodaj pitanje
+            </a>
+          </div>
+        } @else {
+          <div
+            class="questions-list"
+            cdkDropList
+            [cdkDropListData]="questionsStore.questions()"
+            [cdkDropListDisabled]="questionsStore.reordering()"
+            (cdkDropListDropped)="dropQuestion($event)"
+          >
+            @for (question of questionsStore.questions(); track question.id; let index = $index) {
+              <article
+                class="question-card"
+                cdkDrag
+                [cdkDragDisabled]="questionsStore.reordering()"
+              >
+                <button
+                  class="drag-handle"
+                  type="button"
+                  cdkDragHandle
+                  [disabled]="questionsStore.reordering()"
+                  [attr.aria-label]="'Prevucite pitanje ' + question.questionOrder"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                      d="M8 5h2v2H8V5Zm6 0h2v2h-2V5ZM8 11h2v2H8v-2Zm6 0h2v2h-2v-2ZM8 17h2v2H8v-2Zm6 0h2v2h-2v-2Z"
+                    />
+                  </svg>
+                </button>
+
+                <div class="question-main">
+                  <span class="question-number">{{ question.questionOrder }}.</span>
+                  <div
+                    class="question-card-content"
+                    [class.has-image]="question.imagePath !== null"
+                  >
+                    @if (question.imagePath; as imagePath) {
+                      <div class="question-thumbnail">
+                        @if (unavailableQuestionImages().has(imagePath)) {
+                          <span>Slika nije dostupna.</span>
+                        } @else {
+                          <img
+                            [src]="imagePath"
+                            alt="Slika uz pitanje"
+                            (error)="markQuestionImageUnavailable(imagePath)"
+                          />
+                        }
+                      </div>
+                    }
+                    <div class="question-copy">
+                      <a
+                        class="question-link"
+                        [routerLink]="['/app/quizzes', quiz.id, 'questions', question.id]"
+                      >
+                        {{ question.questionText }}
+                      </a>
+                      <div class="question-meta">
+                        <span class="question-type-badge">
+                          {{ questionTypeLabel(question.questionType) }}
+                        </span>
+                        <span>{{ answerSummary(question) }}</span>
+                        <span
+                          >{{ question.timeLimitSeconds }} s · {{ question.maxPoints }} bodova</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  class="question-menu-trigger"
+                  type="button"
+                  [matMenuTriggerFor]="questionMenu"
+                  [disabled]="questionsStore.reordering()"
+                  [attr.aria-label]="'Radnje za pitanje ' + question.questionOrder"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                      d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
+                    />
+                  </svg>
+                </button>
+
+                <mat-menu #questionMenu="matMenu" xPosition="before">
+                  <a
+                    mat-menu-item
+                    [routerLink]="['/app/quizzes', quiz.id, 'questions', question.id]"
+                  >
+                    Uredi pitanje
+                  </a>
+                  <button
+                    mat-menu-item
+                    type="button"
+                    [disabled]="index === 0 || questionsStore.reordering()"
+                    (click)="moveQuestion(question.id, -1)"
+                  >
+                    Pomjeri gore
+                  </button>
+                  <button
+                    mat-menu-item
+                    type="button"
+                    [disabled]="
+                      index === questionsStore.questions().length - 1 || questionsStore.reordering()
+                    "
+                    (click)="moveQuestion(question.id, 1)"
+                  >
+                    Pomjeri dolje
+                  </button>
+                  <button mat-menu-item type="button" (click)="confirmQuestionDelete(question)">
+                    Obriši pitanje
+                  </button>
+                </mat-menu>
+
+                <div class="question-drag-placeholder" *cdkDragPlaceholder></div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+</section>

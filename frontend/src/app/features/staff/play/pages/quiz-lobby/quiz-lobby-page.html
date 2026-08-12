@@ -1,0 +1,334 @@
+<section class="lobby-page" aria-labelledby="session-title">
+  @if (invalidSessionId) {
+    <div class="page-state is-error" role="alert">
+      <span class="state-symbol" aria-hidden="true">?</span>
+      <h1 id="session-title">Sesija nije pronađena</h1>
+      <p>Adresa sesije nije ispravna.</p>
+      <a routerLink="/app/dashboard">Nazad na Početnu</a>
+    </div>
+  } @else if (store.loading()) {
+    <div class="page-state" aria-live="polite">
+      <span class="state-spinner" aria-hidden="true"></span>
+      <p>Pripremamo igru…</p>
+    </div>
+  } @else if (store.error() === 'not-found') {
+    <div class="page-state is-error" role="alert">
+      <span class="state-symbol" aria-hidden="true">?</span>
+      <h1 id="session-title">Sesija nije pronađena</h1>
+      <p>Moguće je da sesija više nije dostupna.</p>
+      <a routerLink="/app/dashboard">Nazad na Početnu</a>
+    </div>
+  } @else if (store.error()) {
+    <div class="page-state is-error" role="alert">
+      <span class="state-symbol" aria-hidden="true">!</span>
+      <h1 id="session-title">Igru nije moguće učitati</h1>
+      <p>Provjerite vezu i pokušajte ponovo.</p>
+      <button type="button" (click)="retry()">Pokušaj ponovo</button>
+    </div>
+  } @else if (store.session(); as session) {
+    @if (session.status === 'WAITING') {
+      <a class="back-link" routerLink="/app/dashboard">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m14.5 6.5-5.5 5.5 5.5 5.5" />
+        </svg>
+        Nazad na Početnu
+      </a>
+
+      <header class="lobby-header">
+        <div>
+          <span class="lobby-kicker">Lobby za igru</span>
+          <h1 id="session-title">{{ session.quiz.title }}</h1>
+        </div>
+        <span class="lobby-status">
+          <span aria-hidden="true"></span>
+          Čekamo igrače
+        </span>
+      </header>
+
+      <section class="join-panel" aria-label="Podaci za pridruživanje">
+        <span class="panel-shape panel-shape--pink" aria-hidden="true"></span>
+        <span class="panel-shape panel-shape--yellow" aria-hidden="true"></span>
+
+        <div class="pin-panel">
+          <span class="panel-label">PIN za pridruživanje</span>
+          <strong class="game-pin" aria-label="PIN igre">{{ session.gamePin }}</strong>
+          <span class="join-address">codeland quiz · /join</span>
+        </div>
+
+        <div class="qr-panel">
+          <qrcode
+            [qrdata]="joinUrl(session.gamePin)"
+            [width]="184"
+            [margin]="1"
+            [colorDark]="'#37008e'"
+            [colorLight]="'#ffffff'"
+            errorCorrectionLevel="M"
+            elementType="svg"
+            [ariaLabel]="'QR kod za pridruživanje kvizu s PIN-om ' + session.gamePin"
+          />
+          <span>Skeniraj i pridruži se</span>
+        </div>
+      </section>
+
+      <section class="participants-section" aria-labelledby="participants-title">
+        <header class="participants-heading">
+          <div>
+            <span class="lobby-kicker">Učionica se okuplja</span>
+            <h2 id="participants-title">Igrači</h2>
+          </div>
+          <div class="participant-counts" aria-live="polite">
+            <strong>{{ store.participants().length }}</strong>
+            <span>pridruženo</span>
+          </div>
+        </header>
+
+        @if (store.participants().length === 0) {
+          <div class="empty-participants">
+            <span class="waiting-orbit" aria-hidden="true"> <i></i><i></i><i></i> </span>
+            <h3>Čekamo prve igrače</h3>
+          </div>
+        } @else {
+          <div class="participants-grid">
+            @for (participant of store.participants(); track participant.id) {
+              <clq-participant-card
+                [participant]="participant"
+                [removing]="store.removingParticipantId() === participant.id"
+                (remove)="removeParticipant($event)"
+              />
+            }
+          </div>
+        }
+      </section>
+
+      <footer class="lobby-actions">
+        <div>
+          <strong>{{ session.questionCount }} pitanja</strong>
+          <span>
+            {{
+              store.participants().length === 0
+                ? 'Kviz možete započeti kada se pridruži prvi igrač.'
+                : 'Sve je spremno za početak.'
+            }}
+          </span>
+        </div>
+        <button
+          type="button"
+          [disabled]="store.participants().length === 0 || store.starting()"
+          (click)="startQuiz()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m9 7 8 5-8 5Z" />
+          </svg>
+          {{ store.starting() ? 'Pokrećem…' : 'Započni kviz' }}
+        </button>
+      </footer>
+    } @else if (session.status === 'FINISHED') {
+      @if (store.finalResult(); as finalResult) {
+        <section class="final-screen" aria-labelledby="session-title">
+          <span class="celebration-shape celebration-shape--one" aria-hidden="true"></span>
+          <span class="celebration-shape celebration-shape--two" aria-hidden="true"></span>
+          <header class="final-heading">
+            <span class="lobby-kicker">{{ session.quiz.title }}</span>
+            <h1 id="session-title">Kviz završen!</h1>
+            <p>Bravo svima! Pogledajmo najbolje rezultate.</p>
+          </header>
+
+          @if (finalResult.topThree.length > 0) {
+            <div class="podium" role="list" aria-label="Najbolja tri igrača">
+              @for (entry of finalResult.topThree; track entry.participantId) {
+                <article
+                  class="podium-place"
+                  role="listitem"
+                  [attr.data-rank]="entry.rank"
+                  [attr.data-avatar-key]="entry.avatarKey"
+                >
+                  <span class="podium-rank">{{ entry.rank }}</span>
+                  <span class="game-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" focusable="false">
+                      <path
+                        d="M14 18.5c0-6.1 4.5-10.5 10-10.5s10 4.4 10 10.5v7c0 7-4.1 12.5-10 12.5s-10-5.5-10-12.5Z"
+                      />
+                      <circle cx="20" cy="23" r="1.7" />
+                      <circle cx="28" cy="23" r="1.7" />
+                      <path d="M20 29c2.4 1.8 5.6 1.8 8 0" />
+                    </svg>
+                    <span>{{ avatarInitials(entry.nickname) }}</span>
+                  </span>
+                  <strong>{{ entry.nickname }}</strong>
+                  <span>{{ entry.totalScore }} bodova</span>
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="final-empty">Kviz je završen bez rangiranih igrača.</p>
+          }
+
+          <div class="final-actions">
+            <a class="final-results" [routerLink]="['/app/results/sessions', session.id]"
+              >Pogledaj rezultate</a
+            >
+            <a class="final-home" routerLink="/app/dashboard">Nazad na Početnu</a>
+          </div>
+        </section>
+      } @else {
+        <div class="page-state is-error" role="alert">
+          <span class="state-symbol" aria-hidden="true">!</span>
+          <h1 id="session-title">Konačni rezultat nije dostupan</h1>
+          <p>Osvježite autoritativno stanje sesije.</p>
+          <button type="button" (click)="retry()">Pokušaj ponovo</button>
+        </div>
+      }
+    } @else if (store.currentQuestion(); as question) {
+      <article
+        class="game-presentation"
+        [class.is-result]="store.questionResult() !== null"
+        aria-labelledby="session-title"
+      >
+        <span class="game-shape game-shape--pink" aria-hidden="true"></span>
+        <span class="game-shape game-shape--teal" aria-hidden="true"></span>
+
+        <header class="game-header">
+          <h1 id="session-title">{{ session.quiz.title }}</h1>
+          <span>Pitanje {{ question.questionOrder }} od {{ session.questionCount }}</span>
+        </header>
+
+        <section class="question-stage" aria-labelledby="question-text">
+          @if (store.questionResult()) {
+            <span class="reveal-label">Rezultat pitanja</span>
+          }
+          <h2 id="question-text" class="question-text">{{ question.questionText }}</h2>
+
+          @if (question.imagePath && !imageUnavailable()) {
+            <img
+              class="question-image"
+              [src]="question.imagePath"
+              alt="Slika uz pitanje"
+              (error)="markImageUnavailable()"
+            />
+          } @else if (question.imagePath && imageUnavailable()) {
+            <p class="image-fallback">Slika nije dostupna.</p>
+          }
+
+          <div
+            class="answer-grid"
+            role="list"
+            [class.has-two-options]="sortedOptions().length === 2"
+            [attr.aria-label]="store.questionResult() ? 'Rezultat odgovora' : 'Ponuđeni odgovori'"
+          >
+            @for (option of sortedOptions(); track option.id; let index = $index) {
+              <div
+                class="answer-card"
+                role="listitem"
+                [attr.data-answer]="index"
+                [class.is-correct]="store.questionResult()?.correctOptionIds?.includes(option.id)"
+                [class.is-quiet]="
+                  store.questionResult() !== null &&
+                  !store.questionResult()?.correctOptionIds?.includes(option.id)
+                "
+              >
+                <span>{{ optionLabel(index) }}</span>
+                <strong>{{ option.optionText }}</strong>
+                @if (store.questionResult()?.correctOptionIds?.includes(option.id)) {
+                  <svg viewBox="0 0 24 24" aria-label="Tačan odgovor" role="img">
+                    <path d="m5 12 4.5 4.5L19 7" />
+                  </svg>
+                }
+              </div>
+            }
+          </div>
+        </section>
+
+        @if (store.questionResult(); as result) {
+          <section class="result-summary" aria-label="Rezultat pitanja">
+            <div class="result-stats">
+              <span
+                ><strong>{{ result.stats.correctAnswerCount }}</strong
+                >Tačno</span
+              >
+              <span
+                ><strong>{{ result.stats.incorrectAnswerCount }}</strong
+                >Netačno</span
+              >
+              <span
+                ><strong>{{ result.stats.unansweredCount }}</strong
+                >Bez odgovora</span
+              >
+            </div>
+
+            @if (result.leaderboard.length > 0) {
+              <div class="leaderboard-preview">
+                <h3>Najbolji nakon pitanja</h3>
+                <div role="list" aria-label="Trenutni poredak">
+                  @for (entry of result.leaderboard.slice(0, 3); track entry.participantId) {
+                    <span
+                      class="leaderboard-entry"
+                      role="listitem"
+                      [attr.data-avatar-key]="entry.avatarKey"
+                    >
+                      <b>{{ entry.rank }}</b>
+                      <i class="game-avatar" aria-hidden="true">
+                        <svg viewBox="0 0 48 48" focusable="false">
+                          <path
+                            d="M14 18.5c0-6.1 4.5-10.5 10-10.5s10 4.4 10 10.5v7c0 7-4.1 12.5-10 12.5s-10-5.5-10-12.5Z"
+                          />
+                          <circle cx="20" cy="23" r="1.7" />
+                          <circle cx="28" cy="23" r="1.7" />
+                          <path d="M20 29c2.4 1.8 5.6 1.8 8 0" />
+                        </svg>
+                        <span>{{ avatarInitials(entry.nickname) }}</span>
+                      </i>
+                      <strong>{{ entry.nickname }}</strong>
+                      <small>{{ entry.totalScore }}</small>
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+        }
+
+        <footer class="game-controls">
+          @if (store.questionResult() === null) {
+            <div
+              class="countdown"
+              [class.is-urgent]="remainingSeconds() <= 5"
+              [attr.aria-label]="'Preostalo vrijeme: ' + remainingSeconds() + ' sekundi'"
+              role="timer"
+            >
+              <strong>{{ remainingSeconds() }}</strong
+              ><span>s</span>
+            </div>
+            <p class="answer-count" aria-live="polite">
+              <strong>{{ store.participantSummary()?.answeredCurrentQuestionCount ?? 0 }}</strong>
+              / {{ store.participantSummary()?.participantCount ?? session.participantCount }}
+              odgovorilo
+            </p>
+          } @else {
+            <span class="reveal-moment">Vrijeme je za sljedeći korak!</span>
+          }
+
+          <button type="button" [disabled]="store.lifecyclePending()" (click)="advance()">
+            {{
+              store.lifecyclePending()
+                ? 'Molimo pričekajte…'
+                : store.questionResult() !== null &&
+                    session.currentQuestionOrder === session.questionCount
+                  ? 'Završi kviz'
+                  : 'Dalje'
+            }}
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
+        </footer>
+      </article>
+    } @else {
+      <div class="page-state is-error" role="alert">
+        <span class="state-symbol" aria-hidden="true">!</span>
+        <h1 id="session-title">Trenutno pitanje nije dostupno</h1>
+        <p>Osvježite autoritativno stanje sesije.</p>
+        <button type="button" (click)="retry()">Pokušaj ponovo</button>
+      </div>
+    }
+  }
+</section>

@@ -8,13 +8,13 @@ use CodeLandQuiz\DTO\QuestionOptionInputDTO;
 use CodeLandQuiz\DTO\UpdateQuestionDTO;
 use CodeLandQuiz\Http\JsonRequest;
 use CodeLandQuiz\Model\QuestionType;
+use CodeLandQuiz\QuestionImage\QuestionImagePath;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 
 final class UpdateQuestionRequest
 {
     private const MAX_QUESTION_TEXT_LENGTH = 1000;
-    private const MAX_IMAGE_PATH_LENGTH = 255;
     private const MIN_TIME_LIMIT_SECONDS = 30;
     private const MAX_TIME_LIMIT_SECONDS = 300;
     private const MIN_POINTS = 1;
@@ -55,7 +55,9 @@ final class UpdateQuestionRequest
                 : null,
             hasImagePath: $hasImagePath,
             imagePath: $hasImagePath
-                ? self::imagePathValue($body->getValue('imagePath'))
+                ? QuestionImagePath::nullableRequestValue(
+                    $body->getValue('imagePath'),
+                )
                 : null,
             hasTimeLimitSeconds: $hasTimeLimitSeconds,
             timeLimitSeconds: $hasTimeLimitSeconds
@@ -114,29 +116,6 @@ final class UpdateQuestionRequest
         }
 
         return $questionType;
-    }
-
-    private static function imagePathValue(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (!is_string($value)) {
-            throw new InvalidArgumentException('Question image path must be a string or null.');
-        }
-
-        $imagePath = trim($value);
-
-        if ($imagePath === '') {
-            return null;
-        }
-
-        if (strlen($imagePath) > self::MAX_IMAGE_PATH_LENGTH) {
-            throw new InvalidArgumentException('Question image path cannot exceed 255 characters.');
-        }
-
-        return $imagePath;
     }
 
     private static function integerRangeValue(

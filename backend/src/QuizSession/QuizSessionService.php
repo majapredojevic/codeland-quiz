@@ -9,6 +9,7 @@ use CodeLandQuiz\DTO\CloseSessionQuestionResultDTO;
 use CodeLandQuiz\DTO\FinalQuizSessionResultDTO;
 use CodeLandQuiz\DTO\PublicSessionQuestionDTO;
 use CodeLandQuiz\DTO\QuizSessionItemDTO;
+use CodeLandQuiz\DTO\QuizSessionPresentationStateDTO;
 use CodeLandQuiz\DTO\RemoveSessionParticipantResultDTO;
 use CodeLandQuiz\DTO\SessionParticipantAdminDTO;
 use CodeLandQuiz\DTO\SessionParticipantListDTO;
@@ -115,6 +116,72 @@ final readonly class QuizSessionService
         }
 
         return $this->toItem($session);
+    }
+
+    public function getSessionPresentationState(
+        int $sessionId,
+    ): QuizSessionPresentationStateDTO {
+        $session = $this->sessions->findOverviewById($sessionId);
+
+        if ($session === null) {
+            throw new QuizSessionNotFoundException(
+                'Quiz session was not found.',
+            );
+        }
+
+        $sessionItem = $this->toItem($session);
+
+        if ($session->status === QuizSessionStatus::WAITING) {
+            return new QuizSessionPresentationStateDTO(
+                session: $sessionItem,
+                currentQuestion: null,
+                questionResult: null,
+                finalResult: null,
+            );
+        }
+
+        if ($session->status === QuizSessionStatus::FINISHED) {
+            return new QuizSessionPresentationStateDTO(
+                session: $sessionItem,
+                currentQuestion: null,
+                questionResult: null,
+                finalResult: $this->finalResultAssembler->assemble(
+                    session: $sessionItem,
+                    stateChanged: false,
+                ),
+            );
+        }
+
+        if ($session->currentQuestionOrder === null) {
+            throw new RuntimeException(
+                'Active quiz session current question order is missing.',
+            );
+        }
+
+        $question = $this->sessionQuestions->findBySessionAndOrder(
+            sessionId: $sessionId,
+            questionOrder: $session->currentQuestionOrder,
+        );
+
+        if ($question === null) {
+            throw new RuntimeException(
+                'Active quiz session current question was not found.',
+            );
+        }
+
+        $questionResult = $session->currentQuestionClosedAt === null
+            ? null
+            : $this->closedQuestionResultAssembler->assemble(
+                question: $question,
+                closedAt: $session->currentQuestionClosedAt,
+            );
+
+        return new QuizSessionPresentationStateDTO(
+            session: $sessionItem,
+            currentQuestion: $this->toPublicQuestion($question),
+            questionResult: $questionResult,
+            finalResult: null,
+        );
     }
 
     public function listSessionParticipants(

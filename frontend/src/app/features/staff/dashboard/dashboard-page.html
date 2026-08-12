@@ -1,49 +1,196 @@
-<section class="dashboard-page" aria-labelledby="dashboard-title">
-  <header class="page-header">
-    <h1 id="dashboard-title">Početna</h1>
+<div class="play-hub">
+  <section class="play-hero" aria-labelledby="dashboard-title">
+    <span class="hero-shape hero-shape--pink" aria-hidden="true"></span>
+    <span class="hero-shape hero-shape--teal" aria-hidden="true"></span>
+    <span class="hero-shape hero-shape--yellow" aria-hidden="true"></span>
 
-    @if (user(); as currentUser) {
-      <p class="greeting">
-        Dobro došli, <strong>{{ currentUser.name }}</strong>
+    <div class="hero-copy">
+      <span class="eyebrow">CodeLand igraonica</span>
+      <h1 id="dashboard-title">Pokrenite kviz i započnite igru</h1>
+      <p>
+        Odaberite omiljeni kviz, okupite učenike uz PIN ili QR kod i pretvorite učenje u zajedničku
+        avanturu.
       </p>
-    }
-  </header>
+      @if (user(); as currentUser) {
+        <span class="welcome">Dobro došli, {{ currentUser.name }}.</span>
+      }
+    </div>
 
-  <section class="dashboard-section" aria-labelledby="quick-actions-title">
-    <h2 id="quick-actions-title">Brze akcije</h2>
-
-    <div class="quick-actions">
-      <button class="quick-action" type="button" disabled aria-disabled="true">
-        <span class="quick-action__heading">
-          <span class="quick-action__title">Pokreni kviz</span>
-          <span class="quick-action__status">Uskoro dostupno</span>
-        </span>
-        <span class="quick-action__description"> Odaberite postojeći kviz i započnite igru. </span>
-      </button>
-
-      <button class="quick-action" type="button" disabled aria-disabled="true">
-        <span class="quick-action__heading">
-          <span class="quick-action__title">Novi kviz</span>
-          <span class="quick-action__status">Uskoro dostupno</span>
-        </span>
-        <span class="quick-action__description">Kreirajte novi kviz za svoje učenike.</span>
-      </button>
+    <div class="hero-illustration" aria-hidden="true">
+      <span class="quiz-tile quiz-tile--one">?</span>
+      <span class="quiz-tile quiz-tile--two">✓</span>
+      <span class="quiz-tile quiz-tile--three">A</span>
+      <svg viewBox="0 0 180 150" focusable="false">
+        <path d="M33 112c13-42 38-68 75-75 20-4 34 1 42 12" />
+        <path d="m139 37 13 10-13 10" />
+        <circle cx="53" cy="109" r="19" />
+        <path d="M45 108h16M53 100v16" />
+      </svg>
     </div>
   </section>
 
-  <div class="recent-sections">
-    <section class="recent-panel" aria-labelledby="recent-quizzes-title">
-      <h2 id="recent-quizzes-title">Nedavni kvizovi</h2>
-      <div class="empty-state">
-        <p>Još nema učitanih kvizova.</p>
-      </div>
-    </section>
+  @if (store.recentLoading() || store.recentQuizzes().length > 0) {
+    <section class="hub-section" aria-labelledby="recently-played-title">
+      <header class="section-heading">
+        <div>
+          <span class="section-kicker">Brzi povratak u igru</span>
+          <h2 id="recently-played-title">Nedavno igrani</h2>
+        </div>
+      </header>
 
-    <section class="recent-panel" aria-labelledby="recent-results-title">
-      <h2 id="recent-results-title">Nedavni rezultati</h2>
-      <div class="empty-state">
-        <p>Rezultati odigranih kvizova biće prikazani ovdje.</p>
-      </div>
+      @if (store.recentLoading()) {
+        <div
+          class="loading-grid"
+          aria-live="polite"
+          aria-label="Učitavanje nedavno igranih kvizova"
+        >
+          @for (item of [1, 2, 3, 4]; track item) {
+            <span class="loading-card" aria-hidden="true"></span>
+          }
+        </div>
+      } @else {
+        <div class="quiz-grid quiz-grid--recent">
+          @for (quiz of store.recentQuizzes(); track quiz.id) {
+            <clq-play-quiz-card
+              [quiz]="quiz"
+              [lastPlayedLabel]="lastPlayedLabel(quiz.lastPlayedAt)"
+              [starting]="store.startingQuizId() === quiz.id"
+              [disabled]="store.startingQuizId() !== null"
+              (play)="playQuiz($event)"
+            />
+          }
+        </div>
+      }
     </section>
-  </div>
-</section>
+  }
+
+  <section class="hub-section topics-section" aria-labelledby="topics-title">
+    <header class="section-heading">
+      <div>
+        <span class="section-kicker">Izaberite područje</span>
+        <h2 id="topics-title">Teme</h2>
+      </div>
+      <p>Klik na temu prikazuje aktivne kvizove spremne za igru.</p>
+    </header>
+
+    @if (store.topicsLoading()) {
+      <p class="compact-state" aria-live="polite">Učitavamo teme…</p>
+    } @else if (store.topicsError()) {
+      <div class="compact-state is-error" role="alert">
+        <span>Teme trenutno nije moguće učitati.</span>
+        <button type="button" (click)="store.loadTopics()">Pokušaj ponovo</button>
+      </div>
+    } @else {
+      <div class="topic-list" aria-label="Filtriranje kvizova po temi">
+        <button
+          class="topic-chip topic-chip--all"
+          type="button"
+          [class.is-selected]="store.selectedTopicId() === null"
+          [attr.aria-pressed]="store.selectedTopicId() === null"
+          (click)="selectTopic(null)"
+        >
+          <span class="topic-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M4 6.5h6.5L12 8h8v9.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+            </svg>
+          </span>
+          <span><strong>Sve</strong><small>Svi aktivni kvizovi</small></span>
+        </button>
+
+        @for (topic of store.visibleTopics(); track topic.id; let index = $index) {
+          <button
+            class="topic-chip"
+            type="button"
+            [class.is-selected]="store.selectedTopicId() === topic.id"
+            [attr.data-accent]="index % 4"
+            [attr.aria-pressed]="store.selectedTopicId() === topic.id"
+            (click)="selectTopic(topic.id)"
+          >
+            <span class="topic-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 6.5h6.5L12 8h8v9.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+              </svg>
+            </span>
+            <span
+              ><strong>{{ topic.name }}</strong
+              ><small>{{ topic.quizCount }} kvizova</small></span
+            >
+          </button>
+        }
+      </div>
+
+      @if (store.canToggleTopics()) {
+        <button class="topics-toggle" type="button" (click)="store.toggleTopics()">
+          {{ store.topicsExpanded() ? 'Prikaži manje' : 'Prikaži sve' }}
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+            [class.is-expanded]="store.topicsExpanded()"
+          >
+            <path d="m7 10 5 5 5-5" />
+          </svg>
+        </button>
+      }
+    }
+  </section>
+
+  <section class="hub-section" aria-labelledby="play-quizzes-title">
+    <header class="section-heading">
+      <div>
+        <span class="section-kicker">Spremno za učionicu</span>
+        <h2 id="play-quizzes-title">
+          @if (store.selectedTopicId(); as selectedId) {
+            Kvizovi iz odabrane teme
+          } @else {
+            Kvizovi za igranje
+          }
+        </h2>
+      </div>
+      <p>Prikazani su samo aktivni kvizovi koji se mogu pokrenuti.</p>
+    </header>
+
+    @if (store.quizzesLoading()) {
+      <div class="loading-grid" aria-live="polite" aria-label="Učitavanje kvizova">
+        @for (item of [1, 2, 3, 4, 5, 6]; track item) {
+          <span class="loading-card" aria-hidden="true"></span>
+        }
+      </div>
+    } @else if (store.quizzesError()) {
+      <div class="large-state is-error" role="alert">
+        <span class="state-icon" aria-hidden="true">!</span>
+        <h3>Kvizove trenutno nije moguće učitati</h3>
+        <p>Provjerite vezu i pokušajte ponovo.</p>
+        <button type="button" (click)="store.loadQuizzes(true)">Pokušaj ponovo</button>
+      </div>
+    } @else if (store.quizzes().length === 0) {
+      <div class="large-state">
+        <span class="state-icon" aria-hidden="true">?</span>
+        <h3>Nema aktivnih kvizova u ovom izboru</h3>
+        <p>Odaberite drugu temu ili aktivirajte kviz u biblioteci kvizova.</p>
+      </div>
+    } @else {
+      <div class="quiz-grid">
+        @for (quiz of store.quizzes(); track quiz.id) {
+          <clq-play-quiz-card
+            [quiz]="quiz"
+            [starting]="store.startingQuizId() === quiz.id"
+            [disabled]="store.startingQuizId() !== null"
+            (play)="playQuiz($event)"
+          />
+        }
+      </div>
+
+      @if (store.hasMoreQuizzes()) {
+        <button
+          class="load-more"
+          type="button"
+          [disabled]="store.quizzesLoadingMore()"
+          (click)="store.loadQuizzes(false)"
+        >
+          {{ store.quizzesLoadingMore() ? 'Učitavam…' : 'Prikaži još kvizova' }}
+        </button>
+      }
+    }
+  </section>
+</div>

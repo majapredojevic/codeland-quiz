@@ -1,4 +1,12 @@
-<div class="staff-shell">
+<div class="staff-shell" [class.is-presentation]="isPresentationMode()">
+  @if (isNavigationOpen()) {
+    <button
+      class="navigation-backdrop"
+      type="button"
+      aria-label="Zatvori navigaciju"
+      (click)="closeNavigation(true)"
+    ></button>
+  }
   <aside
     id="staff-navigation"
     class="sidebar"
@@ -63,13 +71,18 @@
         <span>Učenici</span>
       </a>
 
-      <span class="nav-item is-disabled" role="link" aria-disabled="true">
+      <a
+        class="nav-item"
+        routerLink="/app/results"
+        routerLinkActive="is-active"
+        ariaCurrentWhenActive="page"
+        (click)="closeNavigation(true)"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M4 20.5h16M6.5 18V11h3v7M10.5 18V6h3v12M14.5 18V9h3v9" />
         </svg>
         <span>Rezultati</span>
-        <small>Uskoro</small>
-      </span>
+      </a>
 
       @if (isAdmin()) {
         <a
@@ -91,7 +104,7 @@
   </aside>
 
   <div class="workspace">
-    <header class="topbar" [attr.inert]="isNavigationOpen() ? '' : null">
+    <header class="topbar" [attr.inert]="isNavigationOpen() && !isPresentationMode() ? '' : null">
       <button
         #navigationToggle
         class="menu-toggle"

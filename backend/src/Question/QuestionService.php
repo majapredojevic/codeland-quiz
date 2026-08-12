@@ -17,6 +17,7 @@ use CodeLandQuiz\Model\QuestionOverview;
 use CodeLandQuiz\Model\QuestionType;
 use CodeLandQuiz\Question\Exception\QuizContentLockedException;
 use CodeLandQuiz\Question\Exception\QuestionNotFoundException;
+use CodeLandQuiz\QuestionImage\QuestionImageStorage;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use CodeLandQuiz\Repository\QuestionRepository;
 use CodeLandQuiz\Repository\QuizRepository;
@@ -31,6 +32,7 @@ final readonly class QuestionService
     public function __construct(
         private QuestionRepository $questions,
         private QuizRepository $quizzes,
+        private QuestionImageStorage $questionImages,
         private QuestionContentValidator $questionContentValidator,
         private AuditLogService $auditLogService,
         private TransactionManager $transactionManager,
@@ -87,6 +89,13 @@ final readonly class QuestionService
                 if ($this->quizzes->hasOpenSessions($quizId)) {
                     throw new QuizContentLockedException(
                         'Quiz content cannot be changed while it has an open session.',
+                    );
+                }
+
+                if ($dto->imagePath !== null) {
+                    $this->questionImages->assertManagedImageExists(
+                        $quizId,
+                        $dto->imagePath,
                     );
                 }
 
@@ -174,6 +183,13 @@ final readonly class QuestionService
 
                 if ($question === null) {
                     throw new QuestionNotFoundException('Question was not found.');
+                }
+
+                if ($dto->hasImagePath && $dto->imagePath !== null) {
+                    $this->questionImages->assertManagedImageExists(
+                        $quizId,
+                        $dto->imagePath,
+                    );
                 }
 
                 $questionText = $dto->hasQuestionText

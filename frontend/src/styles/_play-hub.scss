@@ -1,0 +1,58 @@
+.play-hub {
+  .hero-illustration {
+    position: relative;
+    min-height: 15rem;
+  }
+
+  .hero-illustration > svg {
+    position: absolute;
+    inset: 1rem 0 auto auto;
+    width: min(100%, 19rem);
+    fill: none;
+    stroke: color-mix(in srgb, var(--clq-color-primary) 45%, white);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
+  }
+
+  .quiz-tile {
+    position: absolute;
+    display: grid;
+    width: 4rem;
+    height: 4rem;
+    border: 0.25rem solid white;
+    border-radius: 1.1rem;
+    box-shadow: var(--clq-shadow-lg);
+    color: var(--clq-color-text);
+    font-size: 1.5rem;
+    font-weight: 600;
+    place-items: center;
+    transform: rotate(-7deg);
+  }
+
+  .quiz-tile--one {
+    top: 0;
+    left: 10%;
+    background: color-mix(in srgb, var(--clq-color-pink) 70%, white);
+  }
+
+  .quiz-tile--two {
+    top: 36%;
+    right: 7%;
+    background: color-mix(in srgb, var(--clq-color-accent) 48%, white);
+    transform: rotate(8deg);
+  }
+
+  .quiz-tile--three {
+    bottom: 2%;
+    left: 31%;
+    background: color-mix(in srgb, var(--clq-color-highlight) 58%, white);
+    transform: rotate(5deg);
+  }
+}
+
+@media (max-width: 50rem) {
+  .play-hub .hero-illustration {
+    display: none;
+  }
+}
