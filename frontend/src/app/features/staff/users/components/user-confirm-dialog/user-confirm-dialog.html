@@ -1,0 +1,17 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+
+<mat-dialog-content>
+  <p>{{ data.message }}</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button class="secondary-button" type="button" [mat-dialog-close]="false">Otkaži</button>
+  <button
+    class="confirm-button"
+    type="button"
+    [class.confirm-button--destructive]="data.tone === 'destructive'"
+    [mat-dialog-close]="true"
+  >
+    {{ data.confirmLabel }}
+  </button>
+</mat-dialog-actions>

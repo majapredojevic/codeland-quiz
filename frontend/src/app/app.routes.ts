@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 
+import { adminGuard } from './core/auth/admin.guard';
 import { authGuard } from './core/auth/auth.guard';
 import { guestGuard } from './core/auth/guest.guard';
 import { changePasswordPageGuard, passwordChangeGuard } from './core/auth/password-change.guard';
@@ -52,6 +53,13 @@ export const routes: Routes = [
           import('./features/staff/account/password/account-password-page').then(
             ({ AccountPasswordPage }) => AccountPasswordPage,
           ),
+      },
+      {
+        path: 'users',
+        canActivate: [adminGuard],
+        canActivateChild: [adminGuard],
+        loadChildren: () =>
+          import('./features/staff/users/users.routes').then(({ usersRoutes }) => usersRoutes),
       },
     ],
   },

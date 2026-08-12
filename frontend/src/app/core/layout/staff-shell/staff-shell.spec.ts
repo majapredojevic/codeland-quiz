@@ -40,6 +40,7 @@ describe('StaffShell', () => {
       providers: [
         provideRouter([
           { path: 'app/dashboard', component: EmptyPage },
+          { path: 'app/users', component: EmptyPage },
           { path: 'app/account/password', component: EmptyPage },
           { path: 'change-password', component: EmptyPage },
         ]),
@@ -123,9 +124,9 @@ describe('StaffShell', () => {
         expect.stringContaining('Kvizovi'),
         expect.stringContaining('Učenici'),
         expect.stringContaining('Rezultati'),
-        expect.stringContaining('Korisnici'),
       ]),
     );
+    expect(disabledItems).toHaveLength(3);
     expect(disabledItems.every((item) => !item.hasAttribute('href'))).toBe(true);
     expect(navigation?.textContent).not.toContain('Teme');
     expect(navigation?.textContent).not.toContain('Sesije');
@@ -175,15 +176,30 @@ describe('StaffShell', () => {
     expect(TestBed.inject(Router).url).toBe('/app/account/password');
   });
 
-  it('shows Korisnici only to administrators', () => {
+  it('shows an active Korisnici link only to administrators', async () => {
     const { fixture, element } = createShell();
-    expect(element.querySelector('nav')?.textContent).toContain('Korisnici');
+    const usersLink = Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a')).find(
+      (link) => link.textContent?.trim() === 'Korisnici',
+    );
+
+    expect(usersLink?.getAttribute('href')).toBe('/app/users');
+    expect(usersLink?.getAttribute('aria-disabled')).toBeNull();
     expect(profileTrigger(element).textContent).toContain('ADMIN');
+
+    await TestBed.inject(Router).navigateByUrl('/app/users');
+    fixture.detectChanges();
+
+    expect(usersLink?.classList).toContain('is-active');
+    expect(usersLink?.getAttribute('aria-current')).toBe('page');
 
     userState.set(teacher);
     fixture.detectChanges();
 
-    expect(element.querySelector('nav')?.textContent).not.toContain('Korisnici');
+    expect(
+      Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a')).some(
+        (link) => link.textContent?.trim() === 'Korisnici',
+      ),
+    ).toBe(false);
     expect(profileTrigger(element).textContent).toContain('TEACHER');
     expect(profileTrigger(element).querySelector('.user-avatar')?.textContent?.trim()).toBe('MP');
   });

@@ -1,5 +1,6 @@
 import { Route } from '@angular/router';
 
+import { adminGuard } from './core/auth/admin.guard';
 import { StaffShell } from './core/layout/staff-shell/staff-shell';
 import { ChangePasswordPage } from './features/public/change-password/change-password-page';
 import { AccountPasswordPage } from './features/staff/account/password/account-password-page';
@@ -33,5 +34,22 @@ describe('password route structure', () => {
     expect(requiredPasswordRoute).toBeDefined();
     expect(staffRoute?.children?.some(({ path }) => path === 'change-password')).toBe(false);
     expect(await loadRouteComponent(requiredPasswordRoute!)).toBe(ChangePasswordPage);
+  });
+});
+
+describe('admin users route structure', () => {
+  it('lazy-loads the users feature behind the administrator guard', async () => {
+    const staffRoute = routes.find(({ path }) => path === 'app');
+    const usersRoute = staffRoute?.children?.find(({ path }) => path === 'users');
+
+    expect(usersRoute).toBeDefined();
+    expect(usersRoute?.canActivate).toEqual([adminGuard]);
+    expect(usersRoute?.canActivateChild).toEqual([adminGuard]);
+    expect(usersRoute?.loadChildren).toBeTypeOf('function');
+    expect(usersRoute?.loadComponent).toBeUndefined();
+
+    const childRoutes = (await usersRoute?.loadChildren?.()) as Route[];
+
+    expect(childRoutes.map(({ path }) => path)).toEqual(['', 'new', ':id']);
   });
 });
