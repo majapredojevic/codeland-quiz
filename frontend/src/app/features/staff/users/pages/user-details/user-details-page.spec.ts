@@ -4,6 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Observable, of } from 'rxjs';
 
+import { ConfirmDialog } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
 import { UserDetail, UpdateUserRequest } from '../../data-access/users.models';
 import { UsersStore } from '../../data-access/users.store';
@@ -189,6 +190,7 @@ describe('UserDetailsPage', () => {
 
     expect(usersStore.deactivate).not.toHaveBeenCalled();
     expect(openDialog).toHaveBeenCalledOnce();
+    expect(openDialog.mock.calls[0][0]).toBe(ConfirmDialog);
     expect(openDialog.mock.calls[0][1].data).toMatchObject({
       title: 'Deaktivirati korisnika?',
       confirmLabel: 'Deaktiviraj',
@@ -229,6 +231,7 @@ describe('UserDetailsPage', () => {
     await fixture.whenStable();
 
     expect(usersStore.resetPassword).not.toHaveBeenCalled();
+    expect(openDialog.mock.calls[0][0]).toBe(ConfirmDialog);
     expect(openDialog.mock.calls[0][1].data).toMatchObject({
       title: 'Resetovati lozinku?',
       confirmLabel: 'Resetuj lozinku',

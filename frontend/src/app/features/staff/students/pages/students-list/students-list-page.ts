@@ -1,21 +1,20 @@
 import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 
 import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
-import { UsersStore } from '../../data-access/users.store';
+import { StudentsStore } from '../../data-access/students.store';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
 @Component({
-  selector: 'clq-users-list-page',
+  selector: 'clq-students-list-page',
   imports: [RouterLink, ActiveStatusBadge],
-  templateUrl: './users-list-page.html',
-  styleUrl: './users-list-page.scss',
+  templateUrl: './students-list-page.html',
+  styleUrl: './students-list-page.scss',
 })
-export class UsersListPage implements OnInit {
-  protected readonly usersStore = inject(UsersStore);
-  private readonly router = inject(Router);
+export class StudentsListPage implements OnInit {
+  protected readonly studentsStore = inject(StudentsStore);
   private readonly destroyRef = inject(DestroyRef);
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -27,8 +26,8 @@ export class UsersListPage implements OnInit {
   }
 
   ngOnInit(): void {
-    this.searchValue.set(this.usersStore.search());
-    void this.usersStore.loadPage();
+    this.searchValue.set(this.studentsStore.search());
+    void this.studentsStore.loadPage();
   }
 
   protected updateSearch(event: Event): void {
@@ -37,35 +36,35 @@ export class UsersListPage implements OnInit {
     this.clearSearchTimer();
     this.searchTimer = setTimeout(() => {
       this.searchTimer = null;
-      void this.usersStore.setSearch(value);
+      void this.studentsStore.setSearch(value);
     }, SEARCH_DEBOUNCE_MS);
   }
 
   protected clearSearch(): void {
     this.clearSearchTimer();
     this.searchValue.set('');
-    void this.usersStore.setSearch('');
+    void this.studentsStore.setSearch('');
   }
 
   protected previousPage(): void {
-    const pageIndex = this.usersStore.pageIndex();
+    const pageIndex = this.studentsStore.pageIndex();
 
-    if (pageIndex > 0 && !this.usersStore.loading()) {
-      void this.usersStore.loadPage(pageIndex - 1, this.usersStore.pageSize());
+    if (pageIndex > 0 && !this.studentsStore.loading()) {
+      void this.studentsStore.loadPage(pageIndex - 1, this.studentsStore.pageSize());
     }
   }
 
   protected nextPage(): void {
-    const pageIndex = this.usersStore.pageIndex();
-    const totalPages = this.usersStore.pagination().totalPages;
+    const pageIndex = this.studentsStore.pageIndex();
+    const totalPages = this.studentsStore.pagination().totalPages;
 
-    if (pageIndex + 1 < totalPages && !this.usersStore.loading()) {
-      void this.usersStore.loadPage(pageIndex + 1, this.usersStore.pageSize());
+    if (pageIndex + 1 < totalPages && !this.studentsStore.loading()) {
+      void this.studentsStore.loadPage(pageIndex + 1, this.studentsStore.pageSize());
     }
   }
 
   protected changePageSize(event: Event): void {
-    if (!(event.target instanceof HTMLSelectElement) || this.usersStore.loading()) {
+    if (!(event.target instanceof HTMLSelectElement) || this.studentsStore.loading()) {
       return;
     }
 
@@ -73,39 +72,26 @@ export class UsersListPage implements OnInit {
 
     if (
       !PAGE_SIZE_OPTIONS.some((option) => option === pageSize) ||
-      pageSize === this.usersStore.pageSize()
+      pageSize === this.studentsStore.pageSize()
     ) {
       return;
     }
 
-    void this.usersStore.loadPage(0, pageSize);
+    void this.studentsStore.loadPage(0, pageSize);
   }
 
   protected retry(): void {
-    void this.usersStore.loadPage();
-  }
-
-  protected openUser(id: number): void {
-    void this.router.navigate(['/app/users', id]);
-  }
-
-  protected handleRowKeydown(event: KeyboardEvent, id: number): void {
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return;
-    }
-
-    event.preventDefault();
-    this.openUser(id);
+    void this.studentsStore.loadPage();
   }
 
   protected firstVisibleItem(): number {
-    const pagination = this.usersStore.pagination();
+    const pagination = this.studentsStore.pagination();
 
     return pagination.totalItems === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
   }
 
   protected lastVisibleItem(): number {
-    const pagination = this.usersStore.pagination();
+    const pagination = this.studentsStore.pagination();
 
     return Math.min((pagination.pageIndex + 1) * pagination.pageSize, pagination.totalItems);
   }

@@ -43,15 +43,20 @@
         <small>Uskoro</small>
       </span>
 
-      <span class="nav-item is-disabled" role="link" aria-disabled="true">
+      <a
+        class="nav-item"
+        routerLink="/app/students"
+        routerLinkActive="is-active"
+        ariaCurrentWhenActive="page"
+        (click)="closeNavigation(true)"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path
             d="M8.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.3-4 2.2-6 6-6s5.7 2 6 6M16 9a2.5 2.5 0 1 0 0-5M16 13c3.4 0 5.1 2 5.5 5"
           />
         </svg>
         <span>Učenici</span>
-        <small>Uskoro</small>
-      </span>
+      </a>
 
       <span class="nav-item is-disabled" role="link" aria-disabled="true">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">

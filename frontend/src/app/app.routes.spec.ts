@@ -1,6 +1,8 @@
 import { Route } from '@angular/router';
 
 import { adminGuard } from './core/auth/admin.guard';
+import { authGuard } from './core/auth/auth.guard';
+import { passwordChangeGuard } from './core/auth/password-change.guard';
 import { StaffShell } from './core/layout/staff-shell/staff-shell';
 import { ChangePasswordPage } from './features/public/change-password/change-password-page';
 import { AccountPasswordPage } from './features/staff/account/password/account-password-page';
@@ -49,6 +51,25 @@ describe('admin users route structure', () => {
     expect(usersRoute?.loadComponent).toBeUndefined();
 
     const childRoutes = (await usersRoute?.loadChildren?.()) as Route[];
+
+    expect(childRoutes.map(({ path }) => path)).toEqual(['', 'new', ':id']);
+  });
+});
+
+describe('staff students route structure', () => {
+  it('lazy-loads the students feature for all staff without an administrator guard', async () => {
+    const staffRoute = routes.find(({ path }) => path === 'app');
+    const studentsRoute = staffRoute?.children?.find(({ path }) => path === 'students');
+
+    expect(studentsRoute).toBeDefined();
+    expect(studentsRoute?.canActivate).toBeUndefined();
+    expect(studentsRoute?.canActivateChild).toBeUndefined();
+    expect(studentsRoute?.loadChildren).toBeTypeOf('function');
+    expect(studentsRoute?.loadComponent).toBeUndefined();
+    expect(staffRoute?.canActivate).toEqual([authGuard, passwordChangeGuard]);
+    expect(staffRoute?.canActivateChild).toEqual([authGuard, passwordChangeGuard]);
+
+    const childRoutes = (await studentsRoute?.loadChildren?.()) as Route[];
 
     expect(childRoutes.map(({ path }) => path)).toEqual(['', 'new', ':id']);
   });

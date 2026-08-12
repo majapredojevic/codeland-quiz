@@ -55,6 +55,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'students',
+        loadChildren: () =>
+          import('./features/staff/students/students.routes').then(
+            ({ studentsRoutes }) => studentsRoutes,
+          ),
+      },
+      {
         path: 'users',
         canActivate: [adminGuard],
         canActivateChild: [adminGuard],
