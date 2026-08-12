@@ -12,3 +12,48 @@ html {
     )
   );
 }
+
+.clq-account-menu {
+  @include mat.menu-overrides(
+    (
+      container-color: var(--clq-color-surface-raised),
+      container-elevation-shadow: var(--clq-shadow-md),
+      container-shape: var(--clq-radius-lg),
+      item-focus-state-layer-color: color-mix(in srgb, var(--clq-color-primary) 10%, transparent),
+      item-hover-state-layer-color: color-mix(in srgb, var(--clq-color-primary) 8%, transparent),
+      item-icon-color: var(--clq-color-primary),
+      item-icon-size: 1.25rem,
+      item-label-text-color: var(--clq-color-text),
+      item-label-text-weight: 500,
+      item-leading-spacing: var(--clq-space-4),
+      item-trailing-spacing: var(--clq-space-4),
+      item-with-icon-leading-spacing: var(--clq-space-4),
+      item-with-icon-trailing-spacing: var(--clq-space-4),
+    )
+  );
+
+  width: 13.25rem;
+  min-width: 12.5rem;
+  max-width: 13.75rem;
+}
+
+.clq-account-menu__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: var(--clq-space-3);
+  fill: none;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.clq-account-menu .clq-account-menu__item--logout {
+  margin-top: var(--clq-space-1);
+}
+
+.clq-account-menu .clq-account-menu__item:focus-visible {
+  outline: 2px solid var(--clq-color-primary);
+  outline-offset: -3px;
+}

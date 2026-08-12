@@ -1,0 +1,99 @@
+<div class="login-page public-page-shell">
+  <header class="public-header">
+    <a class="brand-link brand-slot" routerLink="/" aria-label="CodeLand početna stranica">
+      <picture class="brand-picture">
+        <source media="(min-width: 600px)" srcset="/brand/logo.png" width="2088" height="796" />
+        <img class="brand-logo" ngSrc="/brand/logo-small.png" fill priority alt="CodeLand" />
+      </picture>
+    </a>
+  </header>
+
+  <main class="public-main">
+    <section class="login-shell" aria-labelledby="login-title">
+      <div class="login-card">
+        <header class="card-header">
+          <p class="eyebrow">Pristup za zaposlene</p>
+          <h1 id="login-title">Prijava</h1>
+          <p>Prijavite se službenim CodeLand nalogom.</p>
+        </header>
+
+        @if (showPasswordChangedNotice()) {
+          <p class="success-message" role="status">
+            Lozinka je uspješno promijenjena. Prijavite se ponovo.
+          </p>
+        }
+
+        <form (submit)="submit($event)" novalidate [attr.aria-busy]="isSubmitting()">
+          <div class="field-group">
+            <label for="staff-email">Email</label>
+            <input
+              id="staff-email"
+              type="email"
+              autocomplete="username"
+              required
+              [value]="email()"
+              [attr.aria-invalid]="emailError() !== null"
+              [attr.aria-describedby]="emailError() ? 'staff-email-error' : null"
+              (input)="updateEmail($event)"
+              (blur)="markEmailTouched()"
+            />
+            @if (emailError(); as error) {
+              <p id="staff-email-error" class="field-error">{{ error }}</p>
+            }
+          </div>
+
+          <div class="field-group">
+            <label for="staff-password">Lozinka</label>
+            <div class="password-input">
+              <input
+                id="staff-password"
+                [type]="isPasswordVisible() ? 'text' : 'password'"
+                autocomplete="current-password"
+                required
+                [value]="password()"
+                [attr.aria-invalid]="passwordError() !== null"
+                [attr.aria-describedby]="passwordError() ? 'staff-password-error' : null"
+                (input)="updatePassword($event)"
+                (blur)="markPasswordTouched()"
+              />
+              <button
+                class="password-toggle"
+                type="button"
+                [attr.aria-label]="isPasswordVisible() ? 'Sakrij lozinku' : 'Prikaži lozinku'"
+                [attr.aria-pressed]="isPasswordVisible()"
+                (click)="togglePasswordVisibility()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                  <circle cx="12" cy="12" r="2.5" />
+                  @if (isPasswordVisible()) {
+                    <path d="m4 4 16 16" />
+                  }
+                </svg>
+              </button>
+            </div>
+            @if (passwordError(); as error) {
+              <p id="staff-password-error" class="field-error">{{ error }}</p>
+            }
+          </div>
+
+          @if (requestError(); as error) {
+            <p class="request-error" role="alert">{{ error }}</p>
+          }
+
+          <button type="submit" [disabled]="!isFormValid() || isSubmitting()">
+            <span aria-live="polite">
+              @if (isSubmitting()) {
+                Prijava u toku…
+              } @else {
+                Prijavi se
+              }
+            </span>
+          </button>
+        </form>
+
+        <a class="back-link" routerLink="/">Nazad na igru</a>
+      </div>
+    </section>
+  </main>
+</div>
