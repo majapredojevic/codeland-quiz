@@ -1,0 +1,49 @@
+<section class="dashboard-page" aria-labelledby="dashboard-title">
+  <header class="page-header">
+    <h1 id="dashboard-title">Početna</h1>
+
+    @if (user(); as currentUser) {
+      <p class="greeting">
+        Dobro došli, <strong>{{ currentUser.name }}</strong>
+      </p>
+    }
+  </header>
+
+  <section class="dashboard-section" aria-labelledby="quick-actions-title">
+    <h2 id="quick-actions-title">Brze akcije</h2>
+
+    <div class="quick-actions">
+      <button class="quick-action" type="button" disabled aria-disabled="true">
+        <span class="quick-action__heading">
+          <span class="quick-action__title">Pokreni kviz</span>
+          <span class="quick-action__status">Uskoro dostupno</span>
+        </span>
+        <span class="quick-action__description"> Odaberite postojeći kviz i započnite igru. </span>
+      </button>
+
+      <button class="quick-action" type="button" disabled aria-disabled="true">
+        <span class="quick-action__heading">
+          <span class="quick-action__title">Novi kviz</span>
+          <span class="quick-action__status">Uskoro dostupno</span>
+        </span>
+        <span class="quick-action__description">Kreirajte novi kviz za svoje učenike.</span>
+      </button>
+    </div>
+  </section>
+
+  <div class="recent-sections">
+    <section class="recent-panel" aria-labelledby="recent-quizzes-title">
+      <h2 id="recent-quizzes-title">Nedavni kvizovi</h2>
+      <div class="empty-state">
+        <p>Još nema učitanih kvizova.</p>
+      </div>
+    </section>
+
+    <section class="recent-panel" aria-labelledby="recent-results-title">
+      <h2 id="recent-results-title">Nedavni rezultati</h2>
+      <div class="empty-state">
+        <p>Rezultati odigranih kvizova biće prikazani ovdje.</p>
+      </div>
+    </section>
+  </div>
+</section>

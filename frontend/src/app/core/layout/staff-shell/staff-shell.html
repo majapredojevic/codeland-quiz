@@ -1,0 +1,161 @@
+<div class="staff-shell">
+  <aside
+    id="staff-navigation"
+    class="sidebar"
+    [class.is-open]="isNavigationOpen()"
+    aria-label="Navigacija za zaposlene"
+  >
+    <button
+      #navigationClose
+      class="sidebar-close"
+      type="button"
+      aria-label="Zatvori navigaciju"
+      (click)="closeNavigation(true)"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m6 6 12 12M18 6 6 18" />
+      </svg>
+    </button>
+
+    <a class="brand" routerLink="/app/dashboard" (click)="closeNavigation(true)">
+      <img ngSrc="/brand/logo.png" width="2088" height="796" priority alt="CodeLand" />
+    </a>
+
+    <nav aria-label="Glavna navigacija">
+      <a
+        class="nav-item"
+        routerLink="/app/dashboard"
+        routerLinkActive="is-active"
+        ariaCurrentWhenActive="page"
+        (click)="closeNavigation(true)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M3.5 10.5 12 3l8.5 7.5M5.5 9.5v11h13v-11M9.5 20.5v-7h5v7" />
+        </svg>
+        <span>Početna</span>
+      </a>
+
+      <span class="nav-item is-disabled" role="link" aria-disabled="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M7 3.5h10v3H7zM5 6.5h14v14H5zM8.5 11h7M8.5 15h4" />
+        </svg>
+        <span>Kvizovi</span>
+        <small>Uskoro</small>
+      </span>
+
+      <span class="nav-item is-disabled" role="link" aria-disabled="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M8.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.3-4 2.2-6 6-6s5.7 2 6 6M16 9a2.5 2.5 0 1 0 0-5M16 13c3.4 0 5.1 2 5.5 5"
+          />
+        </svg>
+        <span>Učenici</span>
+        <small>Uskoro</small>
+      </span>
+
+      <span class="nav-item is-disabled" role="link" aria-disabled="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 20.5h16M6.5 18V11h3v7M10.5 18V6h3v12M14.5 18V9h3v9" />
+        </svg>
+        <span>Rezultati</span>
+        <small>Uskoro</small>
+      </span>
+
+      @if (isAdmin()) {
+        <span class="nav-item is-disabled" role="link" aria-disabled="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20c.3-4 2.3-6 6-6s5.7 2 6 6M17 12v8M13 16h8"
+            />
+          </svg>
+          <span>Korisnici</span>
+          <small>Uskoro</small>
+        </span>
+      }
+    </nav>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar" [attr.inert]="isNavigationOpen() ? '' : null">
+      <button
+        #navigationToggle
+        class="menu-toggle"
+        type="button"
+        aria-controls="staff-navigation"
+        [attr.aria-expanded]="isNavigationOpen()"
+        [attr.aria-label]="isNavigationOpen() ? 'Zatvori navigaciju' : 'Otvori navigaciju'"
+        (click)="toggleNavigation()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+        <span>Meni</span>
+      </button>
+
+      @if (user(); as currentUser) {
+        <button
+          class="profile-trigger"
+          type="button"
+          [matMenuTriggerFor]="accountMenu"
+          [attr.aria-label]="'Otvori korisnički meni za ' + currentUser.name"
+        >
+          <clq-staff-user-summary [user]="currentUser" />
+          <svg class="profile-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m7 9.5 5 5 5-5" />
+          </svg>
+        </button>
+
+        <mat-menu
+          #accountMenu="matMenu"
+          class="clq-account-menu"
+          xPosition="before"
+          [overlapTrigger]="false"
+          aria-label="Korisnički meni"
+        >
+          <a class="clq-account-menu__item" mat-menu-item routerLink="/app/account/password">
+            <svg
+              class="clq-account-menu__icon"
+              matMenuItemIcon
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10M5.5 10h13v10h-13zM12 14v2.5" />
+            </svg>
+            <span>Promijeni lozinku</span>
+          </a>
+          <button
+            class="clq-account-menu__item clq-account-menu__item--logout"
+            mat-menu-item
+            type="button"
+            [disabled]="isLoggingOut()"
+            (click)="logout()"
+          >
+            <svg
+              class="clq-account-menu__icon"
+              matMenuItemIcon
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M10 5H5.5v14H10M14.5 8l4 4-4 4M8 12h10.5" />
+            </svg>
+            @if (isLoggingOut()) {
+              <span>Odjavljivanje…</span>
+            } @else {
+              <span>Odjavi se</span>
+            }
+          </button>
+        </mat-menu>
+      }
+    </header>
+
+    @if (logoutError(); as error) {
+      <p class="logout-error" role="alert">{{ error }}</p>
+    }
+
+    <main class="content" tabindex="-1" [attr.inert]="isNavigationOpen() ? '' : null">
+      <router-outlet />
+    </main>
+  </div>
+</div>

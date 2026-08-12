@@ -1,0 +1,64 @@
+@use 'breakpoints' as bp;
+
+.public-page-shell {
+  display: grid;
+  grid-template-rows: auto minmax(auto, 1fr);
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--clq-public-page-background, var(--clq-color-background));
+}
+
+.public-page-shell > .public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--clq-space-4);
+  gap: var(--clq-space-3);
+}
+
+.public-page-shell > .public-main {
+  min-width: 0;
+  padding-inline: var(--clq-space-4);
+}
+
+.public-page-shell .brand-slot {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  border-radius: var(--clq-radius-md);
+}
+
+.public-page-shell .brand-picture {
+  position: relative;
+  display: block;
+  width: 2.75rem;
+  height: 2.2rem;
+}
+
+.public-page-shell .brand-logo {
+  object-fit: contain;
+  object-position: left center;
+}
+
+@include bp.tablet-up {
+  .public-page-shell > .public-header {
+    padding: var(--clq-space-5) var(--clq-space-6);
+  }
+
+  .public-page-shell > .public-main {
+    padding-inline: var(--clq-space-8);
+  }
+
+  .public-page-shell .brand-picture {
+    width: 11.5rem;
+    height: 4.4rem;
+  }
+}
+
+@include bp.desktop-up {
+  .public-page-shell > .public-header {
+    padding-inline: clamp(1.75rem, 2.5vw, 2.25rem);
+  }
+}

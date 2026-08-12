@@ -45,6 +45,26 @@ describe('JoinPage', () => {
     expect(element.querySelector('form')).toBeTruthy();
   });
 
+  it('uses the shared public layout and responsive branding', () => {
+    const { element } = createPage();
+    const page = element.querySelector<HTMLElement>('.join-page');
+    const header = page?.firstElementChild as HTMLElement | null;
+    const main = header?.nextElementSibling as HTMLElement | null;
+    const brandLink = header?.querySelector<HTMLAnchorElement>('.brand-link');
+    const desktopSource = brandLink?.querySelector<HTMLSourceElement>('source');
+    const logo = brandLink?.querySelector<HTMLImageElement>('img');
+
+    expect(page?.classList).toContain('public-page-shell');
+    expect(header?.classList).toContain('public-header');
+    expect(main?.classList).toContain('public-main');
+    expect(brandLink?.classList).toContain('brand-slot');
+    expect(brandLink?.getAttribute('href')).toBe('/');
+    expect(desktopSource?.media).toBe('(min-width: 600px)');
+    expect(desktopSource?.getAttribute('srcset')).toBe('/brand/logo.png');
+    expect(logo?.getAttribute('src')).toContain('/brand/logo-small.png');
+    expect(logo?.alt).toBe('CodeLand');
+  });
+
   it('renders the CodeLand Quiz heading', () => {
     const { element } = createPage();
 
