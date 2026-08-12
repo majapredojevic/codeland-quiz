@@ -1,0 +1,246 @@
+<section class="quiz-library" aria-labelledby="quiz-library-title">
+  <header class="page-header">
+    <h1 id="quiz-library-title">Kvizovi</h1>
+    <p>Kreirajte i organizujte kvizove za svoje učenike.</p>
+  </header>
+
+  <section
+    class="topics-section"
+    aria-labelledby="topics-title"
+    [attr.aria-busy]="store.topicsLoading()"
+  >
+    <div class="section-heading">
+      <div>
+        <h2 id="topics-title">Teme</h2>
+        <p>Organizujte biblioteku po oblastima.</p>
+      </div>
+      <button class="primary-button" type="button" (click)="openCreateTopic()">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        Nova tema
+      </button>
+    </div>
+
+    @if (store.topicsLoading()) {
+      <div class="local-state" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <p>Učitavanje tema…</p>
+      </div>
+    } @else {
+      @if (store.topicsError(); as error) {
+        <div class="local-state local-state--error" role="alert">
+          <p>{{ error }}</p>
+          <button type="button" (click)="store.loadTopics(true)">Pokušaj ponovo</button>
+        </div>
+      }
+      <div id="topic-grid" class="topic-grid">
+        <button
+          class="all-topics-card"
+          type="button"
+          [attr.aria-pressed]="store.selectedTopicId() === null"
+          (click)="selectTopic(null)"
+        >
+          <span class="all-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M4 6.5h6l2 2h8v10H4zM4 6.5v-2h6l2 2h8v2" />
+            </svg>
+          </span>
+          <strong>Svi kvizovi</strong><span>Prikaži cijelu biblioteku</span>
+        </button>
+        @for (topic of visibleTopics(); track topic.id) {
+          <clq-topic-card
+            [topic]="topic"
+            [selected]="store.selectedTopicId() === topic.id"
+            (selectTopic)="selectTopic($event)"
+            (editTopic)="openEditTopic($event)"
+            (deleteTopic)="confirmDeleteTopic($event)"
+          />
+        }
+      </div>
+      @if (store.topics().length === 0 && !store.topicsError()) {
+        <p class="empty-topics">Još nema kreiranih tema.</p>
+      }
+      @if (hasCollapsedTopics()) {
+        <div class="topic-catalog-actions">
+          <button
+            class="load-more"
+            type="button"
+            aria-controls="topic-grid"
+            [attr.aria-expanded]="topicsExpanded()"
+            (click)="toggleTopicsExpanded()"
+          >
+            {{ topicsExpanded() ? 'Prikaži manje' : 'Prikaži sve teme' }}
+          </button>
+          @if (topicsExpanded() && store.hasMoreTopics()) {
+            <button
+              class="load-more"
+              type="button"
+              [disabled]="store.topicsLoadingMore()"
+              (click)="store.loadTopics(false)"
+            >
+              {{ store.topicsLoadingMore() ? 'Učitavanje…' : 'Prikaži još' }}
+            </button>
+          }
+        </div>
+      }
+    }
+  </section>
+
+  <section class="quizzes-section" aria-labelledby="quizzes-title">
+    <div class="section-heading">
+      <div>
+        <h2 id="quizzes-title">Kvizovi</h2>
+        <p>Pregled dostupnih kvizova.</p>
+      </div>
+    </div>
+
+    <div class="toolbar" aria-label="Filteri kvizova">
+      <div class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m15.5 15.5 5 5" />
+        </svg>
+        <label class="visually-hidden" for="quiz-search">Pretraži kvizove</label>
+        <input
+          id="quiz-search"
+          type="search"
+          autocomplete="off"
+          maxlength="180"
+          placeholder="Pretraži kvizove..."
+          [value]="searchValue()"
+          (input)="updateSearch($event)"
+        />
+        @if (searchValue()) {
+          <button
+            class="clear-search"
+            type="button"
+            aria-label="Obriši pretragu"
+            (click)="clearSearch()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        }
+      </div>
+
+      <div class="toolbar-controls">
+        <label class="compact-control">
+          <span>Status</span>
+          <select
+            [value]="store.status()"
+            [disabled]="store.quizLoading()"
+            (change)="changeStatus($event)"
+          >
+            <option value="all">Svi</option>
+            <option value="active">Aktivni</option>
+            <option value="inactive">Neaktivni</option>
+          </select>
+        </label>
+        <label class="compact-control">
+          <span>Sortiranje</span>
+          <select
+            [value]="store.sort()"
+            [disabled]="store.quizLoading()"
+            (change)="changeSort($event)"
+          >
+            <option value="recent">Nedavno izmijenjeni</option>
+            <option value="titleAsc">Naziv A–Z</option>
+            <option value="titleDesc">Naziv Z–A</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="table-card" [attr.aria-busy]="store.quizLoading()">
+      @if (store.quizError(); as error) {
+        <div class="table-state table-state--error" role="alert">
+          <p>{{ error }}</p>
+          <button type="button" (click)="retryQuizzes()">Pokušaj ponovo</button>
+        </div>
+      } @else if (store.quizLoading() && store.quizzes().length === 0) {
+        <div class="table-state" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <p>Učitavanje kvizova…</p>
+        </div>
+      } @else {
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela kvizova">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Naziv</th>
+                <th scope="col">Tema</th>
+                <th scope="col">Pitanja</th>
+                <th scope="col">Verzija</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (store.quizzes().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="5">{{ quizEmptyMessage() }}</td>
+                </tr>
+              } @else {
+                @for (quiz of store.quizzes(); track quiz.id) {
+                  <tr>
+                    <td class="quiz-title">{{ quiz.title }}</td>
+                    <td [class.muted]="!quiz.topic">{{ quiz.topic?.name || 'Bez teme' }}</td>
+                    <td>{{ quiz.questionCount }}</td>
+                    <td>v{{ quiz.version }}</td>
+                    <td><clq-active-status-badge [isActive]="quiz.isActive" /></td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="pagination" aria-label="Stranice kvizova">
+          <div class="page-size-control">
+            <label for="quiz-page-size">Stavki po stranici:</label
+            ><select
+              id="quiz-page-size"
+              [value]="store.pageSize()"
+              [disabled]="store.quizLoading()"
+              (change)="changePageSize($event)"
+            >
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size">{{ size }}</option>
+              }
+            </select>
+          </div>
+          <div class="pagination-summary">
+            <p aria-live="polite">
+              {{ firstVisibleItem() }}–{{ lastVisibleItem() }} od
+              {{ store.quizPagination().totalItems }}
+            </p>
+            <div class="pagination-actions">
+              <button
+                type="button"
+                aria-label="Prethodna stranica"
+                [disabled]="store.pageIndex() === 0 || store.quizLoading()"
+                (click)="previousPage()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg></button
+              ><span
+                >{{ store.quizPagination().totalPages === 0 ? 0 : store.pageIndex() + 1 }} /
+                {{
+                  store.quizPagination().totalPages === 0 ? 1 : store.quizPagination().totalPages
+                }}</span
+              ><button
+                type="button"
+                aria-label="Sljedeća stranica"
+                [disabled]="
+                  store.pageIndex() + 1 >= store.quizPagination().totalPages || store.quizLoading()
+                "
+                (click)="nextPage()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+              </button>
+            </div>
+          </div>
+        </footer>
+      }
+    </div>
+  </section>
+</section>

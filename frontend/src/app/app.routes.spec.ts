@@ -74,3 +74,19 @@ describe('staff students route structure', () => {
     expect(childRoutes.map(({ path }) => path)).toEqual(['', 'new', ':id']);
   });
 });
+
+describe('staff quizzes route structure', () => {
+  it('lazy-loads the quiz library for all staff behind the existing staff guards', async () => {
+    const staffRoute = routes.find(({ path }) => path === 'app');
+    const quizzesRoute = staffRoute?.children?.find(({ path }) => path === 'quizzes');
+
+    expect(quizzesRoute).toBeDefined();
+    expect(quizzesRoute?.canActivate).toBeUndefined();
+    expect(quizzesRoute?.canActivateChild).toBeUndefined();
+    expect(staffRoute?.canActivate).toEqual([authGuard, passwordChangeGuard]);
+    expect(staffRoute?.canActivateChild).toEqual([authGuard, passwordChangeGuard]);
+
+    const childRoutes = (await quizzesRoute?.loadChildren?.()) as Route[];
+    expect(childRoutes.map(({ path }) => path)).toEqual(['']);
+  });
+});

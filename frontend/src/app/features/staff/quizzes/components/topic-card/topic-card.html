@@ -1,0 +1,55 @@
+<article class="topic-card" [class.is-selected]="selected()">
+  <button
+    class="topic-select"
+    type="button"
+    [attr.aria-pressed]="selected()"
+    [attr.aria-label]="'Filtriraj kvizove po temi ' + topic().name"
+    (click)="selectTopic.emit(topic())"
+  >
+    <span class="folder-icon" aria-hidden="true">
+      <svg viewBox="0 0 32 26" focusable="false">
+        <path d="M2.5 5.5h10l2.5 3h14.5v14.8H2.5z" />
+        <path d="M2.5 8.5V3h9l2.5 3h15.5v2.5" />
+      </svg>
+    </span>
+    <span class="topic-copy">
+      <strong>{{ topic().name }}</strong>
+      @if (topic().description) {
+        <span class="description">{{ topic().description }}</span>
+      }
+      <span class="count">{{ quizCountLabel(topic().quizCount) }}</span>
+    </span>
+  </button>
+
+  <button
+    class="menu-trigger"
+    type="button"
+    [matMenuTriggerFor]="topicMenu"
+    [attr.aria-label]="'Opcije za temu ' + topic().name"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="5" cy="12" r="1.2" />
+      <circle cx="12" cy="12" r="1.2" />
+      <circle cx="19" cy="12" r="1.2" />
+    </svg>
+  </button>
+
+  <mat-menu #topicMenu="matMenu" xPosition="before">
+    <button mat-menu-item type="button" (click)="editTopic.emit(topic())">Uredi temu</button>
+    <button
+      mat-menu-item
+      type="button"
+      class="delete-menu-item"
+      [disabled]="topic().quizCount > 0"
+      [attr.title]="
+        topic().quizCount > 0 ? 'Tema se može obrisati tek kada ne sadrži nijedan kviz.' : null
+      "
+      (click)="deleteTopic.emit(topic())"
+    >
+      <span>Obriši temu</span>
+      @if (topic().quizCount > 0) {
+        <small>Tema se može obrisati tek kada ne sadrži nijedan kviz.</small>
+      }
+    </button>
+  </mat-menu>
+</article>
