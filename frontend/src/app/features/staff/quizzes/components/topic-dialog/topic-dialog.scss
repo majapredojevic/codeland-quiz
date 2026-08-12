@@ -1,0 +1,102 @@
+:host {
+  display: block;
+  width: min(100%, 34rem);
+}
+
+h2[mat-dialog-title] {
+  margin: 0;
+  color: var(--clq-color-text);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+mat-dialog-content {
+  display: grid;
+  gap: var(--clq-space-5);
+  padding-block: var(--clq-space-2) var(--clq-space-4);
+}
+
+.field-group {
+  display: grid;
+  gap: var(--clq-space-2);
+}
+
+label {
+  color: var(--clq-color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 0.7rem var(--clq-space-3);
+  border: 1px solid var(--clq-color-border-subtle);
+  border-radius: var(--clq-radius-md);
+  background: white;
+  color: var(--clq-color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus {
+  border: 2px solid var(--clq-color-primary);
+  outline: 0;
+}
+
+.field-error,
+.request-error {
+  margin: 0;
+  color: var(--clq-color-error-text);
+  font-size: 0.8125rem;
+}
+
+mat-dialog-actions {
+  gap: var(--clq-space-2);
+}
+
+button {
+  min-height: 2.75rem;
+  padding: var(--clq-space-2) var(--clq-space-4);
+  border-radius: var(--clq-radius-md);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.secondary-button {
+  border: 1px solid var(--clq-color-primary);
+  background: white;
+  color: var(--clq-color-primary);
+}
+
+.secondary-button:focus-visible {
+  border-color: transparent;
+}
+
+.primary-button {
+  border: 1px solid var(--clq-color-primary);
+  background: var(--clq-color-primary);
+  color: white;
+}
+
+.primary-button:hover:not(:disabled) {
+  border-color: var(--clq-color-primary-hover);
+  background: var(--clq-color-primary-hover);
+}
+
+@media (max-width: 30rem) {
+  mat-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  button {
+    width: 100%;
+  }
+}

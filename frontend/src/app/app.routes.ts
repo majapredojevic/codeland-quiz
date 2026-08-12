@@ -62,6 +62,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'quizzes',
+        loadChildren: () =>
+          import('./features/staff/quizzes/quizzes.routes').then(
+            ({ quizzesRoutes }) => quizzesRoutes,
+          ),
+      },
+      {
         path: 'users',
         canActivate: [adminGuard],
         canActivateChild: [adminGuard],

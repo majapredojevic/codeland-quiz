@@ -41,6 +41,7 @@ describe('StaffShell', () => {
         provideRouter([
           { path: 'app/dashboard', component: EmptyPage },
           { path: 'app/students', component: EmptyPage },
+          { path: 'app/quizzes', component: EmptyPage },
           { path: 'app/users', component: EmptyPage },
           { path: 'app/account/password', component: EmptyPage },
           { path: 'change-password', component: EmptyPage },
@@ -120,16 +121,28 @@ describe('StaffShell', () => {
     expect(home?.textContent).toContain('Početna');
     expect(home?.getAttribute('href')).toBe('/app/dashboard');
     expect(home?.getAttribute('aria-current')).toBe('page');
-    expect(disabledItems.map((item) => item.textContent)).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('Kvizovi'),
-        expect.stringContaining('Rezultati'),
-      ]),
-    );
-    expect(disabledItems).toHaveLength(2);
+    expect(disabledItems.map((item) => item.textContent)).toEqual([
+      expect.stringContaining('Rezultati'),
+    ]);
+    expect(disabledItems).toHaveLength(1);
     expect(disabledItems.every((item) => !item.hasAttribute('href'))).toBe(true);
     expect(navigation?.textContent).not.toContain('Teme');
     expect(navigation?.textContent).not.toContain('Sesije');
+  });
+
+  it.each([admin, teacher])('shows an active Kvizovi link to $role users', async (staffUser) => {
+    userState.set(staffUser);
+    const { fixture, element } = createShell();
+    const quizzesLink = Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a')).find(
+      (link) => link.textContent?.trim() === 'Kvizovi',
+    );
+
+    expect(quizzesLink?.getAttribute('href')).toBe('/app/quizzes');
+    expect(quizzesLink?.textContent).not.toContain('Uskoro');
+    await TestBed.inject(Router).navigateByUrl('/app/quizzes');
+    fixture.detectChanges();
+    expect(quizzesLink?.classList).toContain('is-active');
+    expect(quizzesLink?.getAttribute('aria-current')).toBe('page');
   });
 
   it.each([admin, teacher])('shows an active Učenici link to $role users', async (staffUser) => {

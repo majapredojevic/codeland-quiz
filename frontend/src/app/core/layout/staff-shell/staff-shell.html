@@ -35,13 +35,18 @@
         <span>Početna</span>
       </a>
 
-      <span class="nav-item is-disabled" role="link" aria-disabled="true">
+      <a
+        class="nav-item"
+        routerLink="/app/quizzes"
+        routerLinkActive="is-active"
+        ariaCurrentWhenActive="page"
+        (click)="closeNavigation(true)"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M7 3.5h10v3H7zM5 6.5h14v14H5zM8.5 11h7M8.5 15h4" />
         </svg>
         <span>Kvizovi</span>
-        <small>Uskoro</small>
-      </span>
+      </a>
 
       <a
         class="nav-item"

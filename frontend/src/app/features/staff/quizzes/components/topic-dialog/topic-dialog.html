@@ -1,0 +1,50 @@
+<h2 mat-dialog-title>{{ title }}</h2>
+
+<form novalidate [attr.aria-busy]="submitting()" (submit)="submit($event)">
+  <mat-dialog-content>
+    <div class="field-group">
+      <label for="topic-name">Naziv teme</label>
+      <input
+        id="topic-name"
+        type="text"
+        autocomplete="off"
+        aria-required="true"
+        [formField]="topicForm.name"
+        [attr.aria-invalid]="nameError() !== null"
+        [attr.aria-describedby]="nameError() ? 'topic-name-error' : null"
+        (input)="clearNameError()"
+      />
+      @if (nameError(); as error) {
+        <p id="topic-name-error" class="field-error">{{ error }}</p>
+      }
+    </div>
+
+    <div class="field-group">
+      <label for="topic-description">Opis</label>
+      <textarea
+        id="topic-description"
+        rows="4"
+        [formField]="topicForm.description"
+        [attr.aria-invalid]="descriptionError() !== null"
+        [attr.aria-describedby]="descriptionError() ? 'topic-description-error' : null"
+        (input)="clearRequestError()"
+      ></textarea>
+      @if (descriptionError(); as error) {
+        <p id="topic-description-error" class="field-error">{{ error }}</p>
+      }
+    </div>
+
+    @if (requestError(); as error) {
+      <p class="request-error" role="alert">{{ error }}</p>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button class="secondary-button" type="button" [disabled]="submitting()" (click)="close()">
+      Otkaži
+    </button>
+    <button class="primary-button" type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Čuvanje…' : submitLabel }}
+    </button>
+  </mat-dialog-actions>
+</form>
