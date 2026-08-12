@@ -2,7 +2,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { QuizListQuery, QuizzesListResponse } from './quizzes.models';
+import {
+  CreateQuizRequest,
+  QuizListQuery,
+  QuizResponse,
+  QuizzesListResponse,
+  UpdateQuizRequest,
+} from './quizzes.models';
 
 @Service()
 export class QuizzesApiService {
@@ -24,5 +30,29 @@ export class QuizzesApiService {
     }
 
     return this.http.get<QuizzesListResponse>('/api/quizzes', { params });
+  }
+
+  get(id: number): Observable<QuizResponse> {
+    return this.http.get<QuizResponse>(`/api/quizzes/${id}`);
+  }
+
+  create(request: CreateQuizRequest): Observable<QuizResponse> {
+    return this.http.post<QuizResponse>('/api/quizzes', request);
+  }
+
+  update(id: number, request: UpdateQuizRequest): Observable<QuizResponse> {
+    return this.http.patch<QuizResponse>(`/api/quizzes/${id}`, request);
+  }
+
+  activate(id: number): Observable<QuizResponse> {
+    return this.http.patch<QuizResponse>(`/api/quizzes/${id}/activate`, null);
+  }
+
+  deactivate(id: number): Observable<QuizResponse> {
+    return this.http.patch<QuizResponse>(`/api/quizzes/${id}/deactivate`, null);
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/quizzes/${id}`);
   }
 }

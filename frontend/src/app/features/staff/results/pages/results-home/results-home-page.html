@@ -1,0 +1,432 @@
+<section class="results-page" aria-labelledby="results-title">
+  <header class="results-header">
+    <h1 id="results-title">Rezultati</h1>
+    <p>Pregledajte rezultate odigranih kvizova i napredak učenika.</p>
+  </header>
+
+  <div class="results-tabs" role="tablist" aria-label="Vrsta rezultata">
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeTab() === 'sessions'"
+      [class.is-active]="activeTab() === 'sessions'"
+      (click)="selectTab('sessions')"
+    >
+      Sesije
+    </button>
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeTab() === 'quizzes'"
+      [class.is-active]="activeTab() === 'quizzes'"
+      (click)="selectTab('quizzes')"
+    >
+      Kvizovi
+    </button>
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeTab() === 'students'"
+      [class.is-active]="activeTab() === 'students'"
+      (click)="selectTab('students')"
+    >
+      Učenici
+    </button>
+  </div>
+
+  @if (activeTab() === 'sessions') {
+    <section class="results-panel" role="tabpanel" aria-label="Završene sesije">
+      <div class="results-toolbar">
+        <div class="results-search">
+          <label class="visually-hidden" for="session-search">Pretraži sesije</label>
+          <span aria-hidden="true">⌕</span>
+          <input
+            id="session-search"
+            type="search"
+            maxlength="100"
+            autocomplete="off"
+            placeholder="Pretraži po kvizu, PIN-u ili nastavniku..."
+            [value]="sessionsSearch()"
+            (input)="updateSearch('sessions', $event)"
+          />
+          @if (sessionsSearch()) {
+            <button
+              type="button"
+              aria-label="Obriši pretragu sesija"
+              (click)="clearSearch('sessions')"
+            >
+              ×
+            </button>
+          }
+        </div>
+        <label class="compact-select"
+          >Sortiranje
+          <select [value]="sessionSort()" (change)="changeSessionSort($event)">
+            <option value="RECENT">Nedavno igrane</option>
+            <option value="OLDEST">Najstarije</option>
+            <option value="QUIZ_TITLE_ASC">Naziv kviza A–Z</option>
+            <option value="QUIZ_TITLE_DESC">Naziv kviza Z–A</option>
+          </select>
+        </label>
+      </div>
+      <div class="results-table-card" [attr.aria-busy]="sessionsLoading()">
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela završenih sesija">
+          <table class="results-table sessions-table">
+            <thead>
+              <tr>
+                <th scope="col">Kviz</th>
+                <th scope="col">Datum</th>
+                <th scope="col">Nastavnik</th>
+                <th scope="col">Pitanja</th>
+                <th scope="col">Učesnici</th>
+                <th scope="col">Rezultat</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (sessionsError()) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    <span>Rezultate nije moguće učitati.</span
+                    ><button type="button" (click)="retry('sessions')">Pokušaj ponovo</button>
+                  </td>
+                </tr>
+              } @else if (sessionsLoading() && sessions().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    <span class="loading-indicator" aria-hidden="true"></span
+                    ><span>Učitavanje sesija…</span>
+                  </td>
+                </tr>
+              } @else if (sessions().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    <strong>{{
+                      sessionsSearch()
+                        ? 'Nema završenih sesija za odabrane kriterijume.'
+                        : 'Još nema odigranih sesija.'
+                    }}</strong>
+                    @if (!sessionsSearch()) {
+                      <small>Završene igre pojaviće se ovdje.</small>
+                    }
+                  </td>
+                </tr>
+              } @else {
+                @for (session of sessions(); track session.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ session.quiz.title }}</strong
+                      ><small>v{{ session.quiz.version }}</small>
+                    </td>
+                    <td>{{ formatDate(session.endedAt ?? session.startedAt) }}</td>
+                    <td>{{ session.host.name }}</td>
+                    <td>{{ session.questionCount }}</td>
+                    <td>{{ session.participantCount }}</td>
+                    <td>
+                      <a
+                        class="row-link"
+                        [routerLink]="['/app/results/sessions', session.id]"
+                        [attr.aria-label]="'Pogledaj rezultate kviza ' + session.quiz.title"
+                        >Pogledaj <span aria-hidden="true">›</span></a
+                      >
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="results-pagination" aria-label="Stranice sesija">
+          <label
+            >Stavki po stranici:
+            <select
+              [value]="sessionsPagination().pageSize"
+              [disabled]="sessionsLoading()"
+              (change)="changePageSize('sessions', $event)"
+            >
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size" [selected]="size === sessionsPagination().pageSize">
+                  {{ size }}
+                </option>
+              }
+            </select></label
+          >
+          <span
+            >{{ firstVisible('sessions') }}–{{ lastVisible('sessions') }} od
+            {{ sessionsPagination().totalItems }}</span
+          >
+          <div>
+            <button
+              type="button"
+              aria-label="Prethodna stranica"
+              [disabled]="sessionsPagination().pageIndex === 0 || sessionsLoading()"
+              (click)="previousPage('sessions')"
+            >
+              ‹</button
+            ><span
+              >{{ sessionsPagination().totalPages ? sessionsPagination().pageIndex + 1 : 0 }} /
+              {{ sessionsPagination().totalPages }}</span
+            ><button
+              type="button"
+              aria-label="Sljedeća stranica"
+              [disabled]="
+                sessionsPagination().pageIndex + 1 >= sessionsPagination().totalPages ||
+                sessionsLoading()
+              "
+              (click)="nextPage('sessions')"
+            >
+              ›
+            </button>
+          </div>
+        </footer>
+      </div>
+    </section>
+  } @else if (activeTab() === 'quizzes') {
+    <section class="results-panel" role="tabpanel" aria-label="Statistika kvizova">
+      <div class="results-toolbar">
+        <div class="results-search">
+          <label class="visually-hidden" for="quiz-results-search">Pretraži kvizove</label
+          ><span aria-hidden="true">⌕</span
+          ><input
+            id="quiz-results-search"
+            type="search"
+            maxlength="100"
+            autocomplete="off"
+            placeholder="Pretraži kvizove..."
+            [value]="quizzesSearch()"
+            (input)="updateSearch('quizzes', $event)"
+          />
+          @if (quizzesSearch()) {
+            <button
+              type="button"
+              aria-label="Obriši pretragu kvizova"
+              (click)="clearSearch('quizzes')"
+            >
+              ×
+            </button>
+          }
+        </div>
+      </div>
+      <div class="results-table-card" [attr.aria-busy]="quizzesLoading()">
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela kvizova">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th scope="col">Naziv</th>
+                <th scope="col">Tema</th>
+                <th scope="col">Verzija</th>
+                <th scope="col">Pitanja</th>
+                <th scope="col">Status</th>
+                <th scope="col">Statistika</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (quizzesError()) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    Kvizove nije moguće učitati.
+                    <button type="button" (click)="retry('quizzes')">Pokušaj ponovo</button>
+                  </td>
+                </tr>
+              } @else if (quizzesLoading() && quizzes().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    <span class="loading-indicator" aria-hidden="true"></span> Učitavanje kvizova…
+                  </td>
+                </tr>
+              } @else if (quizzes().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="6">Nema kvizova koji odgovaraju pretrazi.</td>
+                </tr>
+              } @else {
+                @for (quiz of quizzes(); track quiz.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ quiz.title }}</strong>
+                    </td>
+                    <td>{{ quiz.topic?.name ?? 'Bez teme' }}</td>
+                    <td>v{{ quiz.version }}</td>
+                    <td>{{ quiz.questionCount }}</td>
+                    <td><clq-active-status-badge [isActive]="quiz.isActive" /></td>
+                    <td>
+                      <a
+                        class="row-link"
+                        [routerLink]="['/app/results/quizzes', quiz.id]"
+                        [attr.aria-label]="'Pogledaj statistiku kviza ' + quiz.title"
+                        >Pogledaj <span aria-hidden="true">›</span></a
+                      >
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="results-pagination" aria-label="Stranice kvizova">
+          <label
+            >Stavki po stranici:
+            <select
+              [value]="quizzesPagination().pageSize"
+              [disabled]="quizzesLoading()"
+              (change)="changePageSize('quizzes', $event)"
+            >
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size" [selected]="size === quizzesPagination().pageSize">
+                  {{ size }}
+                </option>
+              }
+            </select></label
+          ><span
+            >{{ firstVisible('quizzes') }}–{{ lastVisible('quizzes') }} od
+            {{ quizzesPagination().totalItems }}</span
+          >
+          <div>
+            <button
+              type="button"
+              aria-label="Prethodna stranica"
+              [disabled]="quizzesPagination().pageIndex === 0 || quizzesLoading()"
+              (click)="previousPage('quizzes')"
+            >
+              ‹</button
+            ><span
+              >{{ quizzesPagination().totalPages ? quizzesPagination().pageIndex + 1 : 0 }} /
+              {{ quizzesPagination().totalPages }}</span
+            ><button
+              type="button"
+              aria-label="Sljedeća stranica"
+              [disabled]="
+                quizzesPagination().pageIndex + 1 >= quizzesPagination().totalPages ||
+                quizzesLoading()
+              "
+              (click)="nextPage('quizzes')"
+            >
+              ›
+            </button>
+          </div>
+        </footer>
+      </div>
+    </section>
+  } @else {
+    <section class="results-panel" role="tabpanel" aria-label="Statistika učenika">
+      <div class="results-toolbar">
+        <div class="results-search">
+          <label class="visually-hidden" for="student-results-search">Pretraži učenike</label
+          ><span aria-hidden="true">⌕</span
+          ><input
+            id="student-results-search"
+            type="search"
+            maxlength="100"
+            autocomplete="off"
+            placeholder="Pretraži po imenu ili korisničkom imenu..."
+            [value]="studentsSearch()"
+            (input)="updateSearch('students', $event)"
+          />
+          @if (studentsSearch()) {
+            <button
+              type="button"
+              aria-label="Obriši pretragu učenika"
+              (click)="clearSearch('students')"
+            >
+              ×
+            </button>
+          }
+        </div>
+      </div>
+      <div class="results-table-card" [attr.aria-busy]="studentsLoading()">
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela učenika">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th scope="col">Ime i prezime</th>
+                <th scope="col">Korisničko ime</th>
+                <th scope="col">Status</th>
+                <th scope="col">Rezultati</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (studentsError()) {
+                <tr class="empty-row">
+                  <td colspan="4">
+                    Učenike nije moguće učitati.
+                    <button type="button" (click)="retry('students')">Pokušaj ponovo</button>
+                  </td>
+                </tr>
+              } @else if (studentsLoading() && students().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="4">
+                    <span class="loading-indicator" aria-hidden="true"></span> Učitavanje učenika…
+                  </td>
+                </tr>
+              } @else if (students().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="4">Nema učenika koji odgovaraju pretrazi.</td>
+                </tr>
+              } @else {
+                @for (student of students(); track student.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ student.firstName }} {{ student.lastName }}</strong>
+                    </td>
+                    <td>&#64;{{ student.username }}</td>
+                    <td><clq-active-status-badge [isActive]="student.isActive" /></td>
+                    <td>
+                      <a
+                        class="row-link"
+                        [routerLink]="['/app/results/students', student.id]"
+                        [attr.aria-label]="
+                          'Pogledaj rezultate učenika ' + student.firstName + ' ' + student.lastName
+                        "
+                        >Pogledaj <span aria-hidden="true">›</span></a
+                      >
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="results-pagination" aria-label="Stranice učenika">
+          <label
+            >Stavki po stranici:
+            <select
+              [value]="studentsPagination().pageSize"
+              [disabled]="studentsLoading()"
+              (change)="changePageSize('students', $event)"
+            >
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size" [selected]="size === studentsPagination().pageSize">
+                  {{ size }}
+                </option>
+              }
+            </select></label
+          ><span
+            >{{ firstVisible('students') }}–{{ lastVisible('students') }} od
+            {{ studentsPagination().totalItems }}</span
+          >
+          <div>
+            <button
+              type="button"
+              aria-label="Prethodna stranica"
+              [disabled]="studentsPagination().pageIndex === 0 || studentsLoading()"
+              (click)="previousPage('students')"
+            >
+              ‹</button
+            ><span
+              >{{ studentsPagination().totalPages ? studentsPagination().pageIndex + 1 : 0 }} /
+              {{ studentsPagination().totalPages }}</span
+            ><button
+              type="button"
+              aria-label="Sljedeća stranica"
+              [disabled]="
+                studentsPagination().pageIndex + 1 >= studentsPagination().totalPages ||
+                studentsLoading()
+              "
+              (click)="nextPage('students')"
+            >
+              ›
+            </button>
+          </div>
+        </footer>
+      </div>
+    </section>
+  }
+</section>

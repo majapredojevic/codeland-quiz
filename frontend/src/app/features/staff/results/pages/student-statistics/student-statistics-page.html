@@ -1,0 +1,255 @@
+<section class="result-detail" aria-labelledby="student-statistics-title">
+  @if (loading()) {
+    <div class="detail-state" role="status">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <p>Učitavanje statistike učenika…</p>
+    </div>
+  } @else if (error()) {
+    <div class="detail-state is-error" role="alert">
+      <h1 id="student-statistics-title">
+        {{
+          error() === 'not-found' || error() === 'invalid'
+            ? 'Učenik nije pronađen.'
+            : 'Statistiku učenika nije moguće učitati.'
+        }}
+      </h1>
+      @if (error() === 'generic') {
+        <button type="button" (click)="retryStatistics()">Pokušaj ponovo</button>
+      }
+      <a routerLink="/app/results" [queryParams]="{ tab: 'students' }"
+        >Nazad na rezultate učenika</a
+      >
+    </div>
+  } @else if (statistics(); as stats) {
+    <a class="results-back" routerLink="/app/results" [queryParams]="{ tab: 'students' }"
+      >‹ Rezultati učenika</a
+    >
+    <header class="detail-header">
+      <div>
+        <span class="detail-kicker">&#64;{{ stats.student.username }}</span>
+        <h1 id="student-statistics-title">
+          {{ stats.student.firstName }} {{ stats.student.lastName }}
+        </h1>
+        @if (!stats.student.isActive) {
+          <span class="inactive-badge">Neaktivan</span>
+        }
+      </div>
+    </header>
+
+    @if (stats.summary.finishedSessionCount === 0) {
+      <div class="normal-empty">
+        <h2>Učenik još nema odigranih kvizova.</h2>
+        <p>Rezultati će se pojaviti nakon prve završene sesije.</p>
+      </div>
+    } @else {
+      <section class="metric-grid metric-grid--six" aria-label="Sažetak statistike učenika">
+        <article class="metric-card">
+          <span>Odigrano</span><strong>{{ stats.summary.finishedSessionCount }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Kvizova</span><strong>{{ stats.summary.distinctQuizCount }}</strong>
+        </article>
+        <article class="metric-card is-positive">
+          <span>Tačnost</span
+          ><strong>{{ formatPercentage(stats.summary.accuracyPercentage) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Prosječan rezultat</span
+          ><strong>{{ formatPercentage(stats.summary.averageScorePercentage) }}</strong>
+        </article>
+        <article class="metric-card">
+          <span>Top 3</span><strong>{{ stats.summary.topThreeCount }}</strong>
+        </article>
+        <article class="metric-card is-highlight">
+          <span>Pobjede</span><strong>{{ stats.summary.firstPlaceCount }}</strong>
+        </article>
+      </section>
+
+      <section class="secondary-metrics" aria-label="Dodatni pokazatelji">
+        <div>
+          <span>Stopa odgovora</span
+          ><strong>{{ formatPercentage(stats.summary.answerRatePercentage) }}</strong>
+        </div>
+        <div>
+          <span>Prosječno vrijeme odgovora</span
+          ><strong>{{ formatResponseTime(stats.summary.averageResponseTimeMs) }}</strong>
+        </div>
+        <div>
+          <span>Ukupno bodova</span><strong>{{ formatScore(stats.summary.totalScore) }}</strong>
+        </div>
+        <div>
+          <span>Najveći rezultat</span
+          ><strong
+            >{{ formatScore(stats.summary.highestScore) }} ·
+            {{ formatPercentage(stats.summary.highestScorePercentage) }}</strong
+          >
+        </div>
+      </section>
+
+      <section class="report-section" aria-labelledby="student-quizzes-title">
+        <h2 id="student-quizzes-title">Rezultati po kvizovima</h2>
+        <div class="student-quiz-grid">
+          @for (quiz of stats.quizzes; track quiz.quizId) {
+            <article>
+              <header>
+                <div>
+                  <small>Verzija v{{ quiz.quizVersion }}</small>
+                  <h3>
+                    <a [routerLink]="['/app/results/quizzes', quiz.quizId]">{{ quiz.quizTitle }}</a>
+                  </h3>
+                </div>
+                <span
+                  >{{ quiz.finishedSessionCount }}
+                  {{ quiz.finishedSessionCount === 1 ? 'sesija' : 'sesija' }}</span
+                >
+              </header>
+              <dl>
+                <div>
+                  <dt>Tačnost</dt>
+                  <dd>{{ formatPercentage(quiz.accuracyPercentage) }}</dd>
+                </div>
+                <div>
+                  <dt>Prosječan rezultat</dt>
+                  <dd>{{ formatPercentage(quiz.averageScorePercentage) }}</dd>
+                </div>
+                <div>
+                  <dt>Najbolji rezultat</dt>
+                  <dd>{{ formatPercentage(quiz.highestScorePercentage) }}</dd>
+                </div>
+                <div>
+                  <dt>Top 3 / pobjede</dt>
+                  <dd>{{ quiz.topThreeCount }} / {{ quiz.firstPlaceCount }}</dd>
+                </div>
+              </dl>
+            </article>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="report-section" aria-labelledby="student-sessions-title">
+      <div class="section-heading">
+        <h2 id="student-sessions-title">Odigrane sesije</h2>
+        <label class="compact-select"
+          >Kviz<select
+            [value]="selectedQuizId() ?? ''"
+            [disabled]="sessionsLoading()"
+            (change)="changeQuizFilter($event)"
+          >
+            <option value="">Svi kvizovi</option>
+            @for (quiz of stats.quizzes; track quiz.quizId) {
+              <option [value]="quiz.quizId">{{ quiz.quizTitle }} v{{ quiz.quizVersion }}</option>
+            }
+          </select></label
+        >
+      </div>
+      <div class="results-table-card compact-card" [attr.aria-busy]="sessionsLoading()">
+        <div
+          class="table-scroll"
+          role="region"
+          tabindex="0"
+          aria-label="Tabela odigranih sesija učenika"
+        >
+          <table class="results-table student-sessions-table">
+            <thead>
+              <tr>
+                <th scope="col">Datum</th>
+                <th scope="col">Kviz</th>
+                <th scope="col">Rezultat</th>
+                <th scope="col">Tačnost</th>
+                <th scope="col">Pozicija</th>
+                <th scope="col">Učesnici</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (sessionsError()) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    Sesije nije moguće učitati.
+                    <button type="button" (click)="retrySessions()">Pokušaj ponovo</button>
+                  </td>
+                </tr>
+              } @else if (sessionsLoading() && sessions().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    <span class="loading-indicator" aria-hidden="true"></span> Učitavanje sesija…
+                  </td>
+                </tr>
+              } @else if (sessions().length === 0) {
+                <tr class="empty-row">
+                  <td colspan="6">
+                    {{
+                      selectedQuizId()
+                        ? 'Nema odigranih sesija za odabrani kviz.'
+                        : 'Učenik još nema odigranih kvizova.'
+                    }}
+                  </td>
+                </tr>
+              } @else {
+                @for (session of sessions(); track session.sessionId) {
+                  <tr>
+                    <td>{{ formatDate(session.endedAt, false) }}</td>
+                    <td>
+                      <a
+                        class="table-title-link"
+                        [routerLink]="['/app/results/sessions', session.sessionId]"
+                        >{{ session.quiz.title }} <small>v{{ session.quiz.version }}</small></a
+                      >
+                    </td>
+                    <td>
+                      {{ formatScore(session.totalScore) }} /
+                      {{ formatScore(session.maxPossibleScore) }}
+                      <small>· {{ formatPercentage(session.scorePercentage) }}</small>
+                    </td>
+                    <td>{{ formatPercentage(session.accuracyPercentage) }}</td>
+                    <td>{{ session.finalRank }}.</td>
+                    <td>{{ session.participantCount }}</td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="results-pagination" aria-label="Stranice sesija učenika">
+          <label
+            >Stavki po stranici:
+            <select
+              [value]="sessionsPagination().pageSize"
+              [disabled]="sessionsLoading()"
+              (change)="changePageSize($event)"
+            >
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size">{{ size }}</option>
+              }
+            </select></label
+          ><span
+            >{{ firstVisible() }}–{{ lastVisible() }} od {{ sessionsPagination().totalItems }}</span
+          >
+          <div>
+            <button
+              type="button"
+              aria-label="Prethodna stranica"
+              [disabled]="sessionsPagination().pageIndex === 0 || sessionsLoading()"
+              (click)="previousPage()"
+            >
+              ‹</button
+            ><span
+              >{{ sessionsPagination().totalPages ? sessionsPagination().pageIndex + 1 : 0 }} /
+              {{ sessionsPagination().totalPages }}</span
+            ><button
+              type="button"
+              aria-label="Sljedeća stranica"
+              [disabled]="
+                sessionsPagination().pageIndex + 1 >= sessionsPagination().totalPages ||
+                sessionsLoading()
+              "
+              (click)="nextPage()"
+            >
+              ›
+            </button>
+          </div>
+        </footer>
+      </div>
+    </section>
+  }
+</section>

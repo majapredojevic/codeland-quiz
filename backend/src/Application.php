@@ -52,12 +52,22 @@ final class Application
         $this->server->set([
             'worker_num' => 1,
             'enable_coroutine' => true,
+            'package_max_length' => $this->applicationFactory
+                ->getMaximumUploadPackageLengthBytes(),
         ]);
     }
 
     private function registerRoutes(): void
     {
         $this->router->get('/health', new HealthController());
+
+        $questionImageController =
+            $this->applicationFactory->createQuestionImageController();
+
+        $this->router->get(
+            '/media/question-images/{quizId}/{fileName}',
+            $questionImageController->media(...),
+        );
 
         $this->router->post(
             '/api/auth/login',
@@ -359,6 +369,28 @@ final class Application
         $this->router->delete(
             '/api/quizzes/{quizId}/questions/{questionId}',
             $questionController->delete(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->post(
+            '/api/quizzes/{quizId}/question-images',
+            $questionImageController->upload(...),
+            [
+                $authenticationMiddleware->handle(...),
+                $csrfMiddleware->handle(...),
+                $passwordChangeRequiredMiddleware->handle(...),
+                $teacherAccessMiddleware->handle(...),
+            ],
+        );
+
+        $this->router->delete(
+            '/api/quizzes/{quizId}/question-images/{fileName}',
+            $questionImageController->cleanup(...),
             [
                 $authenticationMiddleware->handle(...),
                 $csrfMiddleware->handle(...),

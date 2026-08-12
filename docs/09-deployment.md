@@ -6,7 +6,7 @@
 
 | Service | Purpose | Host port | Mounts |
 | --- | --- | ---: | --- |
-| `backend` | PHP 8.3/OpenSwoole application | `9501` | `./backend:/var/www/backend` |
+| `backend` | PHP 8.3/OpenSwoole application | `9501` | `./backend:/var/www/backend` (including persistent `storage/question-images`) |
 | `mysql` | MySQL 8.4 | `3307` → container `3306` | `./docker/mysql/data`, `./docker/mysql/init`, read-only host localtime |
 | `phpmyadmin` | Local database administration | `8081` | None |
 
@@ -30,10 +30,20 @@ Use `backend/.env.example` as the variable reference; never commit real secrets.
 - Cookies: path, Secure, HttpOnly and SameSite.
 - Application limits/defaults: upload metadata settings, question default, nickname limit, pagination.
 
+`QUESTION_IMAGE_STORAGE_PATH` selects the backend-controlled Question image
+directory. Relative values resolve against the backend project root and default
+to `storage/question-images`. The development bind mount persists that directory
+across backend restarts; uploaded assets are ignored by Git. Deployments must
+mount the configured directory on durable storage and route same-origin `/media`
+requests to the OpenSwoole backend.
+
 Secrets must be random and deployment-specific. Staff and participant JWT secrets require at least 32 characters; staff algorithm is HS256.
 
 ## Planned Angular development
 
-The Angular development server should proxy `/api` and `/ws` to `localhost:9501`. This keeps browser requests effectively same-origin and avoids adding CORS solely for development. With plain HTTP, configure non-`__Host` cookie names and `COOKIE_SECURE=false` through local environment values.
+The Angular development server should proxy `/api`, `/ws` and `/media` to
+`localhost:9501`. This keeps browser requests effectively same-origin and avoids
+adding CORS solely for development. With plain HTTP, configure non-`__Host`
+cookie names and `COOKIE_SECURE=false` through local environment values.
 
 Production is expected to use HTTPS, Secure cookies, `__Host-` cookie names and a same-origin frontend/backend layout or suitable reverse proxy. That infrastructure is an external deployment requirement, not an implemented repository service.

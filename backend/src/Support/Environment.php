@@ -60,6 +60,11 @@ final class Environment
         return $value !== null && $value !== '';
     }
 
+    public function getProjectRootPath(): string
+    {
+        return $this->projectRootPath;
+    }
+
     private function load(): void
     {
         $projectRootPath = rtrim($this->projectRootPath, DIRECTORY_SEPARATOR);

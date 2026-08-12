@@ -24,6 +24,7 @@ use CodeLandQuiz\Controller\GameController;
 use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\QuestionController;
+use CodeLandQuiz\Controller\QuestionImageController;
 use CodeLandQuiz\Controller\QuizController;
 use CodeLandQuiz\Controller\QuizStatisticsController;
 use CodeLandQuiz\Controller\QuizSessionController;
@@ -50,6 +51,7 @@ use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
 use CodeLandQuiz\Repository\MySqlQuestionRepository;
+use CodeLandQuiz\Repository\MySqlQuestionImageReferenceRepository;
 use CodeLandQuiz\Repository\MySqlQuizRepository;
 use CodeLandQuiz\Repository\MySqlQuizStatisticsRepository;
 use CodeLandQuiz\Repository\MySqlQuizSessionHistoryRepository;
@@ -71,6 +73,8 @@ use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Question\QuestionService;
+use CodeLandQuiz\QuestionImage\QuestionImageService;
+use CodeLandQuiz\QuestionImage\QuestionImageStorage;
 use CodeLandQuiz\Quiz\QuizService;
 use CodeLandQuiz\Quiz\QuizStatisticsAssembler;
 use CodeLandQuiz\Quiz\QuizStatisticsService;
@@ -103,6 +107,8 @@ final class ApplicationFactory
 
     private Database $database;
 
+    private QuestionImageStorage $questionImageStorage;
+
     private Server $server;
 
     private ParticipantConnectionRegistry $participantConnectionRegistry;
@@ -133,6 +139,7 @@ final class ApplicationFactory
         $this->environment = new Environment($projectRootPath);
         $this->config = new AppConfig($this->environment);
         $this->database = new Database($this->environment);
+        $this->questionImageStorage = new QuestionImageStorage($this->config);
         $this->participantConnectionRegistry =
             new ParticipantConnectionRegistry();
         $this->webSocketMessageEncoder = new WebSocketMessageEncoder();
@@ -187,6 +194,11 @@ final class ApplicationFactory
             config: $this->config,
             responseFactory: new ResponseFactory(),
         );
+    }
+
+    public function getMaximumUploadPackageLengthBytes(): int
+    {
+        return $this->config->getMaximumUploadPackageLengthBytes();
     }
 
     public function createAuthController(): AuthController
@@ -350,10 +362,27 @@ final class ApplicationFactory
             questionService: new QuestionService(
                 questions: $questionRepository,
                 quizzes: $quizRepository,
+                questionImages: $this->questionImageStorage,
                 questionContentValidator: new QuestionContentValidator(),
                 auditLogService: new AuditLogService($auditLogRepository),
                 transactionManager: new PdoTransactionManager($this->database),
             ),
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createQuestionImageController(): QuestionImageController
+    {
+        return new QuestionImageController(
+            questionImageService: new QuestionImageService(
+                quizzes: new MySqlQuizRepository($this->database),
+                references: new MySqlQuestionImageReferenceRepository(
+                    $this->database,
+                ),
+                storage: $this->questionImageStorage,
+                transactionManager: new PdoTransactionManager($this->database),
+            ),
+            questionImageStorage: $this->questionImageStorage,
             responseFactory: new ResponseFactory(),
         );
     }

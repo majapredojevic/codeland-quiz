@@ -1,0 +1,104 @@
+<section class="quiz-create-page quiz-editor-page" aria-labelledby="quiz-create-title">
+  <header class="page-header">
+    <a class="back-link" routerLink="/app/quizzes" [queryParams]="backQueryParams()">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7" /></svg>
+      Kvizovi
+    </a>
+    <h1 id="quiz-create-title">Novi kviz</h1>
+    <p>Kreirajte novi CodeLand kviz.</p>
+  </header>
+
+  <form class="content-card" novalidate [attr.aria-busy]="submitting()" (submit)="submit($event)">
+    <div class="quiz-form-grid">
+      <div class="field-group title-field">
+        <label for="new-quiz-title">Naziv kviza</label>
+        <input
+          id="new-quiz-title"
+          type="text"
+          autocomplete="off"
+          aria-required="true"
+          [formField]="quizForm.title"
+          [attr.aria-invalid]="titleError() !== null"
+          [attr.aria-describedby]="titleError() ? 'new-quiz-title-error' : null"
+          (input)="clearRequestErrors()"
+        />
+        @if (titleError(); as error) {
+          <p id="new-quiz-title-error" class="field-error">{{ error }}</p>
+        }
+      </div>
+
+      <div class="field-group version-field">
+        <label for="new-quiz-version">Verzija</label>
+        <input
+          id="new-quiz-version"
+          type="number"
+          step="1"
+          inputmode="numeric"
+          aria-required="true"
+          [formField]="quizForm.version"
+          [attr.aria-invalid]="versionError() !== null"
+          [attr.aria-describedby]="versionError() ? 'new-quiz-version-error' : null"
+          (input)="clearRequestErrors()"
+        />
+        @if (versionError(); as error) {
+          <p id="new-quiz-version-error" class="field-error">{{ error }}</p>
+        }
+      </div>
+
+      <div class="field-group topic-field">
+        <label for="new-quiz-topic">Tema</label>
+        <select
+          id="new-quiz-topic"
+          [formField]="quizForm.topicSelection"
+          (change)="clearRequestErrors()"
+        >
+          <option value="" disabled>Odaberite temu</option>
+          <option value="none">Bez teme</option>
+          @for (topic of topics.topics(); track topic.id) {
+            <option [value]="topic.id">{{ topic.name }}</option>
+          }
+        </select>
+        @if (topics.loading()) {
+          <p class="field-help" role="status">Učitavanje tema…</p>
+        }
+        @if (topics.error(); as error) {
+          <div class="reference-error" role="alert">
+            <span>{{ error }}</span
+            ><button type="button" (click)="topics.loadAll(true)">Pokušaj ponovo</button>
+          </div>
+        }
+      </div>
+
+      <div class="field-group description-field">
+        <label for="new-quiz-description">Opis</label>
+        <textarea
+          id="new-quiz-description"
+          rows="5"
+          [formField]="quizForm.description"
+          [attr.aria-invalid]="descriptionError() !== null"
+          [attr.aria-describedby]="descriptionError() ? 'new-quiz-description-error' : null"
+          (input)="clearRequestErrors()"
+        ></textarea>
+        @if (descriptionError(); as error) {
+          <p id="new-quiz-description-error" class="field-error">{{ error }}</p>
+        }
+      </div>
+    </div>
+
+    @if (compoundConflict()) {
+      <p class="request-error" role="alert">Kviz sa ovim nazivom i verzijom već postoji.</p>
+    }
+    @if (requestError(); as error) {
+      <p class="request-error" role="alert">{{ error }}</p>
+    }
+
+    <div class="form-actions">
+      <a class="secondary-button" routerLink="/app/quizzes" [queryParams]="backQueryParams()"
+        >Otkaži</a
+      >
+      <button class="primary-button" type="submit" [disabled]="!quizForm().valid() || submitting()">
+        {{ submitting() ? 'Kreiranje…' : 'Kreiraj kviz' }}
+      </button>
+    </div>
+  </form>
+</section>

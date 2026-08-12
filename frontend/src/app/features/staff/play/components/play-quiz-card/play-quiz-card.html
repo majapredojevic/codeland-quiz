@@ -1,0 +1,47 @@
+<article class="play-quiz-card">
+  <span class="card-accent" aria-hidden="true"></span>
+
+  <div class="quiz-copy">
+    @if (quiz().topic?.name; as topicName) {
+      <span class="topic-label">{{ topicName }}</span>
+    } @else {
+      <span class="topic-label is-neutral">Bez teme</span>
+    }
+
+    <h3>{{ quiz().title }}</h3>
+
+    @if (quiz().description) {
+      <p class="description">{{ quiz().description }}</p>
+    }
+  </div>
+
+  <div class="quiz-footer">
+    <div class="quiz-meta">
+      <span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M6.5 4.5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"
+          />
+          <path d="M8.5 9h7M8.5 13h7M8.5 17h4" />
+        </svg>
+        {{ questionCountLabel(quiz().questionCount) }}
+      </span>
+      @if (lastPlayedLabel(); as playedAt) {
+        <span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7.5V12l3 2" />
+          </svg>
+          {{ playedAt }}
+        </span>
+      }
+    </div>
+
+    <button type="button" [disabled]="disabled() || starting()" (click)="play.emit(quiz())">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m9 7 8 5-8 5Z" />
+      </svg>
+      {{ starting() ? 'Pokrećem…' : 'Igraj' }}
+    </button>
+  </div>
+</article>

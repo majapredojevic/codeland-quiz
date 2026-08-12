@@ -9,6 +9,17 @@ use InvalidArgumentException;
 
 final readonly class AppConfig
 {
+    private const SUPPORTED_IMAGE_EXTENSIONS = [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+    ];
+
+    private const BYTES_PER_MEGABYTE = 1024 * 1024;
+
+    private const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
+
     private string $appName;
 
     private string $appEnv;
@@ -47,6 +58,8 @@ final readonly class AppConfig
 
     private int $maximumUploadSizeMb;
 
+    private string $questionImageStoragePath;
+
     /**
      * @var string[]
      */
@@ -82,6 +95,11 @@ final readonly class AppConfig
         $this->cookieHttpOnly = $this->environment->getBool('COOKIE_HTTP_ONLY');
         $this->cookieSameSite = CookieSameSite::from($this->environment->get('COOKIE_SAME_SITE'));
         $this->maximumUploadSizeMb = $this->environment->getInt('MAX_UPLOAD_SIZE_MB');
+        $this->questionImageStoragePath = $this->resolveQuestionImageStoragePath(
+            $this->environment->has('QUESTION_IMAGE_STORAGE_PATH')
+                ? $this->environment->get('QUESTION_IMAGE_STORAGE_PATH')
+                : 'storage/question-images',
+        );
         $this->allowedImageExtensions = $this->parseAllowedImageExtensions(
             $this->environment->get('ALLOWED_IMAGE_EXTENSIONS'),
         );
@@ -106,6 +124,17 @@ final readonly class AppConfig
 
         if ($this->allowedImageExtensions === []) {
             throw new InvalidArgumentException('Allowed image extensions cannot be empty.');
+        }
+
+        $unsupportedImageExtensions = array_diff(
+            $this->allowedImageExtensions,
+            self::SUPPORTED_IMAGE_EXTENSIONS,
+        );
+
+        if ($unsupportedImageExtensions !== []) {
+            throw new InvalidArgumentException(
+                'Allowed image extensions may only contain jpg, jpeg, png and webp.',
+            );
         }
 
         if ($this->defaultPageSize > $this->maximumPageSize) {
@@ -156,6 +185,22 @@ final readonly class AppConfig
     public function getMaximumUploadSizeMb(): int
     {
         return $this->maximumUploadSizeMb;
+    }
+
+    public function getMaximumUploadSizeBytes(): int
+    {
+        return $this->maximumUploadSizeMb * self::BYTES_PER_MEGABYTE;
+    }
+
+    public function getMaximumUploadPackageLengthBytes(): int
+    {
+        return $this->getMaximumUploadSizeBytes()
+            + self::MULTIPART_OVERHEAD_BYTES;
+    }
+
+    public function getQuestionImageStoragePath(): string
+    {
+        return $this->questionImageStoragePath;
     }
 
     public function getAccessTokenCookieName(): string
@@ -241,13 +286,78 @@ final readonly class AppConfig
      */
     private function parseAllowedImageExtensions(string $extensions): array
     {
-        return array_values(array_filter(
+        return array_values(array_unique(array_filter(
             array_map(
                 static fn(string $extension): string => strtolower(trim($extension)),
                 explode(',', $extensions),
             ),
             static fn(string $extension): bool => $extension !== '',
+        )));
+    }
+
+    private function resolveQuestionImageStoragePath(string $configuredPath): string
+    {
+        $configuredPath = trim($configuredPath);
+
+        if (
+            $configuredPath === ''
+            || str_contains($configuredPath, "\0")
+        ) {
+            throw new InvalidArgumentException(
+                'Question image storage path is invalid.',
+            );
+        }
+
+        $segments = preg_split('#[\\\\/]#', $configuredPath);
+
+        if ($segments === false) {
+            throw new InvalidArgumentException(
+                'Question image storage path is invalid.',
+            );
+        }
+
+        foreach ($segments as $segment) {
+            if ($segment === '..') {
+                throw new InvalidArgumentException(
+                    'Question image storage path cannot contain parent traversal.',
+                );
+            }
+        }
+
+        if ($this->isAbsolutePath($configuredPath)) {
+            $absolutePath = rtrim($configuredPath, '/\\');
+
+            if ($absolutePath === '' || preg_match('#^[A-Za-z]:$#', $absolutePath) === 1) {
+                throw new InvalidArgumentException(
+                    'Question image storage path cannot be a filesystem root.',
+                );
+            }
+
+            return $absolutePath;
+        }
+
+        $relativeSegments = array_values(array_filter(
+            $segments,
+            static fn (string $segment): bool => $segment !== '' && $segment !== '.',
         ));
+
+        if ($relativeSegments === []) {
+            throw new InvalidArgumentException(
+                'Question image storage path must identify a directory.',
+            );
+        }
+
+        return rtrim(
+            $this->environment->getProjectRootPath(),
+            '/\\',
+        ) . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $relativeSegments);
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1;
     }
 
     private function readRefreshTokenHashKey(): string

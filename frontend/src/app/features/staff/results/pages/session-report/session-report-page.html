@@ -1,0 +1,331 @@
+<section class="result-detail" aria-labelledby="session-report-title">
+  @if (loading()) {
+    <div class="detail-state" role="status">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <p>Učitavanje rezultata…</p>
+    </div>
+  } @else if (error()) {
+    <div class="detail-state is-error" role="alert">
+      <h1 id="session-report-title">
+        {{
+          error() === 'not-found' || error() === 'invalid'
+            ? 'Sesija nije pronađena.'
+            : error() === 'unavailable'
+              ? 'Rezultati ove sesije još nisu dostupni.'
+              : 'Rezultate nije moguće učitati.'
+        }}
+      </h1>
+      @if (error() === 'not-found') {
+        <p>Moguće je da sesija više nije dostupna.</p>
+      }
+      @if (error() === 'generic') {
+        <button type="button" (click)="retry()">Pokušaj ponovo</button>
+      }
+      <a routerLink="/app/results">Nazad na rezultate</a>
+    </div>
+  } @else if (report(); as current) {
+    <a class="results-back" routerLink="/app/results">‹ Rezultati</a>
+    <header class="detail-header">
+      <div>
+        <span class="detail-kicker">Verzija v{{ current.session.quiz.version }}</span>
+        <h1 id="session-report-title">{{ current.session.quiz.title }}</h1>
+      </div>
+      <dl>
+        <div>
+          <dt>Odigrano</dt>
+          <dd>{{ formatDate(current.session.endedAt) }}</dd>
+        </div>
+        <div>
+          <dt>Nastavnik</dt>
+          <dd>{{ current.session.host.name }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <section class="metric-grid" aria-label="Sažetak sesije">
+      <article class="metric-card">
+        <span>Učesnici</span><strong>{{ current.summary.participantCount }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Prosječan rezultat</span
+        ><strong>{{ formatScore(current.summary.averageScore) }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Najveći rezultat</span
+        ><strong>{{ formatScore(current.summary.highestScore) }}</strong>
+      </article>
+      <article class="metric-card is-positive">
+        <span>Tačnost</span><strong>{{ sessionAccuracy(current) }}</strong>
+      </article>
+    </section>
+    @if (current.summary.removedParticipantCount > 0) {
+      <p class="removed-note">
+        Uklonjeno tokom igre: {{ current.summary.removedParticipantCount }}
+      </p>
+    }
+
+    <div class="results-tabs detail-tabs" role="tablist" aria-label="Detalji rezultata sesije">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'leaderboard'"
+        [class.is-active]="activeTab() === 'leaderboard'"
+        (click)="selectTab('leaderboard')"
+      >
+        Poredak
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'questions'"
+        [class.is-active]="activeTab() === 'questions'"
+        (click)="selectTab('questions')"
+      >
+        Pitanja
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'participants'"
+        [class.is-active]="activeTab() === 'participants'"
+        (click)="selectTab('participants')"
+      >
+        Učesnici
+      </button>
+    </div>
+
+    @if (activeTab() === 'leaderboard') {
+      <section class="report-section" role="tabpanel" aria-labelledby="leaderboard-title">
+        <h2 id="leaderboard-title">Poredak</h2>
+        @if (current.leaderboard.length === 0) {
+          <p class="section-empty">Nema rangiranih učesnika.</p>
+        } @else {
+          <div class="report-podium" role="list" aria-label="Najbolja tri učesnika">
+            @for (entry of current.leaderboard.slice(0, 3); track entry.participantId) {
+              <article role="listitem" [attr.data-rank]="entry.rank">
+                <span class="podium-rank">{{ entry.rank }}.</span
+                ><clq-koda-avatar
+                  [nickname]="entry.nickname"
+                  [avatarKey]="entry.avatarKey"
+                /><strong>{{ entry.nickname }}</strong
+                ><span>{{ formatScore(entry.totalScore) }} bodova</span>
+              </article>
+            }
+          </div>
+          @if (current.leaderboard.length > 3) {
+            <div class="results-table-card compact-card">
+              <div class="table-scroll" role="region" tabindex="0" aria-label="Preostali poredak">
+                <table class="results-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Pozicija</th>
+                      <th scope="col">Igrač</th>
+                      <th scope="col">Bodovi</th>
+                      <th scope="col">Tačno</th>
+                      <th scope="col">Odgovoreno</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (entry of current.leaderboard.slice(3); track entry.participantId) {
+                      <tr>
+                        <td>{{ entry.rank }}.</td>
+                        <td>
+                          <span class="person-cell"
+                            ><clq-koda-avatar
+                              [nickname]="entry.nickname"
+                              [avatarKey]="entry.avatarKey"
+                            /><strong>{{ entry.nickname }}</strong></span
+                          >
+                        </td>
+                        <td>{{ formatScore(entry.totalScore) }}</td>
+                        <td>{{ entry.correctAnswerCount }}</td>
+                        <td>{{ entry.answerCount }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+        }
+      </section>
+    } @else if (activeTab() === 'questions') {
+      <section class="report-section" role="tabpanel" aria-labelledby="questions-title">
+        <h2 id="questions-title">Rezultati po pitanjima</h2>
+        <div class="expandable-list">
+          @for (question of current.questions; track question.id) {
+            <article class="expandable-card">
+              <button
+                class="expandable-summary"
+                type="button"
+                [attr.aria-expanded]="expandedQuestions().has(question.id)"
+                [attr.aria-controls]="'question-' + question.id"
+                (click)="toggleQuestion(question.id)"
+              >
+                <span class="question-copy"
+                  ><small>Pitanje {{ question.questionOrder }}</small
+                  ><strong>{{ question.questionText }}</strong></span
+                >
+                <span class="question-stats"
+                  ><span
+                    ><b>{{ question.stats.correctAnswerCount }}</b> Tačno</span
+                  ><span
+                    ><b>{{ question.stats.incorrectAnswerCount }}</b> Netačno</span
+                  ><span
+                    ><b>{{ question.stats.unansweredCount }}</b> Bez odgovora</span
+                  ><span
+                    ><b>{{ formatResponseTime(question.stats.averageResponseTimeMs) }}</b> Prosječno
+                    vrijeme</span
+                  ></span
+                ><span class="expand-icon" aria-hidden="true">⌄</span>
+              </button>
+              @if (expandedQuestions().has(question.id)) {
+                <div class="expandable-content" [id]="'question-' + question.id">
+                  @if (question.imagePath && !imageErrors().has(question.id)) {
+                    <img
+                      class="report-question-image"
+                      [src]="question.imagePath"
+                      [alt]="'Slika uz pitanje ' + question.questionOrder"
+                      (error)="markImageError(question.id)"
+                    />
+                  }
+                  <dl class="question-meta">
+                    <div>
+                      <dt>Vremensko ograničenje</dt>
+                      <dd>{{ question.timeLimitSeconds }} s</dd>
+                    </div>
+                    <div>
+                      <dt>Maksimalno bodova</dt>
+                      <dd>{{ formatScore(question.maxPoints) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Odgovorilo</dt>
+                      <dd>
+                        {{ question.stats.answerCount }} / {{ question.stats.participantCount }}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div class="answer-options" role="list" aria-label="Odgovori">
+                    @for (option of question.options; track option.id; let index = $index) {
+                      <div role="listitem" [class.is-correct]="option.isCorrect">
+                        <span>{{ index + 1 }}.</span><strong>{{ option.optionText }}</strong>
+                        @if (option.isCorrect) {
+                          <span class="correct-label">✓ Tačan odgovor</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      </section>
+    } @else {
+      <section class="report-section" role="tabpanel" aria-labelledby="participants-title">
+        <h2 id="participants-title">Učesnici</h2>
+        <div class="results-table-card compact-card">
+          <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela učesnika">
+            <table class="results-table participants-table">
+              <thead>
+                <tr>
+                  <th scope="col">Igrač</th>
+                  <th scope="col">Učenik</th>
+                  <th scope="col">Rezultat</th>
+                  <th scope="col">Tačno</th>
+                  <th scope="col">Odgovoreno</th>
+                  <th scope="col">Pozicija</th>
+                  <th scope="col"><span class="visually-hidden">Detalji</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (participant of current.participants; track participant.participantId) {
+                  <tr [class.is-removed]="participant.isRemoved">
+                    <td>
+                      <span class="person-cell"
+                        ><clq-koda-avatar
+                          [nickname]="participant.nickname"
+                          [avatarKey]="participant.avatarKey"
+                        /><span
+                          ><strong>{{ participant.nickname }}</strong>
+                          @if (participant.isRemoved) {
+                            <small class="removed-badge">Uklonjen</small>
+                          }
+                        </span></span
+                      >
+                    </td>
+                    <td>
+                      @if (participant.student; as student) {
+                        <strong>{{ student.firstName }} {{ student.lastName }}</strong
+                        ><small>&#64;{{ student.username }}</small
+                        ><a
+                          class="student-result-link"
+                          [routerLink]="['/app/results/students', student.id]"
+                          >Pogledaj rezultate učenika</a
+                        >
+                      } @else {
+                        Gost
+                      }
+                    </td>
+                    <td>{{ formatScore(participant.totalScore) }}</td>
+                    <td>{{ participant.correctAnswerCount }}</td>
+                    <td>{{ participant.answerCount }}</td>
+                    <td>
+                      {{
+                        participant.isRemoved
+                          ? '—'
+                          : participant.finalRank
+                            ? participant.finalRank + '.'
+                            : '—'
+                      }}
+                    </td>
+                    <td>
+                      <button
+                        class="expand-row"
+                        type="button"
+                        [attr.aria-expanded]="expandedParticipants().has(participant.participantId)"
+                        [attr.aria-controls]="'participant-' + participant.participantId"
+                        [attr.aria-label]="'Prikaži odgovore igrača ' + participant.nickname"
+                        (click)="toggleParticipant(participant.participantId)"
+                      >
+                        ⌄
+                      </button>
+                    </td>
+                  </tr>
+                  @if (expandedParticipants().has(participant.participantId)) {
+                    <tr class="detail-row">
+                      <td colspan="7" [id]="'participant-' + participant.participantId">
+                        <div class="participant-answers">
+                          @for (answer of participant.answers; track answer.sessionQuestionId) {
+                            <article>
+                              <strong>Pitanje {{ answer.questionOrder }}</strong
+                              ><span>{{ selectedAnswerText(answer, current) }}</span
+                              ><span
+                                [class.is-correct-text]="answer.isCorrect === true"
+                                [class.is-incorrect-text]="
+                                  answer.answered && answer.isCorrect === false
+                                "
+                                >{{
+                                  !answer.answered
+                                    ? 'Nije odgovorio'
+                                    : answer.isCorrect
+                                      ? '✓ Tačno'
+                                      : '✕ Netačno'
+                                }}</span
+                              ><span>Vrijeme: {{ formatResponseTime(answer.responseTimeMs) }}</span
+                              ><span>Bodovi: {{ formatScore(answer.pointsAwarded) }}</span>
+                            </article>
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    }
+  }
+</section>

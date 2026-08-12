@@ -1,0 +1,52 @@
+:host {
+  display: inline-grid;
+  flex: 0 0 auto;
+}
+
+.koda-avatar {
+  position: relative;
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  overflow: hidden;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--clq-color-primary) 12%, white);
+  color: var(--clq-color-primary);
+  place-items: center;
+}
+
+.koda-avatar svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  opacity: 0.13;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+
+.koda-avatar span {
+  position: relative;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.koda-avatar[data-avatar-key='koda-green'],
+.koda-avatar[data-avatar-key='koda-turquoise'] {
+  background: color-mix(in srgb, var(--clq-color-accent) 19%, white);
+  color: var(--clq-color-success);
+}
+
+.koda-avatar[data-avatar-key='koda-orange'],
+.koda-avatar[data-avatar-key='koda-yellow'] {
+  background: color-mix(in srgb, var(--clq-color-highlight) 23%, white);
+  color: var(--clq-color-warning);
+}
+
+.koda-avatar[data-avatar-key='koda-pink'],
+.koda-avatar[data-avatar-key='koda-red'] {
+  background: color-mix(in srgb, var(--clq-color-pink) 28%, white);
+  color: var(--clq-color-error-text);
+}

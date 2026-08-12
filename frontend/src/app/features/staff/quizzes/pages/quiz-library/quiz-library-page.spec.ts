@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { convertToParamMap, ActivatedRoute, Router } from '@angular/router';
+import { convertToParamMap, ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { computed, signal, WritableSignal } from '@angular/core';
@@ -147,9 +147,9 @@ describe('QuizLibraryPage', () => {
     await TestBed.configureTestingModule({
       imports: [QuizLibraryPage],
       providers: [
+        provideRouter([]),
         { provide: QuizLibraryStore, useValue: store },
         { provide: ActivatedRoute, useValue: { queryParamMap: routeParams } },
-        { provide: Router, useValue: { navigate } },
         {
           provide: MatDialog,
           useValue: { open: dialogOpen },
@@ -160,6 +160,7 @@ describe('QuizLibraryPage', () => {
         },
       ],
     }).compileComponents();
+    navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
   });
 
   async function render(): Promise<HTMLElement> {
@@ -170,7 +171,7 @@ describe('QuizLibraryPage', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('renders backend topic counts and quiz list fields without quiz navigation or actions', async () => {
+  it('renders backend list fields and accessible quiz-detail navigation without an Actions column', async () => {
     const element = await render();
     expect(element.textContent).toContain('8 kvizova');
     expect(element.textContent).toContain('Petlje');
@@ -178,7 +179,9 @@ describe('QuizLibraryPage', () => {
     expect(element.textContent).toContain('12');
     expect(element.textContent).toContain('v2');
     expect(element.textContent).toContain('Bez teme');
-    expect(element.querySelector('tbody a')).toBeNull();
+    expect(element.querySelector<HTMLAnchorElement>('tbody a')?.getAttribute('href')).toBe(
+      '/app/quizzes/1',
+    );
     expect(element.querySelector('th:last-child')?.textContent).toContain('Status');
   });
 
@@ -196,19 +199,17 @@ describe('QuizLibraryPage', () => {
     expect(element.querySelector('.page-header + .toolbar')).toBeNull();
   });
 
-  it('adds no dead Create Quiz control while preserving query-backed selectedTopicId state', async () => {
+  it('renders the functional Create Quiz link and preserves query-backed selectedTopicId state', async () => {
     const element = await render();
-    expect(element.querySelector('a[href="/app/quizzes/new"]')).toBeNull();
-    expect(
-      Array.from(element.querySelectorAll('button')).some((button) =>
-        button.textContent?.includes('Novi kviz'),
-      ),
-    ).toBe(false);
+    const create = element.querySelector<HTMLAnchorElement>('a[href="/app/quizzes/new"]');
+    expect(create?.textContent).toContain('Novi kviz');
 
     routeParams.next(convertToParamMap({ topicId: '4' }));
     await fixture.whenStable();
     expect(store['setTopicId']).toHaveBeenCalledWith(4);
     expect(selectedId()).toBe(4);
+    fixture.detectChanges();
+    expect(create?.getAttribute('href')).toBe('/app/quizzes/new?topicId=4');
   });
 
   it('keeps table headers and renders a semantic five-column empty row', async () => {
@@ -262,6 +263,13 @@ describe('QuizLibraryPage', () => {
     topicPaginationState.set({ pageIndex: 0, pageSize: 20, totalItems: 10, totalPages: 1 });
     const element = await render();
 
+    expect(
+      (
+        fixture.componentInstance as unknown as {
+          visibleTopics(): TopicItem[];
+        }
+      ).visibleTopics(),
+    ).toHaveLength(8);
     expect(element.querySelectorAll('clq-topic-card')).toHaveLength(8);
     expect(element.querySelector('.all-topics-card')).not.toBeNull();
     expect(element.textContent).toContain('Prikaži sve teme');

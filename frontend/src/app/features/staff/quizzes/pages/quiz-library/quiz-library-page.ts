@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
-import { ActivatedRoute, Params, Router } from '@angular/router';
+import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import {
@@ -18,11 +18,11 @@ import { QuizSort, QuizStatusFilter, TopicItem } from '../../data-access/quizzes
 
 const SEARCH_DEBOUNCE_MS = 300;
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
-const COLLAPSED_TOPIC_LIMIT = 7;
+const COLLAPSED_TOPIC_LIMIT = 8;
 
 @Component({
   selector: 'clq-quiz-library-page',
-  imports: [ActiveStatusBadge, TopicCard],
+  imports: [ActiveStatusBadge, RouterLink, TopicCard],
   templateUrl: './quiz-library-page.html',
   styleUrl: './quiz-library-page.scss',
 })

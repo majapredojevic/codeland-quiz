@@ -4,6 +4,11 @@
     "secure": false,
     "changeOrigin": true
   },
+  "/media": {
+    "target": "http://localhost:9501",
+    "secure": false,
+    "changeOrigin": true
+  },
   "/ws": {
     "target": "ws://localhost:9501",
     "secure": false,

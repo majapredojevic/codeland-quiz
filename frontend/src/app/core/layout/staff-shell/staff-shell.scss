@@ -22,6 +22,16 @@
   flex-direction: column;
 }
 
+.navigation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: rgb(26 26 26 / 34%);
+  cursor: pointer;
+}
+
 .brand {
   display: flex;
   min-height: 4.5rem;
@@ -178,6 +188,75 @@ a.nav-item:hover {
   min-width: 0;
   padding: var(--clq-space-4) var(--clq-space-6) var(--clq-space-6);
   flex: 1 1 auto;
+}
+
+.staff-shell.is-presentation {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.is-presentation .sidebar {
+  position: fixed;
+  left: 0;
+  z-index: 4;
+  width: min(17rem, 86vw);
+  box-shadow: var(--clq-shadow-lg);
+  transform: translateX(-105%);
+  visibility: hidden;
+  transition:
+    transform 180ms ease,
+    visibility 180ms ease;
+}
+
+.is-presentation .sidebar.is-open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.is-presentation .sidebar-close {
+  position: absolute;
+  top: var(--clq-space-3);
+  right: var(--clq-space-3);
+  display: grid;
+  width: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--clq-color-primary);
+  place-items: center;
+}
+
+.is-presentation .topbar {
+  position: absolute;
+  top: var(--clq-space-3);
+  left: var(--clq-space-3);
+  z-index: 2;
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.is-presentation .menu-toggle {
+  display: inline-flex;
+  min-width: 2.75rem;
+  padding: var(--clq-space-2);
+  border: 1px solid color-mix(in srgb, var(--clq-color-primary) 14%, white);
+  background: rgb(255 255 255 / 90%);
+  box-shadow: var(--clq-shadow-md);
+  pointer-events: auto;
+  justify-content: center;
+}
+
+.is-presentation .menu-toggle span,
+.is-presentation .profile-trigger {
+  display: none;
+}
+
+.is-presentation .content {
+  min-height: 100dvh;
+  padding: clamp(3.75rem, 6vw, 5rem) clamp(var(--clq-space-4), 3vw, var(--clq-space-8))
+    var(--clq-space-5);
 }
 
 @media (max-width: 47.5rem) {

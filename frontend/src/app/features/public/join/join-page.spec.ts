@@ -86,6 +86,16 @@ describe('JoinPage', () => {
     expect(getJoinButton(element).disabled).toBe(true);
   });
 
+  it('prefills a valid PIN from the query parameter', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/?pin=004321');
+    const { element } = createPage();
+    const input = element.querySelector<HTMLInputElement>('#game-pin');
+
+    expect(input?.value).toBe('004321');
+    expect(getJoinButton(element).disabled).toBe(false);
+  });
+
   it('keeps the join action disabled for fewer than six digits', () => {
     const { fixture, element } = createPage();
     const input = element.querySelector<HTMLInputElement>('#game-pin');

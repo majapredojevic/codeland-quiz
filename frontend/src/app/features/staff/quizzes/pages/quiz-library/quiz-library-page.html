@@ -150,6 +150,18 @@
             <option value="titleDesc">Naziv Z–A</option>
           </select>
         </label>
+        <a
+          class="primary-button create-quiz-button"
+          routerLink="/app/quizzes/new"
+          [queryParams]="
+            store.selectedTopicId() === null ? null : { topicId: store.selectedTopicId() }
+          "
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Novi kviz
+        </a>
       </div>
     </div>
 
@@ -184,7 +196,14 @@
               } @else {
                 @for (quiz of store.quizzes(); track quiz.id) {
                   <tr>
-                    <td class="quiz-title">{{ quiz.title }}</td>
+                    <td class="quiz-title">
+                      <a
+                        class="quiz-link"
+                        [routerLink]="['/app/quizzes', quiz.id]"
+                        [attr.aria-label]="'Otvori detalje kviza ' + quiz.title"
+                        >{{ quiz.title }}</a
+                      >
+                    </td>
                     <td [class.muted]="!quiz.topic">{{ quiz.topic?.name || 'Bez teme' }}</td>
                     <td>{{ quiz.questionCount }}</td>
                     <td>v{{ quiz.version }}</td>

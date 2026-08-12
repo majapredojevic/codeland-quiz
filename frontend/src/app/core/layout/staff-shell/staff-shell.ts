@@ -2,14 +2,17 @@ import { NgOptimizedImage } from '@angular/common';
 import {
   afterNextRender,
   Component,
+  DestroyRef,
   ElementRef,
   inject,
   Injector,
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs';
 
 import { AuthStore } from '../../auth/auth.store';
 import { StaffUserSummary } from './staff-user-summary';
@@ -35,6 +38,8 @@ import { StaffUserSummary } from './staff-user-summary';
 export class StaffShell {
   private readonly authStore = inject(AuthStore);
   private readonly injector = inject(Injector);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly navigationClose =
     viewChild.required<ElementRef<HTMLButtonElement>>('navigationClose');
   private readonly navigationToggle =
@@ -43,8 +48,22 @@ export class StaffShell {
   protected readonly user = this.authStore.user;
   protected readonly isAdmin = this.authStore.isAdmin;
   protected readonly isNavigationOpen = signal(false);
+  protected readonly isPresentationMode = signal(false);
   protected readonly isLoggingOut = signal(false);
   protected readonly logoutError = signal<string | null>(null);
+
+  constructor() {
+    this.updatePresentationMode(this.router.url);
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((event) => {
+        this.closeNavigation(false);
+        this.updatePresentationMode(event.urlAfterRedirects);
+      });
+  }
 
   protected toggleNavigation(): void {
     if (this.isNavigationOpen()) {
@@ -87,5 +106,9 @@ export class StaffShell {
     } finally {
       this.isLoggingOut.set(false);
     }
+  }
+
+  private updatePresentationMode(url: string): void {
+    this.isPresentationMode.set(/^\/app\/sessions\/\d+(?:[/?#]|$)/.test(url));
   }
 }

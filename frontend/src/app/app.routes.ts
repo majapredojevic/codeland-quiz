@@ -48,6 +48,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'sessions/:sessionId',
+        loadComponent: () =>
+          import('./features/staff/play/pages/quiz-lobby/quiz-lobby-page').then(
+            ({ QuizLobbyPage }) => QuizLobbyPage,
+          ),
+      },
+      {
         path: 'account/password',
         loadComponent: () =>
           import('./features/staff/account/password/account-password-page').then(
@@ -66,6 +73,13 @@ export const routes: Routes = [
         loadChildren: () =>
           import('./features/staff/quizzes/quizzes.routes').then(
             ({ quizzesRoutes }) => quizzesRoutes,
+          ),
+      },
+      {
+        path: 'results',
+        loadChildren: () =>
+          import('./features/staff/results/results.routes').then(
+            ({ resultsRoutes }) => resultsRoutes,
           ),
       },
       {
