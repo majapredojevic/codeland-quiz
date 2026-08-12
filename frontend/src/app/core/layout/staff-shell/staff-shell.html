@@ -62,15 +62,20 @@
       </span>
 
       @if (isAdmin()) {
-        <span class="nav-item is-disabled" role="link" aria-disabled="true">
+        <a
+          class="nav-item"
+          routerLink="/app/users"
+          routerLinkActive="is-active"
+          ariaCurrentWhenActive="page"
+          (click)="closeNavigation(true)"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
               d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20c.3-4 2.3-6 6-6s5.7 2 6 6M17 12v8M13 16h8"
             />
           </svg>
           <span>Korisnici</span>
-          <small>Uskoro</small>
-        </span>
+        </a>
       }
     </nav>
   </aside>

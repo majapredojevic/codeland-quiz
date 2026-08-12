@@ -1,0 +1,207 @@
+<section class="user-details-page" aria-labelledby="user-details-title">
+  @if (invalidId()) {
+    <div class="page-state" role="alert">
+      <h1 id="user-details-title">Korisnik nije pronađen</h1>
+      <p>Adresa korisnika nije ispravna.</p>
+      <a routerLink="/app/users">Nazad na korisnike</a>
+    </div>
+  } @else if (usersStore.detailLoading() && usersStore.detail() === null) {
+    <div class="page-state" role="status">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <h1 id="user-details-title">Učitavanje korisnika…</h1>
+    </div>
+  } @else if (usersStore.detailError(); as error) {
+    <div class="page-state" role="alert">
+      <h1 id="user-details-title">Korisnik nije dostupan</h1>
+      <p>{{ error }}</p>
+      <div class="page-state__actions">
+        <a routerLink="/app/users">Nazad na korisnike</a>
+        <button type="button" (click)="retry()">Pokušaj ponovo</button>
+      </div>
+    </div>
+  } @else if (usersStore.detail(); as user) {
+    <header class="page-header">
+      <a class="back-link" routerLink="/app/users">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m15 5-7 7 7 7" />
+        </svg>
+        Korisnici
+      </a>
+      <div class="summary">
+        <div>
+          <h1 id="user-details-title">{{ user.name }}</h1>
+          <p>{{ user.email }}</p>
+        </div>
+        <div class="summary-badges">
+          <span class="role-badge">{{ user.role }}</span>
+          <clq-user-status-badge [isActive]="user.isActive" />
+        </div>
+      </div>
+    </header>
+
+    <div class="sections">
+      <section class="content-card" aria-labelledby="user-data-title">
+        <header class="card-header">
+          <div>
+            <h2 id="user-data-title">Podaci korisnika</h2>
+            <p>Izmijenite osnovne podatke nastavničkog naloga.</p>
+          </div>
+        </header>
+
+        <form novalidate [attr.aria-busy]="isSaving()" (submit)="save($event)">
+          <div class="form-grid">
+            <div class="field-group">
+              <label for="user-name">Ime i prezime</label>
+              <input
+                id="user-name"
+                type="text"
+                autocomplete="name"
+                required
+                [value]="name()"
+                [attr.aria-invalid]="nameError() !== null"
+                [attr.aria-describedby]="nameError() ? 'user-name-error' : null"
+                (input)="updateName($event)"
+                (blur)="nameTouched.set(true)"
+              />
+              @if (nameError(); as error) {
+                <p id="user-name-error" class="field-error">{{ error }}</p>
+              }
+            </div>
+
+            <div class="field-group">
+              <label for="user-email">Email</label>
+              <input
+                id="user-email"
+                type="email"
+                inputmode="email"
+                autocomplete="email"
+                required
+                [value]="email()"
+                [attr.aria-invalid]="emailError() !== null"
+                [attr.aria-describedby]="emailError() ? 'user-email-error' : null"
+                (input)="updateEmail($event)"
+                (blur)="emailTouched.set(true)"
+              />
+              @if (emailError(); as error) {
+                <p id="user-email-error" class="field-error">{{ error }}</p>
+              }
+            </div>
+
+            <div class="field-group">
+              <span class="field-label">Uloga</span>
+              <p class="read-only-value">{{ user.role }} <span>Nastavnik</span></p>
+            </div>
+          </div>
+
+          @if (saveError(); as error) {
+            <p class="request-error" role="alert">{{ error }}</p>
+          }
+
+          <div class="form-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="isSaving() || !isDirty()"
+              (click)="restoreForm()"
+            >
+              Otkaži
+            </button>
+            <button
+              class="primary-button"
+              type="submit"
+              [disabled]="!isFormValid() || !isDirty() || isSaving()"
+            >
+              @if (isSaving()) {
+                Čuvanje…
+              } @else {
+                Sačuvaj izmjene
+              }
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="content-card" aria-labelledby="account-status-title">
+        <header class="card-header">
+          <div>
+            <h2 id="account-status-title">Status naloga</h2>
+            <p>Kontrolišite mogućnost prijave korisnika.</p>
+          </div>
+          <clq-user-status-badge [isActive]="user.isActive" />
+        </header>
+
+        <div class="action-row">
+          <div>
+            @if (user.isActive) {
+              <p class="action-title">Korisnik se može prijaviti na CodeLand Quiz.</p>
+              <p class="action-description">Deaktivacija čuva postojeće podatke i istoriju.</p>
+            } @else {
+              <p class="action-title">Korisnik se trenutno ne može prijaviti.</p>
+              <p class="action-description">Aktiviranjem će pristup nalogu ponovo biti omogućen.</p>
+            }
+          </div>
+
+          @if (user.isActive) {
+            <button
+              class="destructive-button"
+              type="button"
+              [disabled]="isChangingStatus()"
+              (click)="confirmDeactivation()"
+            >
+              {{ isChangingStatus() ? 'Deaktiviranje…' : 'Deaktiviraj nalog' }}
+            </button>
+          } @else {
+            <button
+              class="positive-button"
+              type="button"
+              [disabled]="isChangingStatus()"
+              (click)="activate()"
+            >
+              {{ isChangingStatus() ? 'Aktiviranje…' : 'Aktiviraj nalog' }}
+            </button>
+          }
+        </div>
+      </section>
+
+      <section class="content-card" aria-labelledby="account-security-title">
+        <header class="card-header">
+          <div>
+            <h2 id="account-security-title">Sigurnost naloga</h2>
+            <p>Upravljajte stanjem lozinke korisnika.</p>
+          </div>
+        </header>
+
+        <dl class="password-state">
+          <div>
+            <dt>Lozinka</dt>
+            <dd>
+              @if (user.mustChangePassword) {
+                Korisnik mora promijeniti lozinku pri sljedećoj prijavi.
+              } @else {
+                Promjena lozinke nije obavezna.
+              }
+            </dd>
+          </div>
+        </dl>
+
+        <div class="action-row">
+          <div>
+            <p class="action-title">Resetuj lozinku</p>
+            <p class="action-description">
+              Resetovanjem će biti generisana nova privremena lozinka, a korisnik će je morati
+              promijeniti pri sljedećoj prijavi.
+            </p>
+          </div>
+          <button
+            class="secondary-button"
+            type="button"
+            [disabled]="isResettingPassword()"
+            (click)="confirmPasswordReset()"
+          >
+            {{ isResettingPassword() ? 'Resetovanje…' : 'Resetuj lozinku' }}
+          </button>
+        </div>
+      </section>
+    </div>
+  }
+</section>

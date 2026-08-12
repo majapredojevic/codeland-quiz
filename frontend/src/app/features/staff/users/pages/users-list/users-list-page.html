@@ -1,0 +1,151 @@
+<section class="users-page" aria-labelledby="users-title">
+  <header class="page-header">
+    <h1 id="users-title">Korisnici</h1>
+    <p>Upravljajte nalozima nastavnika.</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m15.5 15.5 5 5" />
+      </svg>
+      <label class="visually-hidden" for="users-search">Pretraži korisnike</label>
+      <input
+        id="users-search"
+        type="search"
+        autocomplete="off"
+        placeholder="Pretraži po imenu ili emailu..."
+        [value]="searchValue()"
+        (input)="updateSearch($event)"
+      />
+      @if (searchValue()) {
+        <button
+          class="clear-search"
+          type="button"
+          aria-label="Obriši pretragu"
+          (click)="clearSearch()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+      }
+    </div>
+
+    <a class="add-button" routerLink="/app/users/new">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+      Dodaj korisnika
+    </a>
+  </div>
+
+  <section class="table-card" aria-label="Lista korisnika" [attr.aria-busy]="usersStore.loading()">
+    @if (usersStore.error(); as error) {
+      <div class="state-message state-message--error" role="alert">
+        <p>{{ error }}</p>
+        <button type="button" (click)="retry()">Pokušaj ponovo</button>
+      </div>
+    } @else if (usersStore.loading() && usersStore.users().length === 0) {
+      <div class="state-message" role="status">
+        <span class="loading-indicator" aria-hidden="true"></span>
+        <p>Učitavanje korisnika…</p>
+      </div>
+    } @else {
+      @if (usersStore.users().length === 0) {
+        <div class="state-message">
+          @if (usersStore.search()) {
+            <p>Nema korisnika koji odgovaraju pretrazi.</p>
+          } @else {
+            <p>Nema korisnika za prikaz.</p>
+          }
+        </div>
+      } @else {
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela korisnika">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Ime i prezime</th>
+                <th scope="col">Email</th>
+                <th scope="col">Uloga</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (user of usersStore.users(); track user.id) {
+                <tr
+                  tabindex="0"
+                  [attr.aria-label]="'Otvori detalje korisnika ' + user.name"
+                  (click)="openUser(user.id)"
+                  (keydown)="handleRowKeydown($event, user.id)"
+                >
+                  <td class="user-name">{{ user.name }}</td>
+                  <td>{{ user.email }}</td>
+                  <td>
+                    <span class="role-badge">{{ user.role }}</span>
+                  </td>
+                  <td><clq-user-status-badge [isActive]="user.isActive" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <footer class="pagination" aria-label="Stranice korisnika">
+        <div class="page-size-control">
+          <label for="users-page-size">Stavki po stranici:</label>
+          <select
+            id="users-page-size"
+            [value]="usersStore.pageSize()"
+            [disabled]="usersStore.loading()"
+            (change)="changePageSize($event)"
+          >
+            @for (pageSize of pageSizeOptions; track pageSize) {
+              <option [value]="pageSize" [selected]="pageSize === usersStore.pageSize()">
+                {{ pageSize }}
+              </option>
+            }
+          </select>
+        </div>
+
+        <div class="pagination-summary">
+          <p aria-live="polite">
+            {{ firstVisibleItem() }}–{{ lastVisibleItem() }} od
+            {{ usersStore.pagination().totalItems }}
+          </p>
+          <div class="pagination-actions">
+            <button
+              type="button"
+              aria-label="Prethodna stranica"
+              [disabled]="usersStore.pageIndex() === 0 || usersStore.loading()"
+              (click)="previousPage()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="m15 5-7 7 7 7" />
+              </svg>
+            </button>
+            <span class="current-page">
+              {{ usersStore.pagination().totalPages === 0 ? 0 : usersStore.pageIndex() + 1 }} /
+              {{ usersStore.pagination().totalPages }}
+            </span>
+            <button
+              type="button"
+              aria-label="Sljedeća stranica"
+              [disabled]="
+                usersStore.pageIndex() + 1 >= usersStore.pagination().totalPages ||
+                usersStore.loading()
+              "
+              (click)="nextPage()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </footer>
+    }
+  </section>
+</section>

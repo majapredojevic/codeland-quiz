@@ -1,0 +1,77 @@
+<section class="user-create-page" aria-labelledby="user-create-title">
+  <header class="page-header">
+    <a class="back-link" routerLink="/app/users">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m15 5-7 7 7 7" />
+      </svg>
+      Korisnici
+    </a>
+    <h1 id="user-create-title">Novi korisnik</h1>
+    <p>Dodajte novi nastavnički nalog.</p>
+  </header>
+
+  <form class="form-card" novalidate [attr.aria-busy]="isSubmitting()" (submit)="submit($event)">
+    <div class="field-group">
+      <label for="new-user-name">Ime i prezime</label>
+      <input
+        id="new-user-name"
+        type="text"
+        autocomplete="name"
+        required
+        [value]="name()"
+        [attr.aria-invalid]="nameError() !== null"
+        [attr.aria-describedby]="nameError() ? 'new-user-name-error' : null"
+        (input)="updateName($event)"
+        (blur)="nameTouched.set(true)"
+      />
+      @if (nameError(); as error) {
+        <p id="new-user-name-error" class="field-error">{{ error }}</p>
+      }
+    </div>
+
+    <div class="field-group">
+      <label for="new-user-email">Email</label>
+      <input
+        id="new-user-email"
+        type="email"
+        inputmode="email"
+        autocomplete="email"
+        required
+        [value]="email()"
+        [attr.aria-invalid]="emailError() !== null"
+        [attr.aria-describedby]="emailError() ? 'new-user-email-error' : null"
+        (input)="updateEmail($event)"
+        (blur)="emailTouched.set(true)"
+      />
+      @if (emailError(); as error) {
+        <p id="new-user-email-error" class="field-error">{{ error }}</p>
+      }
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">Uloga</span>
+      <p class="read-only-value">TEACHER <span>Nastavnik</span></p>
+    </div>
+
+    @if (requestError(); as error) {
+      <p class="request-error" role="alert">{{ error }}</p>
+    }
+
+    <div class="form-actions">
+      <a
+        class="secondary-button"
+        [routerLink]="isSubmitting() ? null : '/app/users'"
+        [attr.aria-disabled]="isSubmitting()"
+      >
+        Otkaži
+      </a>
+      <button class="primary-button" type="submit" [disabled]="!isFormValid() || isSubmitting()">
+        @if (isSubmitting()) {
+          Dodavanje…
+        } @else {
+          Dodaj korisnika
+        }
+      </button>
+    </div>
+  </form>
+</section>
