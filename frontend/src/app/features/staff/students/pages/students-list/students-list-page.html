@@ -1,7 +1,7 @@
-<section class="users-page" aria-labelledby="users-title">
+<section class="students-page" aria-labelledby="students-title">
   <header class="page-header">
-    <h1 id="users-title">Korisnici</h1>
-    <p>Upravljajte nalozima nastavnika.</p>
+    <h1 id="students-title">Učenici</h1>
+    <p>Upravljajte registrovanim učenicima.</p>
   </header>
 
   <div class="toolbar">
@@ -10,12 +10,13 @@
         <circle cx="10.5" cy="10.5" r="6.5" />
         <path d="m15.5 15.5 5 5" />
       </svg>
-      <label class="visually-hidden" for="users-search">Pretraži korisnike</label>
+      <label class="visually-hidden" for="students-search">Pretraži učenike</label>
       <input
-        id="users-search"
+        id="students-search"
         type="search"
         autocomplete="off"
-        placeholder="Pretraži po imenu ili emailu..."
+        maxlength="100"
+        placeholder="Pretraži po imenu ili korisničkom imenu..."
         [value]="searchValue()"
         (input)="updateSearch($event)"
       />
@@ -33,59 +34,60 @@
       }
     </div>
 
-    <a class="add-button" routerLink="/app/users/new">
+    <a class="add-button" routerLink="/app/students/new">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M12 5v14M5 12h14" />
       </svg>
-      Dodaj korisnika
+      Dodaj učenika
     </a>
   </div>
 
-  <section class="table-card" aria-label="Lista korisnika" [attr.aria-busy]="usersStore.loading()">
-    @if (usersStore.error(); as error) {
+  <section class="table-card" aria-label="Lista učenika" [attr.aria-busy]="studentsStore.loading()">
+    @if (studentsStore.error(); as error) {
       <div class="state-message state-message--error" role="alert">
         <p>{{ error }}</p>
         <button type="button" (click)="retry()">Pokušaj ponovo</button>
       </div>
-    } @else if (usersStore.loading() && usersStore.users().length === 0) {
+    } @else if (studentsStore.loading() && studentsStore.students().length === 0) {
       <div class="state-message" role="status">
         <span class="loading-indicator" aria-hidden="true"></span>
-        <p>Učitavanje korisnika…</p>
+        <p>Učitavanje učenika…</p>
       </div>
     } @else {
-      @if (usersStore.users().length === 0) {
+      @if (studentsStore.students().length === 0) {
         <div class="state-message">
-          @if (usersStore.search()) {
-            <p>Nema korisnika koji odgovaraju pretrazi.</p>
+          @if (studentsStore.search()) {
+            <p>Nema učenika koji odgovaraju pretrazi.</p>
           } @else {
-            <p>Nema korisnika za prikaz.</p>
+            <p>Nema učenika za prikaz.</p>
           }
         </div>
       } @else {
-        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela korisnika">
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela učenika">
           <table>
             <thead>
               <tr>
                 <th scope="col">Ime i prezime</th>
-                <th scope="col">Email</th>
-                <th scope="col">Uloga</th>
+                <th scope="col">Korisničko ime</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
-              @for (user of usersStore.users(); track user.id) {
-                <tr
-                  tabindex="0"
-                  [attr.aria-label]="'Otvori detalje korisnika ' + user.name"
-                  (click)="openUser(user.id)"
-                  (keydown)="handleRowKeydown($event, user.id)"
-                >
-                  <td class="user-name">{{ user.name }}</td>
-                  <td>{{ user.email }}</td>
-                  <td>
-                    <span class="role-badge">{{ user.role }}</span>
+              @for (student of studentsStore.students(); track student.id) {
+                <tr>
+                  <td class="student-name">
+                    <a
+                      class="student-link"
+                      [routerLink]="['/app/students', student.id]"
+                      [attr.aria-label]="
+                        'Otvori detalje učenika ' + student.firstName + ' ' + student.lastName
+                      "
+                    >
+                      {{ student.firstName }} {{ student.lastName }}
+                    </a>
                   </td>
-                  <td><clq-active-status-badge [isActive]="user.isActive" /></td>
+                  <td>{{ student.username }}</td>
+                  <td><clq-active-status-badge [isActive]="student.isActive" /></td>
                 </tr>
               }
             </tbody>
@@ -93,17 +95,17 @@
         </div>
       }
 
-      <footer class="pagination" aria-label="Stranice korisnika">
+      <footer class="pagination" aria-label="Stranice učenika">
         <div class="page-size-control">
-          <label for="users-page-size">Stavki po stranici:</label>
+          <label for="students-page-size">Stavki po stranici:</label>
           <select
-            id="users-page-size"
-            [value]="usersStore.pageSize()"
-            [disabled]="usersStore.loading()"
+            id="students-page-size"
+            [value]="studentsStore.pageSize()"
+            [disabled]="studentsStore.loading()"
             (change)="changePageSize($event)"
           >
             @for (pageSize of pageSizeOptions; track pageSize) {
-              <option [value]="pageSize" [selected]="pageSize === usersStore.pageSize()">
+              <option [value]="pageSize" [selected]="pageSize === studentsStore.pageSize()">
                 {{ pageSize }}
               </option>
             }
@@ -113,13 +115,13 @@
         <div class="pagination-summary">
           <p aria-live="polite">
             {{ firstVisibleItem() }}–{{ lastVisibleItem() }} od
-            {{ usersStore.pagination().totalItems }}
+            {{ studentsStore.pagination().totalItems }}
           </p>
           <div class="pagination-actions">
             <button
               type="button"
               aria-label="Prethodna stranica"
-              [disabled]="usersStore.pageIndex() === 0 || usersStore.loading()"
+              [disabled]="studentsStore.pageIndex() === 0 || studentsStore.loading()"
               (click)="previousPage()"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -127,15 +129,15 @@
               </svg>
             </button>
             <span class="current-page">
-              {{ usersStore.pagination().totalPages === 0 ? 0 : usersStore.pageIndex() + 1 }} /
-              {{ usersStore.pagination().totalPages }}
+              {{ studentsStore.pagination().totalPages === 0 ? 0 : studentsStore.pageIndex() + 1 }}
+              / {{ studentsStore.pagination().totalPages }}
             </span>
             <button
               type="button"
               aria-label="Sljedeća stranica"
               [disabled]="
-                usersStore.pageIndex() + 1 >= usersStore.pagination().totalPages ||
-                usersStore.loading()
+                studentsStore.pageIndex() + 1 >= studentsStore.pagination().totalPages ||
+                studentsStore.loading()
               "
               (click)="nextPage()"
             >

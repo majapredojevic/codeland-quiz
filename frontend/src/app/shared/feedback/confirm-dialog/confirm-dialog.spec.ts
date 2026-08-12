@@ -1,24 +1,24 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 
-import { UserConfirmDialog, UserConfirmDialogData } from './user-confirm-dialog';
+import { ConfirmDialog, ConfirmDialogData } from './confirm-dialog';
 
-describe('UserConfirmDialog', () => {
-  let dialogData: UserConfirmDialogData;
+describe('ConfirmDialog', () => {
+  let dialogData: ConfirmDialogData;
   let close: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     dialogData = {
       title: 'Deaktivirati korisnika?',
       message:
-        '"Milica Milić" više neće moći da se prijavi u aplikaciju.\nPostojeći podaci i istorija biće sačuvani.',
+        '„Milica Milić“ više neće moći da se prijavi u aplikaciju.\nPostojeći podaci i istorija biće sačuvani.',
       confirmLabel: 'Deaktiviraj',
       tone: 'destructive',
     };
     close = vi.fn();
 
     await TestBed.configureTestingModule({
-      imports: [UserConfirmDialog],
+      imports: [ConfirmDialog],
       providers: [
         { provide: MAT_DIALOG_DATA, useFactory: () => dialogData },
         { provide: MatDialogRef, useValue: { close } },
@@ -27,7 +27,7 @@ describe('UserConfirmDialog', () => {
   });
 
   function createDialog(): HTMLElement {
-    const fixture = TestBed.createComponent(UserConfirmDialog);
+    const fixture = TestBed.createComponent(ConfirmDialog);
     fixture.detectChanges();
 
     return fixture.nativeElement as HTMLElement;

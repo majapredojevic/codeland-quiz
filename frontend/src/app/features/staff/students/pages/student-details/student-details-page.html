@@ -1,0 +1,182 @@
+<section class="student-details-page" aria-labelledby="student-details-title">
+  @if (invalidId()) {
+    <div class="page-state" role="alert">
+      <h1 id="student-details-title">Učenik nije pronađen</h1>
+      <p>Adresa učenika nije ispravna.</p>
+      <a routerLink="/app/students">Nazad na učenike</a>
+    </div>
+  } @else if (studentsStore.detailLoading() && studentsStore.detail() === null) {
+    <div class="page-state" role="status">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <h1 id="student-details-title">Učitavanje učenika…</h1>
+    </div>
+  } @else if (studentsStore.detailError(); as error) {
+    <div class="page-state" role="alert">
+      <h1 id="student-details-title">Učenik nije dostupan</h1>
+      <p>{{ error }}</p>
+      <div class="page-state__actions">
+        <a routerLink="/app/students">Nazad na učenike</a>
+        <button type="button" (click)="retry()">Pokušaj ponovo</button>
+      </div>
+    </div>
+  } @else if (studentsStore.detail(); as student) {
+    <header class="page-header">
+      <a class="back-link" routerLink="/app/students">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m15 5-7 7 7 7" />
+        </svg>
+        Učenici
+      </a>
+      <div class="summary">
+        <div>
+          <h1 id="student-details-title">{{ student.firstName }} {{ student.lastName }}</h1>
+          <p>@{{ student.username }}</p>
+        </div>
+        <clq-active-status-badge [isActive]="student.isActive" />
+      </div>
+    </header>
+
+    <div class="sections">
+      <section class="content-card" aria-labelledby="student-data-title">
+        <header class="card-header">
+          <div>
+            <h2 id="student-data-title">Podaci učenika</h2>
+            <p>Izmijenite osnovne podatke učenika.</p>
+          </div>
+        </header>
+
+        <form novalidate [attr.aria-busy]="isSaving()" (submit)="save($event)">
+          <div class="form-grid">
+            <div class="field-group">
+              <label for="student-first-name">Ime</label>
+              <input
+                id="student-first-name"
+                type="text"
+                autocomplete="given-name"
+                aria-required="true"
+                [formField]="studentForm.firstName"
+                [attr.aria-invalid]="firstNameError() !== null"
+                [attr.aria-describedby]="firstNameError() ? 'student-first-name-error' : null"
+                (input)="clearFieldRequestError()"
+              />
+              @if (firstNameError(); as error) {
+                <p id="student-first-name-error" class="field-error">{{ error }}</p>
+              }
+            </div>
+
+            <div class="field-group">
+              <label for="student-last-name">Prezime</label>
+              <input
+                id="student-last-name"
+                type="text"
+                autocomplete="family-name"
+                aria-required="true"
+                [formField]="studentForm.lastName"
+                [attr.aria-invalid]="lastNameError() !== null"
+                [attr.aria-describedby]="lastNameError() ? 'student-last-name-error' : null"
+                (input)="clearFieldRequestError()"
+              />
+              @if (lastNameError(); as error) {
+                <p id="student-last-name-error" class="field-error">{{ error }}</p>
+              }
+            </div>
+
+            <div class="field-group username-field">
+              <label for="student-username">Korisničko ime</label>
+              <input
+                id="student-username"
+                type="text"
+                autocomplete="username"
+                autocapitalize="none"
+                aria-required="true"
+                spellcheck="false"
+                [formField]="studentForm.username"
+                [attr.aria-invalid]="usernameError() !== null"
+                [attr.aria-describedby]="
+                  usernameError()
+                    ? 'student-username-help student-username-error'
+                    : 'student-username-help'
+                "
+                (input)="clearUsernameError()"
+              />
+              <p id="student-username-help" class="field-help">
+                Mala slova i cifre; tačka, crtica i donja crta dozvoljene su unutar imena.
+              </p>
+              @if (usernameError(); as error) {
+                <p id="student-username-error" class="field-error">{{ error }}</p>
+              }
+            </div>
+          </div>
+
+          @if (saveError(); as error) {
+            <p class="request-error" role="alert">{{ error }}</p>
+          }
+
+          <div class="form-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="isSaving() || !isDirty()"
+              (click)="restoreForm()"
+            >
+              Otkaži
+            </button>
+            <button
+              class="primary-button"
+              type="submit"
+              [disabled]="!isFormValid() || !isDirty() || isSaving()"
+            >
+              {{ isSaving() ? 'Čuvanje…' : 'Sačuvaj izmjene' }}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="content-card" aria-labelledby="account-status-title">
+        <header class="card-header">
+          <div>
+            <h2 id="account-status-title">Status naloga</h2>
+          </div>
+          <clq-active-status-badge [isActive]="student.isActive" />
+        </header>
+
+        <div class="action-row">
+          <div>
+            @if (student.isActive) {
+              <p class="action-title">
+                Učenik može učestvovati kao registrovani učesnik u kvizovima.
+              </p>
+              <p class="action-description">
+                Deaktivacijom se čuvaju postojeći podaci i istorija učenika.
+              </p>
+            } @else {
+              <p class="action-title">
+                Učenik trenutno ne može učestvovati kao registrovani učesnik.
+              </p>
+            }
+          </div>
+
+          @if (student.isActive) {
+            <button
+              class="destructive-button"
+              type="button"
+              [disabled]="isChangingStatus()"
+              (click)="confirmDeactivation()"
+            >
+              {{ isChangingStatus() ? 'Deaktiviranje…' : 'Deaktiviraj nalog' }}
+            </button>
+          } @else {
+            <button
+              class="positive-button"
+              type="button"
+              [disabled]="isChangingStatus()"
+              (click)="activate()"
+            >
+              {{ isChangingStatus() ? 'Aktiviranje…' : 'Aktiviraj nalog' }}
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+  }
+</section>

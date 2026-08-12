@@ -15,10 +15,10 @@ import { firstValueFrom } from 'rxjs';
 
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
 import {
-  UserConfirmDialog,
-  UserConfirmDialogData,
-} from '../../components/user-confirm-dialog/user-confirm-dialog';
-import { UserStatusBadge } from '../../components/user-status-badge/user-status-badge';
+  ConfirmDialog,
+  ConfirmDialogData,
+} from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
+import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
 import {
   TemporaryPasswordDialog,
   TemporaryPasswordDialogData,
@@ -28,7 +28,7 @@ import type { UserDetail } from '../../data-access/users.models';
 
 @Component({
   selector: 'clq-user-details-page',
-  imports: [RouterLink, UserStatusBadge],
+  imports: [RouterLink, ActiveStatusBadge],
   templateUrl: './user-details-page.html',
   styleUrl: './user-details-page.scss',
 })
@@ -199,7 +199,7 @@ export class UserDetailsPage implements OnInit {
       return;
     }
 
-    const data: UserConfirmDialogData = {
+    const data: ConfirmDialogData = {
       title: 'Deaktivirati korisnika?',
       message: `„${user.name}” više neće moći da se prijavi u aplikaciju. Postojeći podaci i istorija biće sačuvani.`,
       confirmLabel: 'Deaktiviraj',
@@ -207,7 +207,7 @@ export class UserDetailsPage implements OnInit {
     };
     const confirmed = await firstValueFrom(
       this.dialog
-        .open(UserConfirmDialog, {
+        .open(ConfirmDialog, {
           data,
           width: '30rem',
           maxWidth: 'calc(100vw - 2rem)',
@@ -237,7 +237,7 @@ export class UserDetailsPage implements OnInit {
       return;
     }
 
-    const data: UserConfirmDialogData = {
+    const data: ConfirmDialogData = {
       title: 'Resetovati lozinku?',
       message:
         'Biće generisana nova privremena lozinka. Korisnik će je morati promijeniti pri sljedećoj prijavi.',
@@ -246,7 +246,7 @@ export class UserDetailsPage implements OnInit {
     };
     const confirmed = await firstValueFrom(
       this.dialog
-        .open(UserConfirmDialog, {
+        .open(ConfirmDialog, {
           data,
           width: '30rem',
           maxWidth: 'calc(100vw - 2rem)',

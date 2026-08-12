@@ -40,6 +40,7 @@ describe('StaffShell', () => {
       providers: [
         provideRouter([
           { path: 'app/dashboard', component: EmptyPage },
+          { path: 'app/students', component: EmptyPage },
           { path: 'app/users', component: EmptyPage },
           { path: 'app/account/password', component: EmptyPage },
           { path: 'change-password', component: EmptyPage },
@@ -122,14 +123,31 @@ describe('StaffShell', () => {
     expect(disabledItems.map((item) => item.textContent)).toEqual(
       expect.arrayContaining([
         expect.stringContaining('Kvizovi'),
-        expect.stringContaining('Učenici'),
         expect.stringContaining('Rezultati'),
       ]),
     );
-    expect(disabledItems).toHaveLength(3);
+    expect(disabledItems).toHaveLength(2);
     expect(disabledItems.every((item) => !item.hasAttribute('href'))).toBe(true);
     expect(navigation?.textContent).not.toContain('Teme');
     expect(navigation?.textContent).not.toContain('Sesije');
+  });
+
+  it.each([admin, teacher])('shows an active Učenici link to $role users', async (staffUser) => {
+    userState.set(staffUser);
+    const { fixture, element } = createShell();
+    const studentsLink = Array.from(element.querySelectorAll<HTMLAnchorElement>('nav a')).find(
+      (link) => link.textContent?.trim() === 'Učenici',
+    );
+
+    expect(studentsLink?.getAttribute('href')).toBe('/app/students');
+    expect(studentsLink?.getAttribute('aria-disabled')).toBeNull();
+    expect(studentsLink?.textContent).not.toContain('Uskoro');
+
+    await TestBed.inject(Router).navigateByUrl('/app/students');
+    fixture.detectChanges();
+
+    expect(studentsLink?.classList).toContain('is-active');
+    expect(studentsLink?.getAttribute('aria-current')).toBe('page');
   });
 
   it('renders initials, name, and role inside one native horizontal profile trigger', () => {

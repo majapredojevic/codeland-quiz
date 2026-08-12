@@ -34,7 +34,7 @@
         </div>
         <div class="summary-badges">
           <span class="role-badge">{{ user.role }}</span>
-          <clq-user-status-badge [isActive]="user.isActive" />
+          <clq-active-status-badge [isActive]="user.isActive" />
         </div>
       </div>
     </header>
@@ -127,7 +127,7 @@
             <h2 id="account-status-title">Status naloga</h2>
             <p>Kontrolišite mogućnost prijave korisnika.</p>
           </div>
-          <clq-user-status-badge [isActive]="user.isActive" />
+          <clq-active-status-badge [isActive]="user.isActive" />
         </header>
 
         <div class="action-row">

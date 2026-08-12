@@ -1,14 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 
-import { UserStatusBadge } from './user-status-badge';
+import { ActiveStatusBadge } from './active-status-badge';
 
-describe('UserStatusBadge', () => {
+describe('ActiveStatusBadge', () => {
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [UserStatusBadge] }).compileComponents();
+    await TestBed.configureTestingModule({ imports: [ActiveStatusBadge] }).compileComponents();
   });
 
   function render(isActive: boolean): HTMLElement {
-    const fixture = TestBed.createComponent(UserStatusBadge);
+    const fixture = TestBed.createComponent(ActiveStatusBadge);
     fixture.componentRef.setInput('isActive', isActive);
     fixture.detectChanges();
 

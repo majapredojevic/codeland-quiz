@@ -1,0 +1,85 @@
+<section class="student-create-page" aria-labelledby="student-create-title">
+  <header class="page-header">
+    <a class="back-link" routerLink="/app/students">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m15 5-7 7 7 7" />
+      </svg>
+      Učenici
+    </a>
+    <h1 id="student-create-title">Novi učenik</h1>
+    <p>Dodajte novog učenika u CodeLand Quiz.</p>
+  </header>
+
+  <form class="form-card" novalidate [attr.aria-busy]="isSubmitting()" (submit)="submit($event)">
+    <div class="form-grid">
+      <div class="field-group">
+        <label for="new-student-first-name">Ime</label>
+        <input
+          id="new-student-first-name"
+          type="text"
+          autocomplete="given-name"
+          aria-required="true"
+          [formField]="studentForm.firstName"
+          [attr.aria-invalid]="firstNameError() !== null"
+          [attr.aria-describedby]="firstNameError() ? 'new-student-first-name-error' : null"
+          (input)="clearFieldRequestError()"
+        />
+        @if (firstNameError(); as error) {
+          <p class="field-error" id="new-student-first-name-error">{{ error }}</p>
+        }
+      </div>
+
+      <div class="field-group">
+        <label for="new-student-last-name">Prezime</label>
+        <input
+          id="new-student-last-name"
+          type="text"
+          autocomplete="family-name"
+          aria-required="true"
+          [formField]="studentForm.lastName"
+          [attr.aria-invalid]="lastNameError() !== null"
+          [attr.aria-describedby]="lastNameError() ? 'new-student-last-name-error' : null"
+          (input)="clearFieldRequestError()"
+        />
+        @if (lastNameError(); as error) {
+          <p class="field-error" id="new-student-last-name-error">{{ error }}</p>
+        }
+      </div>
+
+      <div class="field-group field-group--full">
+        <label for="new-student-username">Korisničko ime</label>
+        <input
+          id="new-student-username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          aria-required="true"
+          spellcheck="false"
+          [formField]="studentForm.username"
+          [attr.aria-invalid]="usernameError() !== null"
+          [attr.aria-describedby]="
+            usernameError() ? 'new-student-username-error' : 'new-student-username-help'
+          "
+          (input)="clearUsernameError()"
+        />
+        <p class="field-help" id="new-student-username-help">
+          3–80 znakova: slova, brojevi, tačke, donje crte i crtice.
+        </p>
+        @if (usernameError(); as error) {
+          <p class="field-error" id="new-student-username-error">{{ error }}</p>
+        }
+      </div>
+    </div>
+
+    @if (requestError(); as error) {
+      <p class="request-error" role="alert">{{ error }}</p>
+    }
+
+    <div class="form-actions">
+      <a class="secondary-button" routerLink="/app/students">Otkaži</a>
+      <button class="primary-button" type="submit" [disabled]="isSubmitting()">
+        {{ isSubmitting() ? 'Dodavanje…' : 'Dodaj učenika' }}
+      </button>
+    </div>
+  </form>
+</section>
