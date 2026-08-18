@@ -186,12 +186,13 @@
                 <th scope="col">Pitanja</th>
                 <th scope="col">Verzija</th>
                 <th scope="col">Status</th>
+                <th scope="col">Radnje</th>
               </tr>
             </thead>
             <tbody>
               @if (store.quizzes().length === 0) {
                 <tr class="empty-row">
-                  <td colspan="5">{{ quizEmptyMessage() }}</td>
+                  <td colspan="6">{{ quizEmptyMessage() }}</td>
                 </tr>
               } @else {
                 @for (quiz of store.quizzes(); track quiz.id) {
@@ -208,6 +209,29 @@
                     <td>{{ quiz.questionCount }}</td>
                     <td>v{{ quiz.version }}</td>
                     <td><clq-active-status-badge [isActive]="quiz.isActive" /></td>
+                    <td>
+                      <span
+                        class="quiz-play-control"
+                        [attr.title]="quiz.isActive ? null : 'Aktivirajte kviz prije igranja.'"
+                      >
+                        <button
+                          class="quiz-play-action"
+                          type="button"
+                          [disabled]="!quiz.isActive || launcher.startingQuizId() !== null"
+                          [attr.aria-describedby]="
+                            quiz.isActive ? null : 'quiz-play-help-' + quiz.id
+                          "
+                          (click)="playQuiz(quiz, $event)"
+                        >
+                          {{ launcher.startingQuizId() === quiz.id ? 'Pokrećem…' : 'Igraj' }}
+                        </button>
+                        @if (!quiz.isActive) {
+                          <span class="visually-hidden" [id]="'quiz-play-help-' + quiz.id">
+                            Aktivirajte kviz prije igranja.
+                          </span>
+                        }
+                      </span>
+                    </td>
                   </tr>
                 }
               }

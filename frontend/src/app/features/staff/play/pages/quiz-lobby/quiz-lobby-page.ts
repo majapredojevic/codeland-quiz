@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Component, DestroyRef, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { QRCodeComponent } from 'angularx-qrcode';
@@ -10,17 +10,23 @@ import {
   ConfirmDialogData,
 } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { KodaAvatar } from '../../../../../shared/game/koda-avatar/koda-avatar';
 import { ParticipantCard } from '../../components/participant-card/participant-card';
 import { LobbyStore } from '../../data-access/lobby.store';
-import { PublicSessionQuestionOption, SessionParticipant } from '../../data-access/play.models';
+import {
+  FinalLeaderboardEntry,
+  PublicSessionQuestionOption,
+  SessionParticipant,
+} from '../../data-access/play.models';
 import { QuizSessionsApiService } from '../../data-access/quiz-sessions-api.service';
 
 const PARTICIPANT_REFRESH_MS = 1_000;
 const COUNTDOWN_REFRESH_MS = 250;
+const PODIUM_REVEAL_INTERVAL_MS = 900;
 
 @Component({
   selector: 'clq-quiz-lobby-page',
-  imports: [ParticipantCard, QRCodeComponent, RouterLink],
+  imports: [KodaAvatar, ParticipantCard, QRCodeComponent, RouterLink],
   providers: [LobbyStore, QuizSessionsApiService],
   templateUrl: './quiz-lobby-page.html',
   styleUrl: './quiz-lobby-page.scss',
@@ -33,11 +39,25 @@ export class QuizLobbyPage implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
+  private podiumRevealTimers: ReturnType<typeof setTimeout>[] = [];
   private automaticCloseQuestionId: number | null = null;
 
   protected readonly store = inject(LobbyStore);
   protected readonly remainingSeconds = signal(0);
   protected readonly imageUnavailable = signal(false);
+  protected readonly revealedPodiumCount = signal(0);
+  protected readonly podiumEntries = computed(() =>
+    [...(this.store.finalResult()?.topThree ?? [])].sort((left, right) => right.rank - left.rank),
+  );
+  protected readonly revealedPodiumEntries = computed(() =>
+    this.podiumEntries().slice(0, this.revealedPodiumCount()),
+  );
+  protected readonly podiumRevealComplete = computed(
+    () => this.revealedPodiumCount() >= this.podiumEntries().length,
+  );
+  protected readonly winnerRevealed = computed(() =>
+    this.revealedPodiumEntries().some(({ rank }) => rank === 1),
+  );
   protected sessionId: number | null = null;
   protected invalidSessionId = false;
 
@@ -59,12 +79,14 @@ export class QuizLobbyPage implements OnInit, OnDestroy {
     this.destroyRef.onDestroy(() => {
       this.clearRefreshTimer();
       this.clearCountdownTimer();
+      this.clearPodiumRevealTimers();
     });
   }
 
   ngOnDestroy(): void {
     this.clearRefreshTimer();
     this.clearCountdownTimer();
+    this.clearPodiumRevealTimers();
     this.store.clear();
   }
 
@@ -129,6 +151,7 @@ export class QuizLobbyPage implements OnInit, OnDestroy {
       if (session?.currentQuestionOrder === session?.questionCount) {
         await this.store.finishSession(this.sessionId);
         this.clearRefreshTimer();
+        this.startPodiumReveal();
         return;
       }
 
@@ -151,8 +174,15 @@ export class QuizLobbyPage implements OnInit, OnDestroy {
     return String.fromCharCode(65 + index);
   }
 
-  protected avatarInitials(nickname: string): string {
-    return Array.from(nickname.trim()).slice(0, 2).join('').toLocaleUpperCase('bs');
+  protected completePodiumReveal(): void {
+    this.clearPodiumRevealTimers();
+    this.revealedPodiumCount.set(this.podiumEntries().length);
+  }
+
+  protected podiumLabel(entry: FinalLeaderboardEntry): string {
+    if (entry.rank === 1) return '🥇 1. MJESTO';
+    if (entry.rank === 2) return '🥈 2. mjesto';
+    return '🥉 3. mjesto';
   }
 
   protected sortedOptions(): PublicSessionQuestionOption[] {
@@ -172,6 +202,7 @@ export class QuizLobbyPage implements OnInit, OnDestroy {
       this.prepareQuestionPresentation();
     } else if (session?.status === 'FINISHED') {
       this.clearRefreshTimer();
+      this.startPodiumReveal();
     }
   }
 
@@ -218,5 +249,35 @@ export class QuizLobbyPage implements OnInit, OnDestroy {
     if (this.countdownTimer === null) return;
     clearInterval(this.countdownTimer);
     this.countdownTimer = null;
+  }
+
+  private startPodiumReveal(): void {
+    this.clearPodiumRevealTimers();
+    this.revealedPodiumCount.set(0);
+    const entries = this.podiumEntries();
+    if (entries.length === 0) return;
+
+    const matchMedia = this.document.defaultView?.matchMedia;
+    if (
+      typeof matchMedia === 'function' &&
+      matchMedia.call(this.document.defaultView, '(prefers-reduced-motion: reduce)').matches
+    ) {
+      this.revealedPodiumCount.set(entries.length);
+      return;
+    }
+
+    entries.forEach((_, index) => {
+      this.podiumRevealTimers.push(
+        setTimeout(
+          () => this.revealedPodiumCount.set(index + 1),
+          350 + index * PODIUM_REVEAL_INTERVAL_MS,
+        ),
+      );
+    });
+  }
+
+  private clearPodiumRevealTimers(): void {
+    this.podiumRevealTimers.forEach((timer) => clearTimeout(timer));
+    this.podiumRevealTimers = [];
   }
 }

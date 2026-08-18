@@ -160,9 +160,9 @@ describe('QuizCreatePage', () => {
     },
   );
 
-  it('normalizes create request, maps Bez teme to null, notifies, and navigates to canonical details', async () => {
+  it('normalizes create request, notifies, and opens Questions for the new quiz', async () => {
     const element = await setup();
-    create.mockResolvedValue({ id: 17 });
+    create.mockResolvedValue({ id: 42 });
     setValue(element, '#new-quiz-title', '  Petlje  ');
     setValue(element, '#new-quiz-description', '   ');
     setValue(element, '#new-quiz-topic', 'none');
@@ -175,7 +175,7 @@ describe('QuizCreatePage', () => {
       topicId: null,
     });
     expect(notifySuccess).toHaveBeenCalledWith('Kviz je uspješno kreiran.');
-    expect(navigateByUrl).toHaveBeenCalledWith('/app/quizzes/17');
+    expect(navigateByUrl).toHaveBeenCalledWith('/app/quizzes/42?tab=questions');
   });
 
   it('allows a topic beyond the first backend page to be selected by name and sends its internal ID', async () => {

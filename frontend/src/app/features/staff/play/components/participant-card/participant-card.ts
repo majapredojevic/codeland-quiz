@@ -1,9 +1,11 @@
 import { Component, input, output } from '@angular/core';
 
+import { KodaAvatar } from '../../../../../shared/game/koda-avatar/koda-avatar';
 import { SessionParticipant } from '../../data-access/play.models';
 
 @Component({
   selector: 'clq-participant-card',
+  imports: [KodaAvatar],
   templateUrl: './participant-card.html',
   styleUrl: './participant-card.scss',
 })
@@ -12,9 +14,4 @@ export class ParticipantCard {
   readonly removing = input(false);
   readonly removalAllowed = input(true);
   readonly remove = output<SessionParticipant>();
-
-  protected initials(nickname: string): string {
-    const characters = Array.from(nickname.trim());
-    return characters.slice(0, 2).join('').toLocaleUpperCase('bs');
-  }
 }

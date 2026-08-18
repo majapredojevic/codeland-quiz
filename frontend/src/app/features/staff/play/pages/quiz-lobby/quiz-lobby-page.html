@@ -134,29 +134,34 @@
           </header>
 
           @if (finalResult.topThree.length > 0) {
-            <div class="podium" role="list" aria-label="Najbolja tri igrača">
-              @for (entry of finalResult.topThree; track entry.participantId) {
-                <article
-                  class="podium-place"
-                  role="listitem"
-                  [attr.data-rank]="entry.rank"
-                  [attr.data-avatar-key]="entry.avatarKey"
-                >
-                  <span class="podium-rank">{{ entry.rank }}</span>
-                  <span class="game-avatar" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" focusable="false">
-                      <path
-                        d="M14 18.5c0-6.1 4.5-10.5 10-10.5s10 4.4 10 10.5v7c0 7-4.1 12.5-10 12.5s-10-5.5-10-12.5Z"
-                      />
-                      <circle cx="20" cy="23" r="1.7" />
-                      <circle cx="28" cy="23" r="1.7" />
-                      <path d="M20 29c2.4 1.8 5.6 1.8 8 0" />
-                    </svg>
-                    <span>{{ avatarInitials(entry.nickname) }}</span>
-                  </span>
-                  <strong>{{ entry.nickname }}</strong>
-                  <span>{{ entry.totalScore }} bodova</span>
-                </article>
+            <div class="podium-reveal" aria-live="polite">
+              @if (winnerRevealed()) {
+                <div class="podium-confetti" aria-hidden="true">
+                  @for (piece of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; track piece) {
+                    <i></i>
+                  }
+                </div>
+              }
+              <div class="podium" role="list" aria-label="Najbolja tri igrača">
+                @for (entry of revealedPodiumEntries(); track entry.participantId) {
+                  <article
+                    class="podium-place is-revealed"
+                    role="listitem"
+                    [attr.data-rank]="entry.rank"
+                  >
+                    <span class="podium-rank-label">{{ podiumLabel(entry) }}</span>
+                    <span class="game-avatar" aria-hidden="true">
+                      <clq-koda-avatar [avatarKey]="entry.avatarKey" />
+                    </span>
+                    <strong>{{ entry.nickname }}</strong>
+                    <span>{{ entry.totalScore }} bodova</span>
+                  </article>
+                }
+              </div>
+              @if (!podiumRevealComplete()) {
+                <button class="skip-reveal" type="button" (click)="completePodiumReveal()">
+                  Prikaži cijeli podij
+                </button>
               }
             </div>
           } @else {
@@ -193,21 +198,23 @@
         </header>
 
         <section class="question-stage" aria-labelledby="question-text">
-          @if (store.questionResult()) {
-            <span class="reveal-label">Rezultat pitanja</span>
-          }
-          <h2 id="question-text" class="question-text">{{ question.questionText }}</h2>
+          <div class="presentation-question-prompt">
+            @if (store.questionResult()) {
+              <span class="reveal-label">Rezultat pitanja</span>
+            }
+            <h2 id="question-text" class="question-text">{{ question.questionText }}</h2>
 
-          @if (question.imagePath && !imageUnavailable()) {
-            <img
-              class="question-image"
-              [src]="question.imagePath"
-              alt="Slika uz pitanje"
-              (error)="markImageUnavailable()"
-            />
-          } @else if (question.imagePath && imageUnavailable()) {
-            <p class="image-fallback">Slika nije dostupna.</p>
-          }
+            @if (question.imagePath && !imageUnavailable()) {
+              <img
+                class="question-image"
+                [src]="question.imagePath"
+                alt="Slika uz pitanje"
+                (error)="markImageUnavailable()"
+              />
+            } @else if (question.imagePath && imageUnavailable()) {
+              <p class="image-fallback">Slika nije dostupna.</p>
+            }
+          </div>
 
           <div
             class="answer-grid"
@@ -267,15 +274,7 @@
                     >
                       <b>{{ entry.rank }}</b>
                       <i class="game-avatar" aria-hidden="true">
-                        <svg viewBox="0 0 48 48" focusable="false">
-                          <path
-                            d="M14 18.5c0-6.1 4.5-10.5 10-10.5s10 4.4 10 10.5v7c0 7-4.1 12.5-10 12.5s-10-5.5-10-12.5Z"
-                          />
-                          <circle cx="20" cy="23" r="1.7" />
-                          <circle cx="28" cy="23" r="1.7" />
-                          <path d="M20 29c2.4 1.8 5.6 1.8 8 0" />
-                        </svg>
-                        <span>{{ avatarInitials(entry.nickname) }}</span>
+                        <clq-koda-avatar [avatarKey]="entry.avatarKey" />
                       </i>
                       <strong>{{ entry.nickname }}</strong>
                       <small>{{ entry.totalScore }}</small>

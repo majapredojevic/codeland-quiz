@@ -4,10 +4,10 @@ import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
 
 import { AuthStore } from '../../../core/auth/auth.store';
-import { NotificationService } from '../../../shared/feedback/notification.service';
 import { PlayQuizCard } from '../play/components/play-quiz-card/play-quiz-card';
 import { PlayHubStore } from '../play/data-access/play-hub.store';
 import { PlayableQuiz } from '../play/data-access/play.models';
+import { QuizLaunchService } from '../play/data-access/quiz-launch.service';
 import { QuizSessionsApiService } from '../play/data-access/quiz-sessions-api.service';
 import { QuizzesApiService } from '../quizzes/data-access/quizzes-api.service';
 import { TopicsApiService } from '../quizzes/data-access/topics-api.service';
@@ -23,10 +23,10 @@ export class DashboardPage implements OnInit {
   private readonly authStore = inject(AuthStore);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly store = inject(PlayHubStore);
+  protected readonly launcher = inject(QuizLaunchService);
   protected readonly user = this.authStore.user;
 
   ngOnInit(): void {
@@ -53,15 +53,7 @@ export class DashboardPage implements OnInit {
   }
 
   protected async playQuiz(quiz: PlayableQuiz): Promise<void> {
-    if (this.store.startingQuizId() !== null) return;
-    try {
-      const sessionId = await this.store.createSession(quiz.id);
-      await this.router.navigate(['/app/sessions', sessionId]);
-    } catch {
-      this.notifications.error(
-        'Nije moguće pokrenuti kviz. Provjerite da li je aktivan i ima važeća pitanja.',
-      );
-    }
+    await this.launcher.launch(quiz.id);
   }
 
   protected lastPlayedLabel(value: string | null): string | null {

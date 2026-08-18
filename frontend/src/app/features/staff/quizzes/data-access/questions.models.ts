@@ -1,5 +1,7 @@
 export type QuestionType = 'TRUE_FALSE' | 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE';
 
+export const QUESTION_TEXT_MAX_LENGTH = 250;
+
 export interface QuestionOptionItem {
   id: number;
   optionText: string;

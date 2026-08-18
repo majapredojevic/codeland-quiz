@@ -103,7 +103,7 @@ export class QuizCreatePage implements OnInit {
         topicId: this.selectionToTopicId(value.topicSelection),
       });
       this.notifications.success('Kviz je uspješno kreiran.');
-      await this.router.navigateByUrl(`/app/quizzes/${quiz.id}`);
+      await this.router.navigateByUrl(`/app/quizzes/${quiz.id}?tab=questions`);
     } catch (error: unknown) {
       if (error instanceof HttpErrorResponse && error.status === 409) {
         this.compoundConflict.set(true);

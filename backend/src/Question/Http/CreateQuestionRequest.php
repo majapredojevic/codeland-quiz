@@ -8,13 +8,13 @@ use CodeLandQuiz\DTO\CreateQuestionDTO;
 use CodeLandQuiz\DTO\QuestionOptionInputDTO;
 use CodeLandQuiz\Http\JsonRequest;
 use CodeLandQuiz\Model\QuestionType;
+use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\QuestionImage\QuestionImagePath;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 
 final class CreateQuestionRequest
 {
-    private const MAX_QUESTION_TEXT_LENGTH = 1000;
     private const MIN_TIME_LIMIT_SECONDS = 30;
     private const MAX_TIME_LIMIT_SECONDS = 300;
     private const MIN_POINTS = 1;
@@ -73,17 +73,7 @@ final class CreateQuestionRequest
             throw new InvalidArgumentException('Question text must be a string.');
         }
 
-        $questionText = trim($value);
-
-        if ($questionText === '') {
-            throw new InvalidArgumentException('Question text cannot be empty.');
-        }
-
-        if (strlen($questionText) > self::MAX_QUESTION_TEXT_LENGTH) {
-            throw new InvalidArgumentException('Question text cannot exceed 1000 characters.');
-        }
-
-        return $questionText;
+        return QuestionContentValidator::normalizeQuestionText($value);
     }
 
     private static function questionTypeValue(mixed $value): QuestionType

@@ -20,6 +20,12 @@ export const routes: Routes = [
       import('./features/public/login/login-page').then(({ LoginPage }) => LoginPage),
   },
   {
+    path: 'join',
+    pathMatch: 'full',
+    loadComponent: () =>
+      import('./features/public/join/join-page').then(({ JoinPage }) => JoinPage),
+  },
+  {
     path: 'change-password',
     pathMatch: 'full',
     canActivate: [changePasswordPageGuard],
@@ -94,7 +100,7 @@ export const routes: Routes = [
   {
     path: 'join/:gamePin',
     pathMatch: 'full',
-    // TODO: Replace this temporary redirect when the participant join feature is implemented.
-    redirectTo: '',
+    loadComponent: () =>
+      import('./features/public/player/player-page').then(({ PlayerPage }) => PlayerPage),
   },
 ];

@@ -11,9 +11,6 @@
         Odaberite omiljeni kviz, okupite učenike uz PIN ili QR kod i pretvorite učenje u zajedničku
         avanturu.
       </p>
-      @if (user(); as currentUser) {
-        <span class="welcome">Dobro došli, {{ currentUser.name }}.</span>
-      }
     </div>
 
     <div class="hero-illustration" aria-hidden="true">
@@ -54,8 +51,8 @@
             <clq-play-quiz-card
               [quiz]="quiz"
               [lastPlayedLabel]="lastPlayedLabel(quiz.lastPlayedAt)"
-              [starting]="store.startingQuizId() === quiz.id"
-              [disabled]="store.startingQuizId() !== null"
+              [starting]="launcher.startingQuizId() === quiz.id"
+              [disabled]="launcher.startingQuizId() !== null"
               (play)="playQuiz($event)"
             />
           }
@@ -174,8 +171,8 @@
         @for (quiz of store.quizzes(); track quiz.id) {
           <clq-play-quiz-card
             [quiz]="quiz"
-            [starting]="store.startingQuizId() === quiz.id"
-            [disabled]="store.startingQuizId() !== null"
+            [starting]="launcher.startingQuizId() === quiz.id"
+            [disabled]="launcher.startingQuizId() !== null"
             (play)="playQuiz($event)"
           />
         }

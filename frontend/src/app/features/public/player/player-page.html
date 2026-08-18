@@ -1,0 +1,451 @@
+<div class="player-page">
+  <header class="player-header">
+    <a class="player-brand" routerLink="/" aria-label="CodeLand Quiz početna stranica">
+      <img ngSrc="/brand/logo.png" width="2088" height="796" priority alt="CodeLand" />
+    </a>
+
+    @if (store.participant(); as participant) {
+      <div class="player-identity" [attr.aria-label]="'Igrač ' + participant.nickname">
+        <span class="mini-koda" aria-hidden="true">
+          <clq-koda-avatar [avatarKey]="participant.avatarKey" />
+        </span>
+        <strong>{{ participant.nickname }}</strong>
+      </div>
+    }
+  </header>
+
+  <main class="player-main">
+    @if (store.phase() === 'JOIN') {
+      <section
+        class="join-experience"
+        [class.is-avatar-step]="step() === 'avatar'"
+        aria-labelledby="join-title"
+      >
+        @if (previewLoading()) {
+          <div class="player-state-card" aria-live="polite">
+            <span class="player-spinner" aria-hidden="true"></span>
+            <h1 id="join-title">Pronalazimo tvoju igru…</h1>
+          </div>
+        } @else if (previewError(); as error) {
+          <div class="player-state-card is-error" role="alert">
+            <span class="state-icon" aria-hidden="true">!</span>
+            <h1 id="join-title">Ups!</h1>
+            <p>{{ error }}</p>
+            <a class="primary-action" routerLink="/">Unesi drugi PIN</a>
+          </div>
+        } @else if (preview(); as game) {
+          <header class="game-preview">
+            <span>PIN {{ gamePin }}</span>
+            <h1 id="join-title">{{ game.session.quiz.title }}</h1>
+            <p>Spreman/na za igru? 🎉</p>
+          </header>
+
+          <div class="join-progress" aria-label="Koraci pridruživanja">
+            <span [class.is-active]="step() === 'identity'">1</span>
+            <i></i>
+            <span [class.is-active]="step() === 'details'">2</span>
+            <i></i>
+            <span [class.is-active]="step() === 'avatar'">3</span>
+          </div>
+
+          @if (step() === 'identity') {
+            <section class="join-step" aria-labelledby="identity-title">
+              <div class="step-copy">
+                <h2 id="identity-title" #stepHeading tabindex="-1">Kako se pridružuješ?</h2>
+                <p>Izaberi opciju koja ti odgovara.</p>
+              </div>
+              <div class="identity-choices">
+                <button type="button" (click)="chooseParticipantType('REGISTERED')">
+                  <span class="choice-icon" aria-hidden="true">@</span>
+                  <strong>Imam korisničko ime</strong>
+                  <small>Poveži rezultat sa svojim CodeLand profilom</small>
+                </button>
+                <button type="button" (click)="chooseParticipantType('GUEST')">
+                  <span class="choice-icon is-guest" aria-hidden="true">★</span>
+                  <strong>Nastavi kao gost</strong>
+                  <small>Igraj cijeli kviz bez korisničkog imena</small>
+                </button>
+              </div>
+            </section>
+          } @else if (step() === 'details') {
+            <section class="join-step details-step" aria-labelledby="details-title">
+              <button class="back-action" type="button" (click)="goBack()">← Nazad</button>
+              <div class="step-copy">
+                <h2 id="details-title" #stepHeading tabindex="-1">
+                  {{ participantType() === 'REGISTERED' ? 'Predstavi se' : 'Tvoj nadimak' }}
+                </h2>
+                <p>Tvoji prijatelji će vidjeti samo nadimak i Kodu.</p>
+              </div>
+
+              <div class="player-form">
+                @if (participantType() === 'REGISTERED') {
+                  <div class="field-group">
+                    <label for="player-username">Korisničko ime</label>
+                    <input
+                      id="player-username"
+                      type="text"
+                      autocomplete="username"
+                      spellcheck="false"
+                      [formControl]="usernameControl"
+                      [attr.aria-invalid]="usernameControl.touched && usernameControl.invalid"
+                      aria-describedby="username-help username-error"
+                    />
+                    <p id="username-help" class="field-help">
+                      Unesite svoje CodeLand korisničko ime.
+                    </p>
+                    @if (usernameControl.touched && usernameControl.invalid) {
+                      <p id="username-error" class="field-error" role="alert">
+                        Provjeri korisničko ime.
+                      </p>
+                    } @else if (joinErrorKind() === 'username') {
+                      <div id="username-error" class="field-error-block" role="alert">
+                        <strong>Korisničko ime nije pronađeno.</strong>
+                        <span>Provjeri unos ili nastavi kao gost.</span>
+                        <button type="button" (click)="useGuestInstead()">Nastavi kao gost</button>
+                      </div>
+                    }
+                  </div>
+                }
+
+                <div class="field-group">
+                  <label for="player-nickname">Kako želiš da se zoveš u igri?</label>
+                  <input
+                    id="player-nickname"
+                    type="text"
+                    autocomplete="nickname"
+                    maxlength="30"
+                    [formControl]="nicknameControl"
+                    [attr.aria-invalid]="
+                      (nicknameControl.touched && nicknameControl.invalid) ||
+                      joinErrorKind() === 'nickname'
+                    "
+                    aria-describedby="nickname-help nickname-error"
+                  />
+                  <p id="nickname-help" class="field-help">Od 2 do 30 znakova.</p>
+                  @if (nicknameControl.touched && nicknameControl.invalid) {
+                    <p id="nickname-error" class="field-error" role="alert">
+                      Nadimak mora imati od 2 do 30 znakova.
+                    </p>
+                  } @else if (joinErrorKind() === 'nickname') {
+                    <p id="nickname-error" class="field-error" role="alert">
+                      Ovaj nadimak je već zauzet. Izaberi drugi.
+                    </p>
+                  }
+                </div>
+
+                <button class="primary-action" type="button" (click)="continueToAvatars()">
+                  Izaberi Kodu →
+                </button>
+              </div>
+            </section>
+          } @else {
+            <section class="join-step avatar-step" aria-labelledby="avatar-title">
+              <button class="back-action" type="button" (click)="goBack()">← Nazad</button>
+              <div class="step-copy">
+                <h2 id="avatar-title" #stepHeading tabindex="-1">Izaberi svog Kodu</h2>
+                <p>Ko će te predstavljati u ovoj igri?</p>
+              </div>
+
+              <div class="avatar-grid" role="group" aria-label="Izbor Koda avatara">
+                @for (avatarKey of game.avatarKeys; track avatarKey; let index = $index) {
+                  <button
+                    type="button"
+                    class="avatar-choice"
+                    [class.is-selected]="selectedAvatarKey() === avatarKey"
+                    [attr.aria-pressed]="selectedAvatarKey() === avatarKey"
+                    [attr.aria-label]="'Izaberi ' + avatarAlt(index)"
+                    (click)="selectAvatar(avatarKey)"
+                  >
+                    <clq-koda-avatar [avatarKey]="avatarKey" alt="" />
+                    @if (selectedAvatarKey() === avatarKey) {
+                      <span class="avatar-check" aria-hidden="true">✓</span>
+                    }
+                  </button>
+                }
+              </div>
+
+              @if (joinError(); as error) {
+                <p class="join-error" role="alert">{{ error }}</p>
+              }
+
+              <button
+                class="primary-action join-final-action"
+                type="button"
+                [disabled]="selectedAvatarKey() === null || joining()"
+                (click)="joinGame()"
+              >
+                {{ joining() ? 'Pridružujemo te…' : 'Uđi u igru! 🎉' }}
+              </button>
+            </section>
+          }
+        }
+      </section>
+    } @else {
+      @if (store.phase() === 'RECONNECTING') {
+        <div class="connection-banner" role="status">
+          <span aria-hidden="true"></span>
+          Ponovo se povezujemo…
+        </div>
+      }
+
+      @if (store.phase() === 'WAITING') {
+        <section class="waiting-screen" aria-labelledby="waiting-title">
+          <span class="decorative-orb orb-one" aria-hidden="true"></span>
+          <span class="decorative-orb orb-two" aria-hidden="true"></span>
+          @if (store.participant(); as participant) {
+            <div class="waiting-koda">
+              <clq-koda-avatar
+                [avatarKey]="participant.avatarKey"
+                [alt]="'Koda avatar igrača ' + participant.nickname"
+                [priority]="true"
+              />
+            </div>
+            <div class="waiting-copy">
+              <span>{{ store.session()?.quiz?.title }}</span>
+              <h1 id="waiting-title">U igri si! 🎉</h1>
+              <strong>{{ participant.nickname }}</strong>
+              <p>Čekamo nastavnika da započne kviz.</p>
+              <div class="waiting-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+            </div>
+          }
+        </section>
+      } @else if (showsQuestion()) {
+        @if (store.question(); as question) {
+          <article
+            class="player-question"
+            [class.is-result]="store.answerResult() !== null"
+            aria-labelledby="player-question-text"
+          >
+            <header class="question-header">
+              <div>
+                <span>{{ store.session()?.quiz?.title }}</span>
+                <strong>Pitanje {{ question.questionOrder }} / {{ question.questionCount }}</strong>
+              </div>
+              <div
+                class="player-timer"
+                [class.is-urgent]="store.remainingSeconds() <= 5"
+                [attr.aria-label]="'Preostalo vrijeme: ' + store.remainingSeconds() + ' sekundi'"
+                role="timer"
+              >
+                <strong>{{ store.remainingSeconds() }}</strong
+                ><span>s</span>
+              </div>
+            </header>
+
+            <section class="question-content">
+              <div class="question-prompt">
+                <h1 id="player-question-text">{{ question.questionText }}</h1>
+
+                @if (question.imagePath && !imageUnavailable()) {
+                  <img
+                    class="player-question-image"
+                    [src]="question.imagePath"
+                    alt="Slika uz pitanje"
+                    (error)="markImageUnavailable()"
+                  />
+                } @else if (question.imagePath && imageUnavailable()) {
+                  <p class="image-fallback">Slika trenutno nije dostupna.</p>
+                }
+              </div>
+
+              <div
+                class="player-answer-grid"
+                [class.has-two-options]="store.sortedOptions().length === 2"
+                [attr.aria-label]="store.answerResult() ? 'Rezultat odgovora' : 'Ponuđeni odgovori'"
+                role="group"
+              >
+                @for (option of store.sortedOptions(); track option.id; let index = $index) {
+                  <button
+                    type="button"
+                    class="player-answer"
+                    [attr.data-answer]="index"
+                    [class.is-selected]="isSelected(option.id)"
+                    [class.is-correct]="isCorrectOption(option.id)"
+                    [class.is-wrong-selection]="isWrongSelection(option.id)"
+                    [class.is-quiet]="
+                      store.answerResult() !== null &&
+                      !isCorrectOption(option.id) &&
+                      !isWrongSelection(option.id)
+                    "
+                    [attr.aria-pressed]="store.isMultipleChoice() ? isSelected(option.id) : null"
+                    [disabled]="!store.canInteract()"
+                    (click)="answerOption(option)"
+                  >
+                    <span class="answer-letter">{{ optionLabel(index) }}</span>
+                    <strong>{{ option.optionText }}</strong>
+                    @if (isCorrectOption(option.id)) {
+                      <span class="answer-state is-correct-text">✓ Tačan odgovor</span>
+                    } @else if (isWrongSelection(option.id)) {
+                      <span class="answer-state">Tvoj izbor</span>
+                    } @else if (isSelected(option.id)) {
+                      <span class="answer-check" aria-label="Izabrano">✓</span>
+                    }
+                  </button>
+                }
+              </div>
+            </section>
+
+            <footer class="answer-footer" aria-live="polite">
+              @if (
+                store.isMultipleChoice() &&
+                store.phase() === 'QUESTION_OPEN' &&
+                store.remainingSeconds() > 0
+              ) {
+                <div class="multiple-submit">
+                  <p>Izaberi 2 ili 3 odgovora.</p>
+                  <button
+                    type="button"
+                    [disabled]="!store.hasValidMultipleSelection() || store.submissionPending()"
+                    (click)="store.confirmMultipleAnswer()"
+                  >
+                    {{ store.submissionPending() ? 'Šaljemo…' : 'Potvrdi odgovor' }}
+                  </button>
+                </div>
+              } @else if (store.phase() === 'ANSWER_SUBMITTED') {
+                <p class="submitted-message">
+                  Odgovor je zabilježen <span aria-hidden="true">✓</span>
+                </p>
+              } @else if (store.phase() === 'QUESTION_OPEN' && store.remainingSeconds() === 0) {
+                <div class="waiting-result-message">
+                  <strong>Vrijeme je isteklo.</strong>
+                  <span>Čekamo rezultat…</span>
+                </div>
+              } @else if (store.answerResult(); as result) {
+                <section
+                  class="personal-feedback"
+                  [class.is-correct]="result.isCorrect === true"
+                  aria-labelledby="feedback-title"
+                >
+                  <div>
+                    <h2 id="feedback-title">{{ feedbackTitle() }}</h2>
+                    <p>
+                      {{
+                        result.answered
+                          ? 'Čekamo sljedeće pitanje…'
+                          : 'Sljedeće pitanje stiže uskoro.'
+                      }}
+                    </p>
+                  </div>
+                  <strong>+{{ formatScore(result.pointsAwarded) }} bodova</strong>
+                </section>
+              } @else if (store.phase() === 'BETWEEN_QUESTIONS') {
+                <div class="waiting-result-message">
+                  <strong>Pitanje je završeno.</strong>
+                  <span>Čekamo rezultat…</span>
+                </div>
+              }
+
+              @if (store.answerError(); as error) {
+                <p class="answer-error" role="alert">{{ error }}</p>
+              }
+            </footer>
+          </article>
+        }
+      } @else if (store.phase() === 'FINISHED') {
+        @if (store.finalResult(); as result) {
+          <section
+            class="player-final"
+            [attr.data-rank]="result.rank <= 3 ? result.rank : 'other'"
+            aria-labelledby="final-title"
+          >
+            @if (result.rank === 1) {
+              <div class="confetti" aria-hidden="true">
+                @for (piece of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; track piece) {
+                  <i></i>
+                }
+              </div>
+            }
+            <div class="final-visual">
+              @if (result.rank === 1) {
+                <span class="final-crown" aria-hidden="true">♛</span>
+              }
+              <div class="final-koda">
+                <clq-koda-avatar
+                  [avatarKey]="result.avatarKey"
+                  [alt]="'Koda avatar igrača ' + result.nickname"
+                  [priority]="true"
+                />
+              </div>
+            </div>
+            <div class="final-copy">
+              <span class="final-kicker">{{ finalLabel() }}</span>
+              <h1 id="final-title">{{ finalHeading() }}</h1>
+              <strong class="final-nickname">{{ result.nickname }}</strong>
+              <div class="final-rank">
+                <span>{{ result.rank }}.</span>
+                <small>mjesto</small>
+              </div>
+              <div class="final-stats">
+                <span
+                  ><strong>{{ formatScore(result.totalScore) }}</strong> bodova</span
+                >
+                <span
+                  ><strong>{{ result.correctAnswerCount }} / {{ result.answerCount }}</strong>
+                  tačnih</span
+                >
+              </div>
+              @if (result.rank === 1) {
+                <p class="champion-label">ŠAMPION KVIZA</p>
+              }
+              <button class="primary-action" type="button" (click)="startOver()">
+                Igraj ponovo
+              </button>
+            </div>
+          </section>
+        } @else {
+          <section class="finished-waiting" aria-labelledby="final-wait-title">
+            @if (store.participant(); as participant) {
+              <div class="waiting-koda">
+                <clq-koda-avatar [avatarKey]="participant.avatarKey" alt="" />
+              </div>
+            }
+            <h1 id="final-wait-title">Kviz je završen! 🎉</h1>
+            <p>Čekamo konačni poredak…</p>
+          </section>
+        }
+      } @else if (store.phase() === 'REMOVED') {
+        <section class="player-state-card is-error" role="alert">
+          <span class="state-icon" aria-hidden="true">!</span>
+          <h1>Nastavnik te je uklonio iz igre.</h1>
+          <button class="primary-action" type="button" (click)="startOver()">
+            Nazad na početak
+          </button>
+        </section>
+      } @else if (store.phase() === 'REPLACED') {
+        <section class="player-state-card" role="alert">
+          <span class="state-icon is-info" aria-hidden="true">↗</span>
+          <h1>Igra je otvorena na drugom uređaju.</h1>
+          <p>Ovaj prozor se više neće povezivati.</p>
+          <button class="primary-action" type="button" (click)="startOver()">
+            Nazad na početak
+          </button>
+        </section>
+      } @else if (store.phase() === 'TERMINAL_ERROR') {
+        <section class="player-state-card is-error" role="alert">
+          <span class="state-icon" aria-hidden="true">!</span>
+          <h1>{{ store.terminalMessage() ?? 'Ova igra više nije dostupna.' }}</h1>
+          <div class="state-actions">
+            @if (store.canRetryConnection()) {
+              <button class="primary-action" type="button" (click)="store.retryConnection()">
+                Pokušaj ponovo
+              </button>
+            }
+            <button class="secondary-action" type="button" (click)="startOver()">
+              Nazad na početak
+            </button>
+          </div>
+        </section>
+      } @else if (store.phase() === 'RECONNECTING') {
+        <section class="finished-waiting" aria-live="polite">
+          @if (store.participant(); as participant) {
+            <div class="waiting-koda">
+              <clq-koda-avatar [avatarKey]="participant.avatarKey" alt="" />
+            </div>
+          }
+          <h1>Ponovo se povezujemo…</h1>
+          <p>Sačekaj samo trenutak.</p>
+        </section>
+      }
+    }
+  </main>
+</div>

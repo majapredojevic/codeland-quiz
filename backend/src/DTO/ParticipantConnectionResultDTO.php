@@ -9,6 +9,9 @@ use DateTimeImmutable;
 
 final readonly class ParticipantConnectionResultDTO
 {
+    /**
+     * @param int[] $currentQuestionSelectedOptionIds
+     */
     public function __construct(
         public SessionParticipantItemDTO $participant,
         public int $sessionId,
@@ -19,6 +22,7 @@ final readonly class ParticipantConnectionResultDTO
         public ?PublicSessionQuestionDTO $currentQuestion,
         public ?ClosedSessionQuestionStateDTO $closedQuestion,
         public ?FinalQuizSessionResultDTO $finalResult,
+        public array $currentQuestionSelectedOptionIds,
         public ?DateTimeImmutable $currentQuestionStartedAt,
         public ?DateTimeImmutable $currentQuestionDeadline,
         public int $questionCount,

@@ -86,12 +86,20 @@ final class SessionWebSocketPayloadMapper
     public function participantQuestionStarted(
         ParticipantConnectionResultDTO $result,
     ): array {
-        return $this->questionStartedPayload(
+        $payload = $this->questionStartedPayload(
             question: $result->currentQuestion,
             questionCount: $result->questionCount,
             startedAt: $result->currentQuestionStartedAt,
             answerDeadline: $result->currentQuestionDeadline,
         );
+
+        $payload['participantAnswer'] = [
+            'answered' => $result->currentQuestionSelectedOptionIds !== [],
+            'selectedOptionIds' =>
+                $result->currentQuestionSelectedOptionIds,
+        ];
+
+        return $payload;
     }
 
     /**
@@ -112,6 +120,25 @@ final class SessionWebSocketPayloadMapper
                 'unansweredCount' => $state->stats->unansweredCount,
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function participantQuestionClosed(
+        ParticipantConnectionResultDTO $result,
+    ): array {
+        if ($result->closedQuestion === null) {
+            return [];
+        }
+
+        $payload = $this->questionClosed($result->closedQuestion);
+        $payload['question'] = $this->question(
+            question: $result->closedQuestion->question,
+            questionCount: $result->questionCount,
+        );
+
+        return $payload;
     }
 
     /**

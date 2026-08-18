@@ -29,7 +29,7 @@
 
   table {
     width: 100%;
-    min-width: 44rem;
+    min-width: 50rem;
     border-collapse: collapse;
     table-layout: fixed;
   }
@@ -56,12 +56,17 @@
 
   th:first-child,
   td:first-child {
-    width: 36%;
+    width: 31%;
   }
 
   th:nth-child(2),
   td:nth-child(2) {
-    width: 24%;
+    width: 20%;
+  }
+
+  th:last-child,
+  td:last-child {
+    width: 7rem;
   }
 
   tbody tr {
@@ -74,7 +79,8 @@
     background: color-mix(in srgb, var(--clq-color-primary) 3%, white);
   }
 
-  tbody tr:has(.quiz-link:focus-visible) {
+  tbody tr:has(.quiz-link:focus-visible),
+  tbody tr:has(.quiz-play-action:focus-visible) {
     z-index: 1;
     outline: 3px solid var(--clq-color-primary);
     outline-offset: -3px;
@@ -91,6 +97,35 @@
   }
   .quiz-link:focus-visible {
     outline: 0;
+  }
+
+  .quiz-play-control {
+    position: relative;
+    display: inline-flex;
+    z-index: 2;
+  }
+
+  .quiz-play-action {
+    min-height: 2.25rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--clq-color-primary) 42%, white);
+    border-radius: var(--clq-radius-md);
+    background: white;
+    color: var(--clq-color-primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .quiz-play-action:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--clq-color-primary) 6%, white);
+  }
+
+  .quiz-play-action:disabled {
+    border-color: var(--clq-color-border-subtle);
+    background: var(--clq-color-disabled-surface);
+    color: var(--clq-color-disabled);
+    cursor: not-allowed;
   }
   .empty-row {
     cursor: default;

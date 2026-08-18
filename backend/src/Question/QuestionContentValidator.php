@@ -11,7 +11,7 @@ use RuntimeException;
 
 final class QuestionContentValidator
 {
-    private const MAX_QUESTION_TEXT_LENGTH = 1000;
+    public const MAX_QUESTION_TEXT_LENGTH = 250;
     private const MAX_IMAGE_PATH_LENGTH = 255;
     private const MIN_TIME_LIMIT_SECONDS = 30;
     private const MAX_TIME_LIMIT_SECONDS = 300;
@@ -62,15 +62,7 @@ final class QuestionContentValidator
 
     public function validateStoredQuestion(QuestionOverview $question): void
     {
-        $questionText = trim($question->questionText);
-
-        if ($questionText === '') {
-            throw new InvalidArgumentException('Question text cannot be empty.');
-        }
-
-        if (strlen($questionText) > self::MAX_QUESTION_TEXT_LENGTH) {
-            throw new InvalidArgumentException('Question text cannot exceed 1000 characters.');
-        }
+        self::normalizeQuestionText($question->questionText);
 
         if (
             $question->imagePath !== null
@@ -108,6 +100,21 @@ final class QuestionContentValidator
                 $question->options,
             ),
         );
+    }
+
+    public static function normalizeQuestionText(string $value): string
+    {
+        $questionText = trim($value);
+
+        if ($questionText === '') {
+            throw new InvalidArgumentException('Question text cannot be empty.');
+        }
+
+        if (mb_strlen($questionText, 'UTF-8') > self::MAX_QUESTION_TEXT_LENGTH) {
+            throw new InvalidArgumentException('Question text cannot exceed 250 characters.');
+        }
+
+        return $questionText;
     }
 
     /**

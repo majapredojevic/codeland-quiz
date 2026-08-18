@@ -22,6 +22,7 @@ import {
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
 import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
 import { EntityAuditMeta } from '../../../../../shared/ui/entity-audit-meta/entity-audit-meta';
+import { QuizLaunchService } from '../../../play/data-access/quiz-launch.service';
 import {
   backendErrorMessage,
   isMissingTopicError,
@@ -29,7 +30,7 @@ import {
   QUESTION_CONTENT_LOCK_MESSAGE,
 } from '../../data-access/quiz-error.utils';
 import { QuizStore } from '../../data-access/quiz.store';
-import { CreateQuizRequest, UpdateQuizRequest } from '../../data-access/quizzes.models';
+import { CreateQuizRequest, QuizItem, UpdateQuizRequest } from '../../data-access/quizzes.models';
 import {
   QuestionItem,
   QUESTION_TYPE_BADGES,
@@ -64,6 +65,7 @@ export class QuizDetailsPage implements OnInit, OnDestroy {
   protected readonly quizStore = inject(QuizStore);
   protected readonly topics = inject(TopicReferenceStore);
   protected readonly questionsStore = inject(QuestionsStore);
+  protected readonly launcher = inject(QuizLaunchService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
@@ -330,6 +332,11 @@ export class QuizDetailsPage implements OnInit, OnDestroy {
       await this.quizStore.load(this.quizId);
       this.restoreForm();
     }
+  }
+
+  protected async playQuiz(quiz: QuizItem): Promise<void> {
+    if (!quiz.isActive) return;
+    await this.launcher.launch(quiz.id);
   }
 
   protected questionTypeLabel(type: QuestionType): string {

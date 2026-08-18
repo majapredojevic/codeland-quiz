@@ -19,7 +19,7 @@
     display: grid;
     min-height: calc(100dvh - clamp(5rem, 8vw, 7.5rem));
     padding: clamp(1rem, 2.4vw, 2rem);
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto minmax(min-content, 1fr) auto auto;
     gap: clamp(0.8rem, 1.8vh, 1.4rem);
   }
 
@@ -81,7 +81,14 @@
   .question-stage {
     display: grid;
     min-height: 0;
-    align-content: center;
+    align-content: stretch;
+    grid-template-rows: auto minmax(clamp(0.75rem, 3vh, 2.5rem), 1fr) auto;
+    justify-items: center;
+  }
+
+  .presentation-question-prompt {
+    display: grid;
+    width: 100%;
     gap: clamp(0.75rem, 1.7vh, 1.35rem);
     justify-items: center;
   }
@@ -128,6 +135,7 @@
   .answer-grid {
     display: grid;
     width: min(100%, 76rem);
+    grid-row: 3;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: clamp(0.65rem, 1.5vw, 1.15rem);
   }
@@ -325,6 +333,11 @@
     stroke: currentColor;
     stroke-linecap: round;
     stroke-width: 1.8;
+  }
+
+  .game-avatar clq-koda-avatar {
+    width: 100%;
+    height: 100%;
   }
 
   .game-avatar span {
@@ -526,6 +539,16 @@
     justify-content: center;
   }
 
+  .podium-reveal {
+    position: relative;
+    display: grid;
+    width: min(100%, 58rem);
+    min-height: 15rem;
+    align-content: end;
+    gap: var(--clq-space-3);
+    justify-items: center;
+  }
+
   .podium-place {
     display: grid;
     min-width: 0;
@@ -537,6 +560,10 @@
     flex: 1 1 0;
     gap: var(--clq-space-2);
     justify-items: center;
+  }
+
+  .podium-place.is-revealed {
+    animation: podium-arrive 430ms cubic-bezier(0.2, 0.82, 0.32, 1.12) both;
   }
 
   .podium-place[data-rank='1'] {
@@ -566,6 +593,18 @@
     place-items: center;
   }
 
+  .podium-rank-label {
+    color: var(--clq-color-primary);
+    font-size: clamp(0.72rem, 1.25vw, 0.9rem);
+    font-weight: 800;
+    letter-spacing: 0.045em;
+  }
+
+  .podium-place[data-rank='1'] .podium-rank-label {
+    color: #765000;
+    font-size: clamp(0.8rem, 1.5vw, 1rem);
+  }
+
   .podium-place[data-rank='1'] .podium-rank {
     background: var(--clq-color-highlight);
     color: #503500;
@@ -587,6 +626,146 @@
   .podium-place > span:last-child {
     color: var(--clq-color-text-muted);
     font-size: 0.85rem;
+  }
+
+  .skip-reveal {
+    min-height: 2.35rem;
+    padding: 0.35rem 0.8rem;
+    border: 0;
+    border-radius: var(--clq-radius-pill);
+    background: transparent;
+    color: var(--clq-color-primary);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .skip-reveal:hover {
+    background: color-mix(in srgb, var(--clq-color-primary) 7%, white);
+  }
+
+  .podium-confetti {
+    position: absolute;
+    inset: -4rem 0 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .podium-confetti i {
+    position: absolute;
+    top: -1rem;
+    width: 0.55rem;
+    height: 1rem;
+    border-radius: 0.12rem;
+    background: var(--clq-color-highlight);
+    animation: podium-confetti 1.8s ease-out both;
+  }
+
+  .podium-confetti i:nth-child(1) {
+    left: 8%;
+  }
+  .podium-confetti i:nth-child(2) {
+    left: 16%;
+    background: var(--clq-color-accent);
+    animation-delay: 80ms;
+  }
+  .podium-confetti i:nth-child(3) {
+    left: 24%;
+    background: var(--clq-color-pink);
+    animation-delay: 180ms;
+  }
+  .podium-confetti i:nth-child(4) {
+    left: 32%;
+    background: var(--clq-color-primary);
+    animation-delay: 40ms;
+  }
+  .podium-confetti i:nth-child(5) {
+    left: 40%;
+    animation-delay: 230ms;
+  }
+  .podium-confetti i:nth-child(6) {
+    left: 48%;
+    background: var(--clq-color-accent);
+    animation-delay: 110ms;
+  }
+  .podium-confetti i:nth-child(7) {
+    left: 56%;
+    background: var(--clq-color-pink);
+    animation-delay: 280ms;
+  }
+  .podium-confetti i:nth-child(8) {
+    left: 64%;
+    background: var(--clq-color-primary);
+    animation-delay: 70ms;
+  }
+  .podium-confetti i:nth-child(9) {
+    left: 72%;
+    animation-delay: 190ms;
+  }
+  .podium-confetti i:nth-child(10) {
+    left: 80%;
+    background: var(--clq-color-accent);
+    animation-delay: 130ms;
+  }
+  .podium-confetti i:nth-child(11) {
+    left: 88%;
+    background: var(--clq-color-pink);
+    animation-delay: 250ms;
+  }
+  .podium-confetti i:nth-child(12) {
+    left: 94%;
+    background: var(--clq-color-primary);
+    animation-delay: 30ms;
+  }
+}
+
+@keyframes podium-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(2.2rem) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes podium-confetti {
+  0% {
+    opacity: 0;
+    transform: translateY(-1rem) rotate(0);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(22rem) rotate(480deg);
+  }
+}
+
+@media (max-height: 56.25rem) and (min-width: 46.01rem) {
+  .lobby-page {
+    .game-presentation {
+      padding: 1rem clamp(1rem, 2vw, 1.5rem);
+      gap: clamp(0.65rem, 1.25vh, 0.9rem);
+    }
+
+    .question-image {
+      max-height: min(22dvh, 13rem);
+    }
+  }
+}
+
+@media (max-height: 50rem) and (min-width: 64.01rem) {
+  .lobby-page {
+    .question-text {
+      font-size: clamp(1.65rem, 3.4vw, 3rem);
+    }
+
+    .question-image {
+      max-height: min(15dvh, 8rem);
+    }
   }
 }
 
@@ -653,6 +832,11 @@
     .answer-card,
     .countdown {
       transition: none;
+    }
+
+    .podium-place.is-revealed,
+    .podium-confetti i {
+      animation: none;
     }
   }
 }

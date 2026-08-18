@@ -206,7 +206,6 @@ final readonly class AnswerSubmissionService
         $this->validateSelectionCount(
             questionType: $question->questionType,
             selectedCount: count($selectedOptionIds),
-            optionCount: count($question->options),
         );
 
         return $selectedOptionIds;
@@ -215,7 +214,6 @@ final readonly class AnswerSubmissionService
     private function validateSelectionCount(
         QuestionType $questionType,
         int $selectedCount,
-        int $optionCount,
     ): void {
         if (
             (
@@ -231,7 +229,7 @@ final readonly class AnswerSubmissionService
 
         if (
             $questionType === QuestionType::MULTIPLE_CHOICE
-            && ($selectedCount < 1 || $selectedCount > $optionCount)
+            && ($selectedCount < 2 || $selectedCount > 3)
         ) {
             throw new InvalidSelectedOptionsException(
                 'Selected options are invalid for the current question.',

@@ -522,9 +522,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             server: $server,
             fileDescriptor: $fileDescriptor,
             type: 'QUESTION_CLOSED',
-            payload: $this->payloadMapper->questionClosed(
-                $result->closedQuestion,
-            ),
+            payload: $this->payloadMapper->participantQuestionClosed($result),
         );
 
         foreach ($result->closedQuestion->participantResults as $participantResult) {

@@ -32,6 +32,8 @@ interface PageAccess {
   imageSelectionError(): string | null;
   previewSource(): string | null;
   requestError(): string | null;
+  legacyQuestionTextOverLimit(): boolean;
+  questionTextLength(): number;
   selectType(type: QuestionType): void;
   setSingleOptionCount(count: 2 | 4): void;
   selectSingleCorrect(index: number): void;
@@ -101,8 +103,11 @@ describe('QuestionEditorPage', () => {
     });
   });
 
-  async function setup(edit = false): Promise<HTMLElement> {
-    questionDetail = signal<QuestionItem | null>(edit ? canonicalQuestion : null);
+  async function setup(
+    edit = false,
+    editableQuestion: QuestionItem = canonicalQuestion,
+  ): Promise<HTMLElement> {
+    questionDetail = signal<QuestionItem | null>(edit ? editableQuestion : null);
     create = vi.fn().mockResolvedValue(canonicalQuestion);
     update = vi.fn().mockResolvedValue(canonicalQuestion);
     loadQuestion = vi.fn().mockResolvedValue(undefined);
@@ -219,9 +224,32 @@ describe('QuestionEditorPage', () => {
     const fileInput = element.querySelector<HTMLInputElement>('#question-image')!;
     expect(fileInput.type).toBe('file');
     expect(fileInput.accept).toContain('image/jpeg');
+    const questionText = element.querySelector<HTMLTextAreaElement>('#question-text')!;
+    expect(questionText.maxLength).toBe(250);
+    expect(questionText.closest('.field-group')?.textContent).toContain('0 / 250');
     expect(
       element.querySelector<HTMLLabelElement>('label[for="question-image"]')?.textContent,
     ).toContain('Odaberite sliku pitanja');
+  });
+
+  it('physically limits new typing and pasted input to 250 characters', async () => {
+    const element = await setup();
+    const questionText = element.querySelector<HTMLTextAreaElement>('#question-text')!;
+
+    questionText.value = 'x'.repeat(251);
+    questionText.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    fixture.detectChanges();
+    expect(questionText.value).toHaveLength(250);
+    expect(page().formModel().questionText).toHaveLength(250);
+    expect(questionText.closest('.field-group')?.textContent).toContain('250 / 250');
+
+    questionText.value = 'y'.repeat(400);
+    questionText.dispatchEvent(
+      new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }),
+    );
+    fixture.detectChanges();
+    expect(questionText.value).toHaveLength(250);
+    expect(page().formModel().questionText).toHaveLength(250);
   });
 
   it('accepts a supported non-empty file, creates a local preview, and does not upload on selection', async () => {
@@ -384,8 +412,10 @@ describe('QuestionEditorPage', () => {
     await setup();
     expect(page().formValid()).toBe(false);
 
-    page().formModel.set({ ...validSingleModel(), questionText: 'x'.repeat(1001) });
+    page().formModel.set({ ...validSingleModel(), questionText: 'x'.repeat(251) });
     expect(page().formValid()).toBe(false);
+    page().formModel.set({ ...validSingleModel(), questionText: 'x'.repeat(250) });
+    expect(page().formValid()).toBe(true);
     page().formModel.set({
       ...validSingleModel(),
       options: [
@@ -589,7 +619,7 @@ describe('QuestionEditorPage', () => {
     create.mockRejectedValue(
       new HttpErrorResponse({
         status: 400,
-        error: { error: 'Question text must not exceed 1000 characters.' },
+        error: { error: 'Question text cannot exceed 250 characters.' },
       }),
     );
     cleanupImage.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
@@ -597,7 +627,26 @@ describe('QuestionEditorPage', () => {
     await page().submit(new SubmitEvent('submit'));
 
     expect(cleanupImage).toHaveBeenCalledWith(9, 'new-image.webp');
-    expect(page().requestError()).toBe('Tekst pitanja može imati najviše 1000 znakova.');
+    expect(page().requestError()).toBe('Tekst pitanja može imati najviše 250 znakova.');
+  });
+
+  it('shows legacy over-limit text intact and requires shortening before save', async () => {
+    const legacyQuestion = { ...canonicalQuestion, questionText: 'x'.repeat(300) };
+    const element = await setup(true, legacyQuestion);
+    const questionText = element.querySelector<HTMLTextAreaElement>('#question-text')!;
+
+    expect(questionText.value).toHaveLength(300);
+    expect(page().legacyQuestionTextOverLimit()).toBe(true);
+    expect(page().questionTextLength()).toBe(300);
+    fixture.detectChanges();
+    expect(questionText.closest('.field-group')?.textContent).toContain('300 / 250');
+    expect(element.textContent).toContain('Tekst pitanja može imati najviše 250 znakova.');
+    expect(page().formValid()).toBe(false);
+
+    page().formModel.update((value) => ({ ...value, maxPoints: 2000 }));
+    await page().submit(new SubmitEvent('submit'));
+    expect(update).not.toHaveBeenCalled();
+    expect(questionText.value).toHaveLength(300);
   });
 
   it('loads canonical edit data directly and omits unchanged imagePath from a partial PATCH', async () => {

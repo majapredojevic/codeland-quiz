@@ -534,6 +534,9 @@ final class ApplicationFactory
                     sessions: $sessionRepository,
                     participants: $participantRepository,
                     sessionQuestions: $sessionQuestionRepository,
+                    answers: new MySqlParticipantAnswerRepository(
+                        $this->database,
+                    ),
                     publicQuestionMapper: new PublicSessionQuestionMapper(),
                     transactionManager: new PdoTransactionManager(
                         $this->database,

@@ -6,6 +6,7 @@ import { computed, signal, WritableSignal } from '@angular/core';
 import { BehaviorSubject, of } from 'rxjs';
 
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { QuizLaunchService } from '../../../play/data-access/quiz-launch.service';
 import { QuizLibraryStore } from '../../data-access/quiz-library.store';
 import { QuizItem, TopicItem } from '../../data-access/quizzes.models';
 import { QuizLibraryPage } from './quiz-library-page';
@@ -84,6 +85,8 @@ describe('QuizLibraryPage', () => {
     totalItems: number;
     totalPages: number;
   }>;
+  let startingQuizId: WritableSignal<number | null>;
+  let launch: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     routeParams = new BehaviorSubject(convertToParamMap({}));
@@ -93,6 +96,8 @@ describe('QuizLibraryPage', () => {
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(undefined) }));
     notificationSuccess = vi.fn();
     notificationError = vi.fn();
+    startingQuizId = signal<number | null>(null);
+    launch = vi.fn().mockResolvedValue(true);
     topicsState = signal([scratch]);
     selectedId = signal<number | null>(null);
     selectedTopicState = signal<TopicItem | null>(null);
@@ -149,6 +154,10 @@ describe('QuizLibraryPage', () => {
       providers: [
         provideRouter([]),
         { provide: QuizLibraryStore, useValue: store },
+        {
+          provide: QuizLaunchService,
+          useValue: { startingQuizId: startingQuizId.asReadonly(), launch },
+        },
         { provide: ActivatedRoute, useValue: { queryParamMap: routeParams } },
         {
           provide: MatDialog,
@@ -171,7 +180,7 @@ describe('QuizLibraryPage', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('renders backend list fields and accessible quiz-detail navigation without an Actions column', async () => {
+  it('renders backend list fields, detail navigation, and a restrained Actions column', async () => {
     const element = await render();
     expect(element.textContent).toContain('8 kvizova');
     expect(element.textContent).toContain('Petlje');
@@ -182,7 +191,7 @@ describe('QuizLibraryPage', () => {
     expect(element.querySelector<HTMLAnchorElement>('tbody a')?.getAttribute('href')).toBe(
       '/app/quizzes/1',
     );
-    expect(element.querySelector('th:last-child')?.textContent).toContain('Status');
+    expect(element.querySelector('th:last-child')?.textContent).toContain('Radnje');
   });
 
   it('places Nova tema in the Topics header and quiz filters inside the Quiz section', async () => {
@@ -212,7 +221,7 @@ describe('QuizLibraryPage', () => {
     expect(create?.getAttribute('href')).toBe('/app/quizzes/new?topicId=4');
   });
 
-  it('keeps table headers and renders a semantic five-column empty row', async () => {
+  it('keeps table headers and renders a semantic six-column empty row', async () => {
     quizState.set([]);
     paginationState.set({ pageIndex: 0, pageSize: 10, totalItems: 0, totalPages: 0 });
     const element = await render();
@@ -220,18 +229,42 @@ describe('QuizLibraryPage', () => {
     const headers = table?.querySelectorAll('thead th');
     const emptyCell = table?.querySelector<HTMLTableCellElement>('tbody .empty-row td');
 
-    expect(headers).toHaveLength(5);
+    expect(headers).toHaveLength(6);
     expect(Array.from(headers ?? []).map((header) => header.textContent?.trim())).toEqual([
       'Naziv',
       'Tema',
       'Pitanja',
       'Verzija',
       'Status',
+      'Radnje',
     ]);
-    expect(emptyCell?.colSpan).toBe(5);
+    expect(emptyCell?.colSpan).toBe(6);
     expect(emptyCell?.textContent).toContain('Nema kvizova za prikaz.');
     expect(element.querySelector('.quizzes-section .table-state')).toBeNull();
     expect(element.querySelector('.pagination-actions span')?.textContent).toContain('0 / 1');
+  });
+
+  it('plays only active quizzes without triggering row detail navigation', async () => {
+    const element = await render();
+    const buttons = element.querySelectorAll<HTMLButtonElement>('.quiz-play-action');
+
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]?.disabled).toBe(false);
+    expect(buttons[1]?.disabled).toBe(true);
+    expect(buttons[1]?.closest('.quiz-play-control')?.getAttribute('title')).toBe(
+      'Aktivirajte kviz prije igranja.',
+    );
+
+    navigate.mockClear();
+    buttons[0]?.click();
+    await fixture.whenStable();
+
+    expect(launch).toHaveBeenCalledOnce();
+    expect(launch).toHaveBeenCalledWith(1);
+    expect(navigate).not.toHaveBeenCalled();
+
+    buttons[1]?.click();
+    expect(launch).toHaveBeenCalledOnce();
   });
 
   it('uses the selected-topic and status contextual message in the empty table row', async () => {

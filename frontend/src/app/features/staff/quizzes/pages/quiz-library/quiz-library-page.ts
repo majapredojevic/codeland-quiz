@@ -11,10 +11,11 @@ import {
 } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
 import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
+import { QuizLaunchService } from '../../../play/data-access/quiz-launch.service';
 import { TopicCard } from '../../components/topic-card/topic-card';
 import { TopicDialog, TopicDialogData } from '../../components/topic-dialog/topic-dialog';
 import { QuizLibraryStore } from '../../data-access/quiz-library.store';
-import { QuizSort, QuizStatusFilter, TopicItem } from '../../data-access/quizzes.models';
+import { QuizItem, QuizSort, QuizStatusFilter, TopicItem } from '../../data-access/quizzes.models';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
@@ -28,6 +29,7 @@ const COLLAPSED_TOPIC_LIMIT = 8;
 })
 export class QuizLibraryPage implements OnInit {
   protected readonly store = inject(QuizLibraryStore);
+  protected readonly launcher = inject(QuizLaunchService);
   private readonly dialog = inject(MatDialog);
   private readonly notifications = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
@@ -208,6 +210,13 @@ export class QuizLibraryPage implements OnInit {
 
   protected retryQuizzes(): void {
     this.store.loadQuizzes();
+  }
+
+  protected async playQuiz(quiz: QuizItem, event: Event): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!quiz.isActive) return;
+    await this.launcher.launch(quiz.id);
   }
 
   protected firstVisibleItem(): number {
