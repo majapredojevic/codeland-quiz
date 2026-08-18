@@ -14,6 +14,13 @@ import { authRefreshInterceptor } from './auth-refresh.interceptor';
 import { AuthStore } from './auth.store';
 
 describe('authRefreshInterceptor', () => {
+  const user = {
+    id: 7,
+    name: 'Ana Anić',
+    email: 'ana@example.com',
+    role: 'TEACHER' as const,
+    mustChangePassword: false,
+  };
   let http: HttpClient;
   let httpTesting: HttpTestingController;
   let authStore: AuthStore;
@@ -44,7 +51,14 @@ describe('authRefreshInterceptor', () => {
     document.cookie = 'codeland_csrf=; Max-Age=0; path=/';
   });
 
+  async function authenticate(): Promise<void> {
+    const restoration = authStore.restoreSession();
+    httpTesting.expectOne('/api/auth/me').flush({ user });
+    await restoration;
+  }
+
   it('refreshes after a 401 and retries the original request once', async () => {
+    await authenticate();
     const result = firstValueFrom(http.get<{ value: string }>('/api/protected'));
 
     httpTesting
@@ -86,7 +100,43 @@ describe('authRefreshInterceptor', () => {
     httpTesting.expectNone('/api/auth/refresh');
   });
 
+  it('does not refresh a logout 401', async () => {
+    await authenticate();
+    const result = firstValueFrom(http.post('/api/auth/logout', null));
+
+    httpTesting
+      .expectOne('/api/auth/logout')
+      .flush({ error: 'Authentication required.' }, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(result).rejects.toBeInstanceOf(HttpErrorResponse);
+    httpTesting.expectNone('/api/auth/refresh');
+  });
+
+  it('does not enter staff refresh for a public player API 401', async () => {
+    await authenticate();
+    const result = firstValueFrom(http.get('/api/game/session/123456'));
+
+    httpTesting
+      .expectOne('/api/game/session/123456')
+      .flush({ error: 'Game unavailable.' }, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(result).rejects.toBeInstanceOf(HttpErrorResponse);
+    httpTesting.expectNone('/api/auth/refresh');
+  });
+
+  it('does not refresh ordinary APIs before staff restoration is explicitly requested', async () => {
+    const result = firstValueFrom(http.get('/api/public-resource'));
+
+    httpTesting
+      .expectOne('/api/public-resource')
+      .flush({ error: 'Unavailable.' }, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(result).rejects.toBeInstanceOf(HttpErrorResponse);
+    httpTesting.expectNone('/api/auth/refresh');
+  });
+
   it('shares one refresh across concurrent 401 responses', async () => {
+    await authenticate();
     const first = firstValueFrom(http.get<{ request: number }>('/api/first'));
     const second = firstValueFrom(http.get<{ request: number }>('/api/second'));
 
@@ -108,6 +158,7 @@ describe('authRefreshInterceptor', () => {
   });
 
   it('does not attempt a second refresh when the retried request returns 401', async () => {
+    await authenticate();
     const result = firstValueFrom(http.get('/api/protected'));
 
     httpTesting
@@ -124,6 +175,7 @@ describe('authRefreshInterceptor', () => {
   });
 
   it('lets Angular apply the rotated XSRF token to a retried mutation', async () => {
+    await authenticate();
     document.cookie = 'codeland_csrf=old-token; path=/';
     const result = firstValueFrom(http.post<{ saved: boolean }>('/api/protected', { value: 1 }));
 
@@ -146,6 +198,7 @@ describe('authRefreshInterceptor', () => {
   });
 
   it('clears authentication state when refresh fails', async () => {
+    await authenticate();
     const result = firstValueFrom(http.get('/api/protected'));
 
     httpTesting

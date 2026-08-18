@@ -1,17 +1,10 @@
+import {
+  formatCodeLandDate,
+  formatCodeLandDateTime,
+} from '../../../../shared/utils/date-formatters';
+
 const numberFormatter = new Intl.NumberFormat('bs-BA', { maximumFractionDigits: 2 });
 const scoreFormatter = new Intl.NumberFormat('bs-BA', { maximumFractionDigits: 0 });
-const dateTimeFormatter = new Intl.DateTimeFormat('bs-BA', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-const dateFormatter = new Intl.DateTimeFormat('bs-BA', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-});
 
 export function formatPercentage(value: number | null | undefined): string {
   return value === null || value === undefined || !Number.isFinite(value)
@@ -38,9 +31,5 @@ export function formatResponseTime(milliseconds: number | null | undefined): str
 }
 
 export function formatStaffDate(value: string | null | undefined, includeTime = true): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '—';
-  const formatted = (includeTime ? dateTimeFormatter : dateFormatter).format(date);
-  return includeTime ? formatted.replace(/,\s*/, ' · ') : formatted;
+  return includeTime ? formatCodeLandDateTime(value) : formatCodeLandDate(value);
 }

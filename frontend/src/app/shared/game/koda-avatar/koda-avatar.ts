@@ -17,13 +17,7 @@ const AVATAR_IMAGE_BY_KEY: Readonly<Record<string, string>> = {
   imports: [NgOptimizedImage],
   template: `
     <span class="koda-frame">
-      <img
-        [ngSrc]="source()"
-        width="512"
-        height="512"
-        [alt]="alt()"
-        [priority]="priority()"
-      />
+      <img [ngSrc]="source()" fill [alt]="alt()" [priority]="priority()" />
     </span>
   `,
   styleUrl: './koda-avatar.scss',

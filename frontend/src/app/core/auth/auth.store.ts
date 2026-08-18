@@ -24,6 +24,7 @@ export class AuthStore {
   private readonly userState = signal<StaffUser | null>(null);
   private readonly statusState = signal<AuthStatus>('checking');
   private readonly noticeState = signal<AuthNotice | null>(null);
+  private restorationRequest: Promise<void> | null = null;
   private refreshRequest: Observable<void> | null = null;
 
   readonly user = this.userState.asReadonly();
@@ -34,7 +35,20 @@ export class AuthStore {
   readonly isTeacher = computed(() => this.user()?.role === 'TEACHER');
   readonly mustChangePassword = computed(() => this.user()?.mustChangePassword === true);
 
-  async restoreSession(): Promise<void> {
+  restoreSession(): Promise<void> {
+    if (this.status() !== 'checking') return Promise.resolve();
+    if (this.restorationRequest !== null) return this.restorationRequest;
+
+    const restoration = this.performSessionRestore().finally(() => {
+      if (this.restorationRequest === restoration) {
+        this.restorationRequest = null;
+      }
+    });
+    this.restorationRequest = restoration;
+    return restoration;
+  }
+
+  private async performSessionRestore(): Promise<void> {
     this.statusState.set('checking');
 
     try {
