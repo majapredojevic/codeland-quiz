@@ -27,6 +27,8 @@ use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
 use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuestionImageController;
+use CodeLandQuiz\Controller\ReadinessController;
+use CodeLandQuiz\Controller\RuntimeMetricsController;
 use CodeLandQuiz\Controller\QuizController;
 use CodeLandQuiz\Controller\QuizStatisticsController;
 use CodeLandQuiz\Controller\QuizSessionController;
@@ -49,6 +51,8 @@ use CodeLandQuiz\Middleware\CsrfMiddleware;
 use CodeLandQuiz\Middleware\PasswordChangeRequiredMiddleware;
 use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
+use CodeLandQuiz\Observability\RuntimeLogger;
+use CodeLandQuiz\Observability\RuntimeMetrics;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
@@ -88,6 +92,7 @@ use CodeLandQuiz\QuizSession\QuizSessionHistoryService;
 use CodeLandQuiz\QuizSession\QuizSessionReportAssembler;
 use CodeLandQuiz\QuizSession\QuizSessionService;
 use CodeLandQuiz\QuizSession\SecureGamePinGenerator;
+use CodeLandQuiz\Runtime\OpenSwooleRuntimeSupervisor;
 use CodeLandQuiz\Topic\TopicService;
 use CodeLandQuiz\WebSocket\ClosedQuestionWebSocketNotifier;
 use CodeLandQuiz\WebSocket\EchoGateway;
@@ -141,11 +146,19 @@ final class ApplicationFactory
 
     private FinishedSessionWebSocketNotifier $finishedSessionWebSocketNotifier;
 
+    private RuntimeLogger $runtimeLogger;
+
+    private RuntimeMetrics $runtimeMetrics;
+
     public function __construct(string $projectRootPath, Server $server)
     {
         $this->server = $server;
         $this->environment = new Environment($projectRootPath);
         $this->config = new AppConfig($this->environment);
+        $this->runtimeLogger = new RuntimeLogger(
+            debugEnabled: $this->config->getAppEnv() === 'development',
+        );
+        $this->runtimeMetrics = new RuntimeMetrics();
         $this->database = new Database($this->environment);
         $this->questionImageStorage = new QuestionImageStorage($this->config);
         $this->participantConnectionRegistry =
@@ -156,6 +169,7 @@ final class ApplicationFactory
                 server: $this->server,
                 connectionRegistry: $this->participantConnectionRegistry,
                 messageEncoder: $this->webSocketMessageEncoder,
+                logger: $this->runtimeLogger,
             );
         $this->sessionWebSocketPayloadMapper =
             new SessionWebSocketPayloadMapper();
@@ -173,12 +187,14 @@ final class ApplicationFactory
             server: $this->server,
             connectionRegistry: $this->participantConnectionRegistry,
             messageEncoder: $this->webSocketMessageEncoder,
+            logger: $this->runtimeLogger,
         );
         $this->participantRemovalWebSocketNotifier =
             new ParticipantRemovalWebSocketNotifier(
                 server: $this->server,
                 connectionRegistry: $this->participantConnectionRegistry,
                 participantSender: $this->participantWebSocketSender,
+                logger: $this->runtimeLogger,
             );
         $this->closedQuestionWebSocketNotifier =
             new ClosedQuestionWebSocketNotifier(
@@ -209,6 +225,78 @@ final class ApplicationFactory
         return $this->config->getMaximumUploadPackageLengthBytes();
     }
 
+    public function getOpenSwooleMaximumConnections(): int
+    {
+        return $this->config->getOpenSwooleMaximumConnections();
+    }
+
+    public function getOpenSwooleMaximumCoroutines(): int
+    {
+        return $this->config->getOpenSwooleMaximumCoroutines();
+    }
+
+    public function getOpenSwooleTransportHeartbeatCheckIntervalSeconds(): int
+    {
+        return $this->config
+            ->getOpenSwooleTransportHeartbeatCheckIntervalSeconds();
+    }
+
+    public function getOpenSwooleTransportHeartbeatIdleSeconds(): int
+    {
+        return $this->config->getOpenSwooleTransportHeartbeatIdleSeconds();
+    }
+
+    public function getRuntimeLogger(): RuntimeLogger
+    {
+        return $this->runtimeLogger;
+    }
+
+    public function getRuntimeMetrics(): RuntimeMetrics
+    {
+        return $this->runtimeMetrics;
+    }
+
+    public function createReadinessController(): ReadinessController
+    {
+        return new ReadinessController(
+            database: $this->database,
+            responseFactory: new ResponseFactory(),
+            logger: $this->runtimeLogger,
+            metrics: $this->runtimeMetrics,
+        );
+    }
+
+    public function createRuntimeMetricsController(): RuntimeMetricsController
+    {
+        return new RuntimeMetricsController(
+            server: $this->server,
+            connectionRegistry: $this->participantConnectionRegistry,
+            metrics: $this->runtimeMetrics,
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createRuntimeSupervisor(
+        WebSocketGatewayRouter $webSocketGateway,
+    ): OpenSwooleRuntimeSupervisor {
+        return new OpenSwooleRuntimeSupervisor(
+            server: $this->server,
+            webSocketGateway: $webSocketGateway,
+            metrics: $this->runtimeMetrics,
+            logger: $this->runtimeLogger,
+            heartbeatIntervalSeconds:
+                $this->config->getWebSocketHeartbeatIntervalSeconds(),
+            staleTimeoutSeconds:
+                $this->config->getWebSocketStaleTimeoutSeconds(),
+        );
+    }
+
+    public function reconcileParticipantPresence(): int
+    {
+        return (new MySqlSessionParticipantRepository($this->database))
+            ->reconcileDisconnectedPresenceForLiveSessions();
+    }
+
     public function createAuthController(): AuthController
     {
         return new AuthController(
@@ -219,6 +307,7 @@ final class ApplicationFactory
             clientAddress: new ClientAddress(
                 $this->config->getTrustedProxyCidrs(),
             ),
+            logger: $this->runtimeLogger,
         );
     }
 
@@ -594,8 +683,9 @@ final class ApplicationFactory
                 payloadMapper: $this->sessionWebSocketPayloadMapper,
                 connectionLimiter: $connectionLimiter,
                 abuseLimiter: $abuseLimiter,
+                logger: $this->runtimeLogger,
             ),
-            echoGateway: new EchoGateway(),
+            echoGateway: new EchoGateway($this->runtimeLogger),
             messageEncoder: $this->webSocketMessageEncoder,
             originPolicy: new WebSocketOriginPolicy(
                 $this->config->getWebSocketAllowedOrigins(),
@@ -612,6 +702,7 @@ final class ApplicationFactory
             routePolicy: new WebSocketRoutePolicy(
                 echoEnabled: $this->config->getAppEnv() === 'development',
             ),
+            logger: $this->runtimeLogger,
         );
     }
 
@@ -646,7 +737,10 @@ final class ApplicationFactory
     {
         $userRepository = new MySqlUserRepository($this->database);
         $refreshTokenRepository = new MySqlRefreshTokenRepository($this->database);
-        $loginAttemptRepository = new MySqlLoginAttemptRepository($this->database);
+        $loginAttemptRepository = new MySqlLoginAttemptRepository(
+            $this->database,
+            $this->runtimeLogger,
+        );
         $auditLogRepository = new MySqlAuditLogRepository($this->database);
 
         return new AuthService(

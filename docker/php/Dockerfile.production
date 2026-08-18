@@ -50,4 +50,6 @@ USER www-data
 
 EXPOSE 9501
 
+STOPSIGNAL SIGTERM
+
 CMD ["php", "server.php"]

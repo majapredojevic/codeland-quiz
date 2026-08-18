@@ -142,6 +142,22 @@ describe('PlayerGameStore', () => {
     expect(store.participant()?.nickname).toBe('Pixel');
   });
 
+  it('acknowledges server heartbeats without changing UI state or leaking after destroy', () => {
+    const socket = authenticate();
+    socket.receive('HEARTBEAT', { acknowledge: true });
+
+    expect(JSON.parse(socket.sent.at(-1) ?? '')).toEqual({
+      type: 'HEARTBEAT_ACK',
+      payload: {},
+    });
+    expect(store.phase()).toBe('WAITING');
+
+    const sentCount = socket.sent.length;
+    store.ngOnDestroy();
+    socket.receive('HEARTBEAT', { acknowledge: true });
+    expect(socket.sent).toHaveLength(sentCount);
+  });
+
   it('submits single choice once, locks it, and reveals only canonical result data', () => {
     const socket = authenticate('ACTIVE');
     startQuestion(socket, 'SINGLE_CHOICE');

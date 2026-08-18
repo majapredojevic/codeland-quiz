@@ -8,7 +8,9 @@ JSON responses use `Content-Type: application/json; charset=utf-8`. In the table
 
 | Method | Path | Authentication / role | CSRF | Purpose | Typical success |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/health` | Public | No | Health check | 200 |
+| GET | `/health` | Public | No | Lightweight process liveness | 200 |
+| GET | `/ready` | Public/sanitized | No | Runtime initialized + cheap DB readiness | 200/503 |
+| GET | `/internal/metrics` | Internal backend network only | No | Sanitized OpenSwoole/runtime metrics | 200 |
 | POST | `/api/auth/login` | Public | No | Staff login and cookie issuance | 200 |
 | POST | `/api/auth/refresh` | Refresh cookie | No | Atomic refresh rotation and new cookies | 200 |
 | GET | `/api/auth/me` | Access cookie | No | Current staff identity | 200 |

@@ -28,7 +28,13 @@ An authenticated participant submits:
 }
 ```
 
-These are the only accepted client gameplay message types.
+The only other accepted client message is the transparent heartbeat ACK:
+
+```json
+{"type":"HEARTBEAT_ACK","payload":{}}
+```
+
+It updates monotonic connection activity and bypasses gameplay/database work.
 
 ## Server gameplay events
 
@@ -46,6 +52,7 @@ These are the only accepted client gameplay message types.
 | `FINAL_RESULT` | One participant; personal final rank and totals |
 | `PARTICIPANT_REMOVED` | Removed participant before forced disconnect |
 | `CONNECTION_REPLACED` | Previous socket when a newer socket authenticates for the same participant |
+| `HEARTBEAT` | Authenticated participants; tiny liveness probe, no UI/domain effect |
 
 Correctness is deliberately absent from `ANSWER_ACCEPTED`; it appears only after `QUESTION_CLOSED`. `ANSWER_RESULT` and `FINAL_RESULT` are personalized, while leaderboards and `GAME_FINISHED` are shared.
 
@@ -57,6 +64,8 @@ Correctness is deliberately absent from `ANSWER_ACCEPTED`; it appears only after
 - FINISHED: authenticated, then `GAME_FINISHED` and the participant's `FINAL_RESULT` when found.
 
 The current socket mapping is replaced before the old socket is disconnected, preventing its close event from disconnecting the replacement.
+
+The server sends `HEARTBEAT` on the shared 25-second sweep. Any valid inbound participant message refreshes activity; 75 seconds without one closes the stale socket and marks presence disconnected without removing the participant. The browser responds immediately and creates no interval/subscription.
 
 ## Errors and closure
 

@@ -4,16 +4,24 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\Observability\RuntimeLogger;
 use JsonException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
 
-final class EchoGateway implements WebSocketGateway
+final readonly class EchoGateway implements WebSocketGateway
 {
+    public function __construct(
+        private RuntimeLogger $logger,
+    ) {
+    }
+
     public function open(Server $server, Request $request): void
     {
-        echo "WebSocket connection opened: {$request->fd}\n";
+        $this->logger->debug('websocket.echo_opened', [
+            'fd' => (int) $request->fd,
+        ]);
     }
 
     /**
@@ -21,11 +29,10 @@ final class EchoGateway implements WebSocketGateway
      */
     public function message(Server $server, Frame $frame): void
     {
-        echo sprintf(
-            "Received WebSocket echo frame from %d (%d bytes).\n",
-            $frame->fd,
-            strlen($frame->data),
-        );
+        $this->logger->debug('websocket.echo_frame_received', [
+            'fd' => $frame->fd,
+            'count' => strlen($frame->data),
+        ]);
 
         $server->push($frame->fd, json_encode([
             'event' => 'server.echo',
@@ -37,6 +44,8 @@ final class EchoGateway implements WebSocketGateway
 
     public function close(Server $server, int $fileDescriptor): void
     {
-        echo "WebSocket connection closed: {$fileDescriptor}\n";
+        $this->logger->debug('websocket.echo_closed', [
+            'fd' => $fileDescriptor,
+        ]);
     }
 }

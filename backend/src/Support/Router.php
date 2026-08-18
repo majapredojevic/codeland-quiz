@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Support;
 
 use CodeLandQuiz\Http\RequestContext;
+use CodeLandQuiz\Http\RequestIdGenerator;
+use CodeLandQuiz\Observability\RuntimeLogger;
+use CodeLandQuiz\Observability\RuntimeMetrics;
+use OpenSwoole\Coroutine;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use RuntimeException;
+use Throwable;
 
 final class Router
 {
@@ -34,6 +39,13 @@ final class Router
      * }>>
      */
     private array $routes = [];
+
+    public function __construct(
+        private readonly RuntimeLogger $logger,
+        private readonly RuntimeMetrics $metrics,
+        private readonly RequestIdGenerator $requestIdGenerator,
+    ) {
+    }
 
     /**
      * @param callable(Request, Response, RequestContext): void $handler
@@ -122,6 +134,7 @@ final class Router
 
     public function dispatch(Request $request, Response $response): void
     {
+        $startedAt = hrtime(true);
         $method = strtoupper(
             (string) ($request->server['request_method'] ?? 'GET'),
         );
@@ -133,21 +146,55 @@ final class Router
 
         $matchedRoute = $this->findRoute($method, $path);
 
-        if ($matchedRoute === null) {
-            $this->sendRouteError($response, $path);
-
-            return;
-        }
-
-        $context = new RequestContext();
-        $context->setRouteParameters($matchedRoute['parameters']);
-
-        $pipeline = $this->buildMiddlewarePipeline(
-            $matchedRoute['handler'],
-            $matchedRoute['middleware'],
+        $context = new RequestContext(
+            requestId: $this->requestIdGenerator->generate(),
+            method: $method,
+            route: $matchedRoute['route'] ?? $path,
         );
+        $context->activate();
+        $response->header('X-Request-ID', $context->getRequestId());
 
-        $pipeline($request, $response, $context);
+        try {
+            if ($matchedRoute === null) {
+                $this->sendRouteError($response, $path);
+
+                return;
+            }
+
+            $context->setRouteParameters($matchedRoute['parameters']);
+
+            $pipeline = $this->buildMiddlewarePipeline(
+                $matchedRoute['handler'],
+                $matchedRoute['middleware'],
+            );
+
+            $pipeline($request, $response, $context);
+        } catch (Throwable $throwable) {
+            $this->logger->error('http.request_failed', [
+                'requestId' => $context->getRequestId(),
+                'route' => $context->getRoute(),
+                'method' => $context->getMethod(),
+                'coroutineId' => Coroutine::getCid(),
+                'exception' => $throwable::class,
+            ]);
+            JsonResponse::send($response, [
+                'error' => 'Internal server error.',
+            ], 500);
+        } finally {
+            $this->metrics->recordHttpRequest();
+            $this->logger->info('http.request.completed', [
+                'requestId' => $context->getRequestId(),
+                'route' => $context->getRoute(),
+                'method' => $context->getMethod(),
+                'status' => $context->getResponseStatus(),
+                'durationMs' => round(
+                    (hrtime(true) - $startedAt) / 1_000_000,
+                    3,
+                ),
+                'coroutineId' => Coroutine::getCid(),
+            ]);
+            $context->deactivate();
+        }
     }
 
     /**
@@ -185,7 +232,8 @@ final class Router
      *         RequestContext,
      *         callable
      *     ): void>,
-     *     parameters: array<string, string>
+     *     parameters: array<string, string>,
+     *     route: string
      * }|null
      */
     private function findRoute(string $method, string $path): ?array
@@ -198,6 +246,7 @@ final class Router
                     'handler' => $route['handler'],
                     'middleware' => $route['middleware'],
                     'parameters' => [],
+                    'route' => $route['path'],
                 ];
             }
         }
@@ -210,6 +259,7 @@ final class Router
                     'handler' => $route['handler'],
                     'middleware' => $route['middleware'],
                     'parameters' => $parameters,
+                    'route' => $route['path'],
                 ];
             }
         }

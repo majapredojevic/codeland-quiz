@@ -80,6 +80,18 @@ final readonly class AppConfig
 
     private int $webSocketConnectionPerIpLimit;
 
+    private int $webSocketHeartbeatIntervalSeconds;
+
+    private int $webSocketStaleTimeoutSeconds;
+
+    private int $openSwooleMaximumConnections;
+
+    private int $openSwooleMaximumCoroutines;
+
+    private int $openSwooleTransportHeartbeatCheckIntervalSeconds;
+
+    private int $openSwooleTransportHeartbeatIdleSeconds;
+
     private bool $cookieSecure;
 
     private bool $cookieHttpOnly;
@@ -155,6 +167,31 @@ final readonly class AppConfig
         $this->webSocketConnectionPerIpLimit = $this->environment->getInt(
             'WS_CONNECTION_PER_IP_LIMIT',
         );
+        $this->webSocketHeartbeatIntervalSeconds = $this->optionalInt(
+            'WS_HEARTBEAT_INTERVAL_SECONDS',
+            25,
+        );
+        $this->webSocketStaleTimeoutSeconds = $this->optionalInt(
+            'WS_STALE_TIMEOUT_SECONDS',
+            75,
+        );
+        $this->openSwooleMaximumConnections = $this->optionalInt(
+            'OPENSWOOLE_MAX_CONNECTIONS',
+            4096,
+        );
+        $this->openSwooleMaximumCoroutines = $this->optionalInt(
+            'OPENSWOOLE_MAX_COROUTINES',
+            4096,
+        );
+        $this->openSwooleTransportHeartbeatCheckIntervalSeconds =
+            $this->optionalInt(
+                'OPENSWOOLE_TRANSPORT_HEARTBEAT_CHECK_INTERVAL_SECONDS',
+                30,
+            );
+        $this->openSwooleTransportHeartbeatIdleSeconds = $this->optionalInt(
+            'OPENSWOOLE_TRANSPORT_HEARTBEAT_IDLE_SECONDS',
+            120,
+        );
         $this->cookieSecure = $this->environment->getBool('COOKIE_SECURE');
         $this->cookieHttpOnly = $this->environment->getBool('COOKIE_HTTP_ONLY');
         $this->cookieSameSite = CookieSameSite::from($this->environment->get('COOKIE_SAME_SITE'));
@@ -186,6 +223,18 @@ final readonly class AppConfig
         $this->ensurePositive($this->webSocketConnectionLimit, 'WebSocket connection limit');
         $this->ensurePositive($this->webSocketPendingConnectionLimit, 'WebSocket pending connection limit');
         $this->ensurePositive($this->webSocketConnectionPerIpLimit, 'WebSocket connection per-IP limit');
+        $this->ensurePositive($this->webSocketHeartbeatIntervalSeconds, 'WebSocket heartbeat interval');
+        $this->ensurePositive($this->webSocketStaleTimeoutSeconds, 'WebSocket stale timeout');
+        $this->ensurePositive($this->openSwooleMaximumConnections, 'OpenSwoole maximum connections');
+        $this->ensurePositive($this->openSwooleMaximumCoroutines, 'OpenSwoole maximum coroutines');
+        $this->ensurePositive(
+            $this->openSwooleTransportHeartbeatCheckIntervalSeconds,
+            'OpenSwoole transport heartbeat check interval',
+        );
+        $this->ensurePositive(
+            $this->openSwooleTransportHeartbeatIdleSeconds,
+            'OpenSwoole transport heartbeat idle time',
+        );
         $this->ensurePositive($this->jwtExpirationMinutes, 'JWT expiration');
         $this->ensurePositive($this->participantTokenTtlSeconds, 'Participant token TTL');
         $this->ensurePositive($this->refreshTokenExpirationDays, 'Refresh token expiration');
@@ -221,6 +270,32 @@ final readonly class AppConfig
         if ($this->webSocketConnectionPerIpLimit > $this->webSocketConnectionLimit) {
             throw new InvalidArgumentException(
                 'WebSocket per-IP connection limit cannot exceed the global limit.',
+            );
+        }
+
+        if (
+            $this->webSocketStaleTimeoutSeconds
+                < $this->webSocketHeartbeatIntervalSeconds * 2
+        ) {
+            throw new InvalidArgumentException(
+                'WebSocket stale timeout must allow at least two heartbeat intervals.',
+            );
+        }
+
+        if ($this->openSwooleMaximumConnections <= $this->webSocketConnectionLimit) {
+            throw new InvalidArgumentException(
+                'OpenSwoole maximum connections must exceed the application WebSocket limit.',
+            );
+        }
+
+        if (
+            $this->openSwooleTransportHeartbeatIdleSeconds
+                <= $this->webSocketStaleTimeoutSeconds
+            || $this->openSwooleTransportHeartbeatCheckIntervalSeconds
+                >= $this->openSwooleTransportHeartbeatIdleSeconds
+        ) {
+            throw new InvalidArgumentException(
+                'OpenSwoole transport heartbeat must remain behind the application stale policy.',
             );
         }
 
@@ -318,6 +393,36 @@ final readonly class AppConfig
     public function getWebSocketConnectionPerIpLimit(): int
     {
         return $this->webSocketConnectionPerIpLimit;
+    }
+
+    public function getWebSocketHeartbeatIntervalSeconds(): int
+    {
+        return $this->webSocketHeartbeatIntervalSeconds;
+    }
+
+    public function getWebSocketStaleTimeoutSeconds(): int
+    {
+        return $this->webSocketStaleTimeoutSeconds;
+    }
+
+    public function getOpenSwooleMaximumConnections(): int
+    {
+        return $this->openSwooleMaximumConnections;
+    }
+
+    public function getOpenSwooleMaximumCoroutines(): int
+    {
+        return $this->openSwooleMaximumCoroutines;
+    }
+
+    public function getOpenSwooleTransportHeartbeatCheckIntervalSeconds(): int
+    {
+        return $this->openSwooleTransportHeartbeatCheckIntervalSeconds;
+    }
+
+    public function getOpenSwooleTransportHeartbeatIdleSeconds(): int
+    {
+        return $this->openSwooleTransportHeartbeatIdleSeconds;
     }
 
     public function getJwtExpirationMinutes(): int
@@ -732,5 +837,12 @@ final readonly class AppConfig
         if ($value < 1) {
             throw new InvalidArgumentException(sprintf('%s must be greater than zero.', $label));
         }
+    }
+
+    private function optionalInt(string $name, int $default): int
+    {
+        return $this->environment->has($name)
+            ? $this->environment->getInt($name)
+            : $default;
     }
 }

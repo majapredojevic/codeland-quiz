@@ -1,5 +1,14 @@
 # Changelog
 
+## Phase 3 runtime hardening
+
+- Added one shared participant heartbeat/stale sweep with monotonic activity,
+  reconnect/fd-reuse protection and transparent Angular acknowledgements.
+- Added startup/WorkerExit presence reconciliation, graceful container stop,
+  explicit OpenSwoole connection/coroutine ceilings and readiness gating.
+- Added bounded request IDs, structured/redacted JSON logs, private runtime
+  metrics, event-loop lag/memory observability and controlled verification.
+
 ## Unreleased
 
 ### Added

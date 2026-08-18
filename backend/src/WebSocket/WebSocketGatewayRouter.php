@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\WebSocket;
 
 use CodeLandQuiz\Support\ClientAddress;
+use CodeLandQuiz\Observability\RuntimeLogger;
 use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\WebSocket\Frame;
@@ -30,6 +31,7 @@ final class WebSocketGatewayRouter
         private readonly WebSocketAbuseLimiter $abuseLimiter,
         private readonly ClientAddress $clientAddress,
         private readonly WebSocketRoutePolicy $routePolicy,
+        private readonly RuntimeLogger $logger,
     ) {
     }
 
@@ -73,6 +75,10 @@ final class WebSocketGatewayRouter
                 $clientIdentifier,
             );
         } catch (WebSocketRateLimitExceededException) {
+            $this->logger->warning('websocket.connection_limit_rejected', [
+                'fd' => $fileDescriptor,
+                'reason' => 'connection_limit',
+            ]);
             $this->pushError(
                 server: $server,
                 fileDescriptor: $fileDescriptor,
@@ -92,7 +98,10 @@ final class WebSocketGatewayRouter
             unset($this->gatewaysByFileDescriptor[$fileDescriptor]);
             $this->connectionLimiter->remove($fileDescriptor);
             $this->abuseLimiter->removeConnection($fileDescriptor);
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.open_failed', [
+                'fd' => $fileDescriptor,
+                'exception' => $throwable::class,
+            ]);
             $this->rejectWithInternalError($server, $fileDescriptor);
         }
     }
@@ -122,7 +131,10 @@ final class WebSocketGatewayRouter
         try {
             $gateway->message($server, $frame);
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.message_failed', [
+                'fd' => $frame->fd,
+                'exception' => $throwable::class,
+            ]);
             $this->rejectWithInternalError($server, $frame->fd);
         }
     }
@@ -139,11 +151,26 @@ final class WebSocketGatewayRouter
         try {
             $gateway->close($server, $fileDescriptor);
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.close_failed', [
+                'fd' => $fileDescriptor,
+                'exception' => $throwable::class,
+            ]);
         } finally {
             $this->connectionLimiter->remove($fileDescriptor);
             $this->abuseLimiter->removeConnection($fileDescriptor);
         }
+    }
+
+    public function heartbeatSweep(
+        Server $server,
+        int $monotonicNanoseconds,
+        int $staleTimeoutSeconds,
+    ): int {
+        return $this->participantGateway->heartbeatSweep(
+            server: $server,
+            monotonicNanoseconds: $monotonicNanoseconds,
+            staleTimeoutSeconds: $staleTimeoutSeconds,
+        );
     }
 
     private function gatewayForRequest(Request $request): ?WebSocketGateway

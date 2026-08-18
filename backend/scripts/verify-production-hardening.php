@@ -69,6 +69,12 @@ function productionConfig(array $overrides = []): AppConfig
         'WS_CONNECTION_LIMIT' => '2000',
         'WS_PENDING_CONNECTION_LIMIT' => '750',
         'WS_CONNECTION_PER_IP_LIMIT' => '750',
+        'WS_HEARTBEAT_INTERVAL_SECONDS' => '25',
+        'WS_STALE_TIMEOUT_SECONDS' => '75',
+        'OPENSWOOLE_MAX_CONNECTIONS' => '4096',
+        'OPENSWOOLE_MAX_COROUTINES' => '4096',
+        'OPENSWOOLE_TRANSPORT_HEARTBEAT_CHECK_INTERVAL_SECONDS' => '30',
+        'OPENSWOOLE_TRANSPORT_HEARTBEAT_IDLE_SECONDS' => '120',
         'COOKIE_SECURE' => 'true',
         'COOKIE_HTTP_ONLY' => 'true',
         'COOKIE_SAME_SITE' => 'Strict',
@@ -98,6 +104,13 @@ assertProduction(
     $config->getMaximumUploadSizeBytes() === 5 * 1024 * 1024
         && $config->getMaximumUploadPackageLengthBytes() === 6 * 1024 * 1024,
     'Application upload and multipart package limits are not aligned.',
+);
+assertProduction(
+    $config->getWebSocketHeartbeatIntervalSeconds() === 25
+        && $config->getWebSocketStaleTimeoutSeconds() === 75
+        && $config->getOpenSwooleMaximumConnections() === 4096
+        && $config->getOpenSwooleMaximumCoroutines() === 4096,
+    'Production OpenSwoole runtime limits were not retained.',
 );
 
 foreach ([
@@ -170,7 +183,9 @@ assertProduction(
     is_string($nginx)
         && str_contains($nginx, 'ssl_protocols TLSv1.2 TLSv1.3;')
         && str_contains($nginx, 'proxy_set_header Upgrade $http_upgrade;')
-        && str_contains($nginx, 'proxy_read_timeout 3600s;')
+        && str_contains($nginx, 'proxy_read_timeout 150s;')
+        && str_contains($nginx, 'location = /ready')
+        && str_contains($nginx, 'location = /internal/metrics')
         && str_contains($nginx, 'client_max_body_size 6m;')
         && substr_count($nginx, 'proxy_pass http://backend:9501;') >= 7
         && !str_contains($nginx, 'proxy_pass http://backend:9501/;'),

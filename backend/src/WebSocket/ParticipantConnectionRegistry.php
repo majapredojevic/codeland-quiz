@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use Closure;
 use CodeLandQuiz\Model\ParticipantType;
 use DateTimeImmutable;
 use RuntimeException;
 
 final class ParticipantConnectionRegistry
 {
+    private Closure $monotonicClock;
+
     /**
      * @var array<int, string>
      */
@@ -34,6 +37,12 @@ final class ParticipantConnectionRegistry
      * @var array<int, int>
      */
     private array $answeredQuestionOrderByFileDescriptor = [];
+
+    public function __construct(?Closure $monotonicClock = null)
+    {
+        $this->monotonicClock = $monotonicClock
+            ?? static fn (): int => hrtime(true);
+    }
 
     public function registerPending(int $fileDescriptor): string
     {
@@ -86,6 +95,7 @@ final class ParticipantConnectionRegistry
             participantType: $participantType,
             studentId: $studentId,
             participantTokenExpiresAt: $participantTokenExpiresAt,
+            lastSeenMonotonicNanoseconds: ($this->monotonicClock)(),
         );
 
         $this->authenticatedConnections[$fileDescriptor] = $connection;
@@ -134,6 +144,63 @@ final class ParticipantConnectionRegistry
         );
 
         return $connection;
+    }
+
+    public function removeIfCurrent(
+        int $fileDescriptor,
+        string $connectionId,
+    ): ?AuthenticatedParticipantConnection {
+        if (!$this->isCurrent($fileDescriptor, $connectionId)) {
+            return null;
+        }
+
+        return $this->remove($fileDescriptor);
+    }
+
+    public function isCurrent(
+        int $fileDescriptor,
+        string $connectionId,
+    ): bool {
+        $connection = $this->authenticatedConnections[$fileDescriptor] ?? null;
+
+        return $connection !== null
+            && hash_equals($connection->connectionId, $connectionId)
+            && ($this->currentFileDescriptorByParticipantId[
+                $connection->participantId
+            ] ?? null) === $fileDescriptor;
+    }
+
+    public function touchAuthenticated(
+        int $fileDescriptor,
+        string $connectionId,
+    ): bool {
+        if (!$this->isCurrent($fileDescriptor, $connectionId)) {
+            return false;
+        }
+
+        $this->authenticatedConnections[$fileDescriptor]->touch(
+            ($this->monotonicClock)(),
+        );
+
+        return true;
+    }
+
+    /**
+     * @return AuthenticatedParticipantConnection[]
+     */
+    public function authenticatedConnections(): array
+    {
+        return array_values($this->authenticatedConnections);
+    }
+
+    public function countPending(): int
+    {
+        return count($this->pendingConnectionIds);
+    }
+
+    public function countAuthenticated(): int
+    {
+        return count($this->authenticatedConnections);
     }
 
     /**

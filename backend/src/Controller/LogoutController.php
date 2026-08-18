@@ -42,8 +42,7 @@ final class LogoutController
 
             $this->authCookieService->clearAuthenticationCookies($response);
 
-            $response->status(204);
-            $response->end();
+            $this->responseFactory->noContent($response);
         } catch (Throwable) {
             $this->authCookieService->clearAuthenticationCookies($response);
             $this->responseFactory->error(

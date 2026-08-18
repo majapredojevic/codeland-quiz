@@ -7,6 +7,7 @@ namespace CodeLandQuiz\Support;
 use OpenSwoole\Coroutine;
 use PDO;
 use PDOException;
+use Throwable;
 
 final class Database
 {
@@ -46,6 +47,17 @@ final class Database
         }
 
         return $this->fallbackConnection;
+    }
+
+    public function isReady(): bool
+    {
+        try {
+            return (int) $this->getConnection()
+                ->query('SELECT 1')
+                ->fetchColumn() === 1;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function connect(): PDO

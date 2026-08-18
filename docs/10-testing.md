@@ -11,6 +11,7 @@ cd backend
 composer verify-security
 composer verify-production
 composer verify-images
+composer verify-runtime
 composer audit --locked
 
 cd ../frontend
@@ -33,6 +34,9 @@ separately.
 
 - REST: request validation, status, JSON shape/content type, middleware and role combinations.
 - WebSocket: authentication timeout, participant authentication, answer/event ordering, reconnect/replacement and removal.
+- Runtime heartbeat: healthy idle ACK, silent stale cleanup, fd reuse and old-socket/new-socket ownership.
+- Runtime lifecycle: startup/WorkerExit presence reconciliation, abrupt restart recovery, timer singularity and readiness gating.
+- Observability: distinct bounded request IDs, JSON log context, internal metrics privacy and controlled event-loop-lag measurement.
 - Database: rows, foreign keys, generated uniqueness, snapshots, token rotation links, audit and statistics consistency.
 - Security regressions: cookies/CSRF, generic login failures, inactive staff, password-change gating, refresh rotation/revocation and role denial.
 - Concurrency: parallel answer/close and join/start operations; transaction rollback and lock ordering.
@@ -61,3 +65,8 @@ Test duplicate registered join, duplicate nickname, duplicate answer, answer aft
 - JOIN vs START: join shared lock first → participant is included before start; start exclusive lock first → later join observes ACTIVE and is rejected.
 
 Use separate concurrent clients/connections and verify both API/WebSocket outcome and committed database state. Syntax checks and `git diff --check` supplement, but do not replace, runtime testing.
+
+Phase 3 uses configurable short heartbeat thresholds for automated integration
+checks; production defaults remain 25/75 seconds. The 500-player test is not
+part of this verification. Capture its later methodology/results separately
+and do not infer capacity from functional hardening checks.
