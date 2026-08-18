@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Auth;
 
 use CodeLandQuiz\Config\AppConfig;
+use CodeLandQuiz\Auth\Exception\InvalidCredentialsException;
 use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
 use CodeLandQuiz\DTO\RefreshResult;
@@ -28,59 +29,62 @@ final readonly class AuthService
     ) {
     }
 
-    public function login(LoginDTO $dto, ?string $userAgent = null): LoginResult
+    public function login(
+        LoginDTO $dto,
+        ?string $userAgent = null,
+        string $clientIdentifier = 'unknown',
+    ): LoginResult
     {
-        $this->loginAttemptService->ensureLoginAllowed($dto->email);
+        $user = $this->loginAttemptService->executeLoginAttempt(
+            email: $dto->email,
+            clientIdentifier: $clientIdentifier,
+            operation: function () use ($dto, $userAgent) {
+                $user = $this->users->findByEmailIncludingInactive(
+                    $dto->email,
+                );
 
-        $user = $this->users->findByEmailIncludingInactive($dto->email);
+                if (
+                    $user === null
+                    || !$this->passwordHasher->verify(
+                        $dto->password,
+                        $user->getPasswordHash(),
+                    )
+                    || !$user->isActive()
+                    || !$user->canUseNormalLogin()
+                ) {
+                    $this->loginAttemptService->recordFailure(
+                        $dto->email,
+                        $userAgent,
+                    );
+                    $this->auditLogService->log(
+                        action: AuditAction::LOGIN_FAILED,
+                        userId: $user?->getId(),
+                        metadata: ['email' => $dto->email],
+                    );
 
-        if ($user === null) {
-            $this->loginAttemptService->recordFailure($dto->email, $userAgent);
-            $this->auditLogService->log(
-                action: AuditAction::LOGIN_FAILED,
-                metadata: [
-                    'email' => $dto->email,
-                ],
-            );
+                    throw new InvalidCredentialsException(
+                        'Invalid credentials.',
+                    );
+                }
 
-            throw new RuntimeException('Invalid credentials.');
-        }
+                if ($this->passwordHasher->needsRehash($user->getPasswordHash())) {
+                    $user->changePasswordHash(
+                        $this->passwordHasher->hash($dto->password),
+                    );
+                    $this->users->save($user);
+                }
 
-        if (!$this->passwordHasher->verify($dto->password, $user->getPasswordHash())) {
-            $this->loginAttemptService->recordFailure($dto->email, $userAgent);
-            $this->auditLogService->log(
-                action: AuditAction::LOGIN_FAILED,
-                userId: $user->getId(),
-                metadata: [
-                    'email' => $dto->email,
-                ],
-            );
+                $this->loginAttemptService->recordSuccess(
+                    $dto->email,
+                    $userAgent,
+                );
+                $this->auditLogService->log(
+                    action: AuditAction::LOGIN_SUCCESS,
+                    userId: $user->getId(),
+                );
 
-            throw new RuntimeException('Invalid credentials.');
-        }
-
-        if (!$user->isActive() || !$user->canUseNormalLogin()) {
-            $this->loginAttemptService->recordFailure($dto->email, $userAgent);
-            $this->auditLogService->log(
-                action: AuditAction::LOGIN_FAILED,
-                userId: $user->getId(),
-                metadata: [
-                    'email' => $dto->email,
-                ],
-            );
-
-            throw new RuntimeException('Invalid credentials.');
-        }
-
-        if ($this->passwordHasher->needsRehash($user->getPasswordHash())) {
-            $user->changePasswordHash($this->passwordHasher->hash($dto->password));
-            $this->users->save($user);
-        }
-
-        $this->loginAttemptService->recordSuccess($dto->email, $userAgent);
-        $this->auditLogService->log(
-            action: AuditAction::LOGIN_SUCCESS,
-            userId: $user->getId(),
+                return $user;
+            },
         );
 
         $accessToken = $this->jwtService->createAccessToken($user);

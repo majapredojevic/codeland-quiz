@@ -50,6 +50,31 @@ final readonly class AppConfig
 
     private int $loginLockDurationMinutes;
 
+    private int $loginIpAttemptLimit;
+
+    /**
+     * @var string[]
+     */
+    private array $webSocketAllowedOrigins;
+
+    private int $webSocketGameplayMaximumFrameBytes;
+
+    private int $webSocketAuthenticationAttemptLimit;
+
+    private int $webSocketAuthenticationIpAttemptLimit;
+
+    private int $webSocketAuthenticationIpWindowSeconds;
+
+    private int $webSocketAnswerAttemptLimit;
+
+    private int $webSocketAnswerAttemptWindowSeconds;
+
+    private int $webSocketConnectionLimit;
+
+    private int $webSocketPendingConnectionLimit;
+
+    private int $webSocketConnectionPerIpLimit;
+
     private bool $cookieSecure;
 
     private bool $cookieHttpOnly;
@@ -91,6 +116,37 @@ final readonly class AppConfig
         $this->csrfTokenExpirationMinutes = $this->environment->getInt('CSRF_TOKEN_EXPIRATION_MINUTES');
         $this->loginAttemptLimit = $this->environment->getInt('LOGIN_ATTEMPT_LIMIT');
         $this->loginLockDurationMinutes = $this->environment->getInt('LOGIN_LOCK_DURATION_MINUTES');
+        $this->loginIpAttemptLimit = $this->environment->getInt('LOGIN_IP_ATTEMPT_LIMIT');
+        $this->webSocketAllowedOrigins = $this->parseList(
+            $this->environment->get('WS_ALLOWED_ORIGINS'),
+        );
+        $this->webSocketGameplayMaximumFrameBytes = $this->environment->getInt(
+            'WS_GAMEPLAY_MAX_FRAME_BYTES',
+        );
+        $this->webSocketAuthenticationAttemptLimit = $this->environment->getInt(
+            'WS_AUTH_ATTEMPT_LIMIT',
+        );
+        $this->webSocketAuthenticationIpAttemptLimit = $this->environment->getInt(
+            'WS_AUTH_IP_ATTEMPT_LIMIT',
+        );
+        $this->webSocketAuthenticationIpWindowSeconds = $this->environment->getInt(
+            'WS_AUTH_IP_WINDOW_SECONDS',
+        );
+        $this->webSocketAnswerAttemptLimit = $this->environment->getInt(
+            'WS_ANSWER_ATTEMPT_LIMIT',
+        );
+        $this->webSocketAnswerAttemptWindowSeconds = $this->environment->getInt(
+            'WS_ANSWER_ATTEMPT_WINDOW_SECONDS',
+        );
+        $this->webSocketConnectionLimit = $this->environment->getInt(
+            'WS_CONNECTION_LIMIT',
+        );
+        $this->webSocketPendingConnectionLimit = $this->environment->getInt(
+            'WS_PENDING_CONNECTION_LIMIT',
+        );
+        $this->webSocketConnectionPerIpLimit = $this->environment->getInt(
+            'WS_CONNECTION_PER_IP_LIMIT',
+        );
         $this->cookieSecure = $this->environment->getBool('COOKIE_SECURE');
         $this->cookieHttpOnly = $this->environment->getBool('COOKIE_HTTP_ONLY');
         $this->cookieSameSite = CookieSameSite::from($this->environment->get('COOKIE_SAME_SITE'));
@@ -112,6 +168,16 @@ final readonly class AppConfig
 
         $this->ensurePositive($this->loginAttemptLimit, 'Login attempt limit');
         $this->ensurePositive($this->loginLockDurationMinutes, 'Login lock duration');
+        $this->ensurePositive($this->loginIpAttemptLimit, 'Login IP attempt limit');
+        $this->ensurePositive($this->webSocketGameplayMaximumFrameBytes, 'WebSocket gameplay frame limit');
+        $this->ensurePositive($this->webSocketAuthenticationAttemptLimit, 'WebSocket authentication attempt limit');
+        $this->ensurePositive($this->webSocketAuthenticationIpAttemptLimit, 'WebSocket authentication IP attempt limit');
+        $this->ensurePositive($this->webSocketAuthenticationIpWindowSeconds, 'WebSocket authentication IP window');
+        $this->ensurePositive($this->webSocketAnswerAttemptLimit, 'WebSocket answer attempt limit');
+        $this->ensurePositive($this->webSocketAnswerAttemptWindowSeconds, 'WebSocket answer attempt window');
+        $this->ensurePositive($this->webSocketConnectionLimit, 'WebSocket connection limit');
+        $this->ensurePositive($this->webSocketPendingConnectionLimit, 'WebSocket pending connection limit');
+        $this->ensurePositive($this->webSocketConnectionPerIpLimit, 'WebSocket connection per-IP limit');
         $this->ensurePositive($this->jwtExpirationMinutes, 'JWT expiration');
         $this->ensurePositive($this->participantTokenTtlSeconds, 'Participant token TTL');
         $this->ensurePositive($this->refreshTokenExpirationDays, 'Refresh token expiration');
@@ -124,6 +190,30 @@ final readonly class AppConfig
 
         if ($this->allowedImageExtensions === []) {
             throw new InvalidArgumentException('Allowed image extensions cannot be empty.');
+        }
+
+        if ($this->webSocketAllowedOrigins === []) {
+            throw new InvalidArgumentException(
+                'WebSocket allowed origins cannot be empty.',
+            );
+        }
+
+        if (in_array('*', $this->webSocketAllowedOrigins, true)) {
+            throw new InvalidArgumentException(
+                'WebSocket allowed origins cannot contain a wildcard.',
+            );
+        }
+
+        if ($this->webSocketPendingConnectionLimit > $this->webSocketConnectionLimit) {
+            throw new InvalidArgumentException(
+                'WebSocket pending connection limit cannot exceed the global limit.',
+            );
+        }
+
+        if ($this->webSocketConnectionPerIpLimit > $this->webSocketConnectionLimit) {
+            throw new InvalidArgumentException(
+                'WebSocket per-IP connection limit cannot exceed the global limit.',
+            );
         }
 
         $unsupportedImageExtensions = array_diff(
@@ -150,6 +240,64 @@ final readonly class AppConfig
     public function getLoginLockDurationMinutes(): int
     {
         return $this->loginLockDurationMinutes;
+    }
+
+    public function getLoginIpAttemptLimit(): int
+    {
+        return $this->loginIpAttemptLimit;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getWebSocketAllowedOrigins(): array
+    {
+        return $this->webSocketAllowedOrigins;
+    }
+
+    public function getWebSocketGameplayMaximumFrameBytes(): int
+    {
+        return $this->webSocketGameplayMaximumFrameBytes;
+    }
+
+    public function getWebSocketAuthenticationAttemptLimit(): int
+    {
+        return $this->webSocketAuthenticationAttemptLimit;
+    }
+
+    public function getWebSocketAuthenticationIpAttemptLimit(): int
+    {
+        return $this->webSocketAuthenticationIpAttemptLimit;
+    }
+
+    public function getWebSocketAuthenticationIpWindowSeconds(): int
+    {
+        return $this->webSocketAuthenticationIpWindowSeconds;
+    }
+
+    public function getWebSocketAnswerAttemptLimit(): int
+    {
+        return $this->webSocketAnswerAttemptLimit;
+    }
+
+    public function getWebSocketAnswerAttemptWindowSeconds(): int
+    {
+        return $this->webSocketAnswerAttemptWindowSeconds;
+    }
+
+    public function getWebSocketConnectionLimit(): int
+    {
+        return $this->webSocketConnectionLimit;
+    }
+
+    public function getWebSocketPendingConnectionLimit(): int
+    {
+        return $this->webSocketPendingConnectionLimit;
+    }
+
+    public function getWebSocketConnectionPerIpLimit(): int
+    {
+        return $this->webSocketConnectionPerIpLimit;
     }
 
     public function getJwtExpirationMinutes(): int
@@ -286,12 +434,22 @@ final readonly class AppConfig
      */
     private function parseAllowedImageExtensions(string $extensions): array
     {
+        return $this->parseList($extensions, true);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function parseList(string $values, bool $lowercase = false): array
+    {
         return array_values(array_unique(array_filter(
             array_map(
-                static fn(string $extension): string => strtolower(trim($extension)),
-                explode(',', $extensions),
+                static fn(string $value): string => $lowercase
+                    ? strtolower(trim($value))
+                    : trim($value),
+                explode(',', $values),
             ),
-            static fn(string $extension): bool => $extension !== '',
+            static fn(string $value): bool => $value !== '',
         )));
     }
 

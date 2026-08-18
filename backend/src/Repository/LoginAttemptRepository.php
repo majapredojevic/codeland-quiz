@@ -9,6 +9,16 @@ use DateTimeImmutable;
 
 interface LoginAttemptRepository
 {
+    /**
+     * @template T
+     * @param callable(): T $operation
+     * @return T
+     */
+    public function synchronizedByEmail(
+        string $email,
+        callable $operation,
+    ): mixed;
+
     public function save(LoginAttempt $attempt): void;
 
     public function countFailedAttemptsSince(

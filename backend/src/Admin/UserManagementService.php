@@ -123,7 +123,7 @@ final readonly class UserManagementService
             $id,
             $performedByUserId,
         ): UserListItemDTO {
-            $teacher = $this->users->findTeacherById($id);
+            $teacher = $this->users->findTeacherByIdForUpdate($id);
 
             if ($teacher === null) {
                 throw new TeacherNotFoundException('Teacher was not found.');
@@ -210,22 +210,22 @@ final readonly class UserManagementService
         int $id,
         int $performedByUserId,
     ): ResetTeacherPasswordResult {
-        $teacher = $this->users->findTeacherById($id);
-
-        if ($teacher === null) {
-            throw new TeacherNotFoundException('Teacher was not found.');
-        }
-
         $temporaryPassword = $this->temporaryPasswordGenerator->generate();
         $passwordHash = $this->passwordHasher->hash($temporaryPassword);
 
-        $teacher->changePasswordHash($passwordHash);
-        $teacher->requirePasswordChange();
-
-        $this->transactionManager->transactional(function () use (
+        $user = $this->transactionManager->transactional(function () use (
+            $id,
+            $passwordHash,
             $performedByUserId,
-            $teacher,
-        ): void {
+        ): UserListItemDTO {
+            $teacher = $this->users->findTeacherByIdForUpdate($id);
+
+            if ($teacher === null) {
+                throw new TeacherNotFoundException('Teacher was not found.');
+            }
+
+            $teacher->changePasswordHash($passwordHash);
+            $teacher->requirePasswordChange();
             $this->users->save($teacher);
             $revokedRefreshTokens = $this->refreshTokens->revokeAllForUser(
                 $teacher->getId(),
@@ -241,10 +241,12 @@ final readonly class UserManagementService
                     'revokedRefreshTokens' => $revokedRefreshTokens,
                 ],
             );
+
+            return $this->toUserListItem($teacher);
         });
 
         return new ResetTeacherPasswordResult(
-            user: $this->toUserListItem($teacher),
+            user: $user,
             temporaryPassword: $temporaryPassword,
         );
     }
@@ -284,7 +286,7 @@ final readonly class UserManagementService
             $performedByUserId,
             $shouldBeActive,
         ): UserListItemDTO {
-            $teacher = $this->users->findTeacherById($id);
+            $teacher = $this->users->findTeacherByIdForUpdate($id);
 
             if ($teacher === null) {
                 throw new TeacherNotFoundException('Teacher was not found.');

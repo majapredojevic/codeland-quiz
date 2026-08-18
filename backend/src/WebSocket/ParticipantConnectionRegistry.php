@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\WebSocket;
 
 use CodeLandQuiz\Model\ParticipantType;
+use DateTimeImmutable;
 use RuntimeException;
 
 final class ParticipantConnectionRegistry
@@ -28,6 +29,11 @@ final class ParticipantConnectionRegistry
      * @var array<int, array<int, true>>
      */
     private array $fileDescriptorsBySessionId = [];
+
+    /**
+     * @var array<int, int>
+     */
+    private array $answeredQuestionOrderByFileDescriptor = [];
 
     public function registerPending(int $fileDescriptor): string
     {
@@ -54,6 +60,7 @@ final class ParticipantConnectionRegistry
         int $sessionId,
         ParticipantType $participantType,
         ?int $studentId,
+        DateTimeImmutable $participantTokenExpiresAt,
     ): ?int {
         if (!$this->isPending($fileDescriptor, $connectionId)) {
             throw new RuntimeException(
@@ -78,6 +85,7 @@ final class ParticipantConnectionRegistry
             sessionId: $sessionId,
             participantType: $participantType,
             studentId: $studentId,
+            participantTokenExpiresAt: $participantTokenExpiresAt,
         );
 
         $this->authenticatedConnections[$fileDescriptor] = $connection;
@@ -144,6 +152,32 @@ final class ParticipantConnectionRegistry
         return isset($this->authenticatedConnections[$fileDescriptor]);
     }
 
+    public function markAnswerAccepted(
+        int $fileDescriptor,
+        int $questionOrder,
+    ): void {
+        if (!$this->isAuthenticated($fileDescriptor)) {
+            return;
+        }
+
+        $this->answeredQuestionOrderByFileDescriptor[$fileDescriptor] =
+            $questionOrder;
+    }
+
+    public function hasAcceptedCurrentAnswer(int $fileDescriptor): bool
+    {
+        return isset(
+            $this->answeredQuestionOrderByFileDescriptor[$fileDescriptor],
+        );
+    }
+
+    public function clearAcceptedAnswersForSession(int $sessionId): void
+    {
+        foreach ($this->findSessionFileDescriptors($sessionId) as $fileDescriptor) {
+            unset($this->answeredQuestionOrderByFileDescriptor[$fileDescriptor]);
+        }
+    }
+
     private function removeAuthenticated(
         int $fileDescriptor,
     ): ?AuthenticatedParticipantConnection {
@@ -154,6 +188,7 @@ final class ParticipantConnectionRegistry
         }
 
         unset($this->authenticatedConnections[$fileDescriptor]);
+        unset($this->answeredQuestionOrderByFileDescriptor[$fileDescriptor]);
         unset(
             $this->fileDescriptorsBySessionId[
                 $connection->sessionId

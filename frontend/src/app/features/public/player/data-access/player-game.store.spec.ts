@@ -268,6 +268,20 @@ describe('PlayerGameStore', () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it('stops reconnecting and clears the expired participant session', () => {
+    const socket = authenticate('ACTIVE');
+    socket.receive('ERROR', {
+      code: 'PARTICIPANT_SESSION_EXPIRED',
+      message: 'expired',
+    });
+
+    expect(store.phase()).toBe('TERMINAL_ERROR');
+    expect(store.terminalMessage()).toBe(
+      'Ova sesija je istekla. Pridruži se igri ponovo.',
+    );
+    expect(sessionStorage.length).toBe(0);
+  });
+
   it('derives the countdown from the server deadline and locks locally at zero', () => {
     vi.useFakeTimers();
     const socket = authenticate('ACTIVE');

@@ -16,7 +16,11 @@ Logout is CSRF-protected but independent of a valid access JWT. A missing, inval
 
 ## Password and login protection
 
-Passwords use PHP `password_hash`/`password_verify`, with rehash on successful eligible login. New/reset teacher accounts receive a generated temporary password and `must_change_password`; middleware restricts normal protected operations until change. Login attempts are stored and counted by email/time for rate limiting. Unknown, incorrect, inactive and non-staff login attempts receive the same generic invalid-credentials response. Known-user failures are audited.
+Passwords use PHP `password_hash`/`password_verify`, with rehash on successful eligible login. New/reset teacher accounts receive a generated temporary password and `must_change_password`; middleware restricts normal protected operations until change. Login email is normalized and bounded to 180 bytes, while persisted User-Agent data is reduced to printable ASCII and bounded to 255 bytes.
+
+Failed logins are limited to 5 per normalized account in 15 minutes. A MySQL account advisory lock serializes the account check and attempt write. A second single-worker in-memory limit allows 100 failed logins per client IP in the same window; successful logins release their IP reservation. The IP value comes from the direct socket address, not forwarded headers. Active limits return HTTP 429. Unknown, incorrect, inactive and non-staff login attempts receive the same generic invalid-credentials response, while unexpected infrastructure failures receive a generic 500 response and are logged without request credentials or tokens.
+
+Password changes and admin teacher profile/reset/status mutations lock the affected user row with `SELECT ... FOR UPDATE` inside their transaction. Read-only profile and list operations remain unlocked.
 
 ## Middleware
 
@@ -31,8 +35,12 @@ Normal protected mutations are ordered authentication → CSRF → required-pass
 
 Participant JWTs use a separate minimum-32-character secret and HS256. Claims include `iss`, `aud`, `tokenType`, string `sub`, `sessionId`, `participantType`, nullable `studentId`, `iat`, `exp` and random `jti`. WebSocket authentication verifies claims and current session/participant database state; removed participants are rejected. Participant tokens grant no staff permissions.
 
-The gameplay socket requires authentication within 10 seconds. One socket is current per participant; a new authenticated socket replaces the old one safely. Public game responses do not expose registered-student identity. Protected participant/report endpoints may expose it to staff. Answer acknowledgement does not reveal correctness; answer and final results are personalized.
+The gameplay socket accepts only exact origins in `WS_ALLOWED_ORIGINS`; missing, malformed and unlisted browser origins are rejected during the WebSocket handshake. Production origins must use HTTPS. `/ws/echo` is available only when `APP_ENV=development`, and its logging records frame length rather than frame contents.
+
+Gameplay frames are capped at 16 KiB before JSON decoding. The gameplay socket requires authentication within 10 seconds and allows three authentication attempts per connection, plus 1,000 authentication attempts per client IP each minute. Answer submissions allow eight attempts per connection in ten seconds. Once the backend accepts an answer, repeated submissions are rejected from authoritative connection state until the next question starts; the database uniqueness constraint remains authoritative.
+
+The single worker allows at most 2,000 WebSocket connections globally, 750 pending participant authentications and 750 connections per client IP. These broad ceilings accommodate 500 students and shared school NAT while bounding unauthenticated accumulation. Participant token expiry is retained in authenticated connection state and checked before each participant command. One socket is current per participant; a new authenticated socket replaces the old one safely. Public game responses do not expose registered-student identity. Protected participant/report endpoints may expose it to staff. Answer acknowledgement does not reveal correctness; answer and final results are personalized.
 
 ## Deployment responsibilities and future hardening
 
-TLS termination and a production reverse proxy are deployment responsibilities and are not present in this repository. CORS should be introduced only if deployment becomes cross-origin. Possible future work includes IP-based rate limiting, security headers, CAPTCHA where justified, Redis/shared multi-worker registry state and a participant-token revocation list. None is currently implemented.
+TLS termination and a production reverse proxy are deployment responsibilities and are not present in this repository. CORS should be introduced only if deployment becomes cross-origin. Login-attempt timestamp indexes keep time-window queries bounded, but old rows still require later operational retention/cleanup. Possible future work includes security headers, CAPTCHA where justified, Redis/shared multi-worker registry state and a participant-token revocation list.

@@ -13,7 +13,11 @@ interface UserRepository
 
     public function findById(int $id): ?User;
 
+    public function findByIdForUpdate(int $id): ?User;
+
     public function findTeacherById(int $id): ?User;
+
+    public function findTeacherByIdForUpdate(int $id): ?User;
 
     public function findByEmail(string $email): ?User;
 

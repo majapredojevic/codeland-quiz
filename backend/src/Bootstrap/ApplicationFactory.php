@@ -13,6 +13,8 @@ use CodeLandQuiz\Auth\DatabaseRefreshTokenService;
 use CodeLandQuiz\Auth\DefaultCsrfTokenService;
 use CodeLandQuiz\Auth\JwtTokenService;
 use CodeLandQuiz\Auth\LoginAttemptService;
+use CodeLandQuiz\Auth\LoginInputNormalizer;
+use CodeLandQuiz\Auth\LoginIpRateLimiter;
 use CodeLandQuiz\Auth\SecureTemporaryPasswordGenerator;
 use CodeLandQuiz\Auth\UserService;
 use CodeLandQuiz\Admin\UserManagementService;
@@ -69,6 +71,7 @@ use CodeLandQuiz\Student\StudentService;
 use CodeLandQuiz\Student\StudentStatisticsAssembler;
 use CodeLandQuiz\Student\StudentStatisticsService;
 use CodeLandQuiz\Support\Database;
+use CodeLandQuiz\Support\ClientAddress;
 use CodeLandQuiz\Support\Environment;
 use CodeLandQuiz\Support\PdoTransactionManager;
 use CodeLandQuiz\Question\QuestionContentValidator;
@@ -96,6 +99,11 @@ use CodeLandQuiz\WebSocket\ParticipantWebSocketSender;
 use CodeLandQuiz\WebSocket\SessionWebSocketBroadcaster;
 use CodeLandQuiz\WebSocket\SessionWebSocketPayloadMapper;
 use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
+use CodeLandQuiz\WebSocket\WebSocketAbuseLimiter;
+use CodeLandQuiz\WebSocket\WebSocketConnectionLimiter;
+use CodeLandQuiz\WebSocket\WebSocketFramePolicy;
+use CodeLandQuiz\WebSocket\WebSocketOriginPolicy;
+use CodeLandQuiz\WebSocket\WebSocketRoutePolicy;
 use CodeLandQuiz\WebSocket\WebSocketMessageEncoder;
 use OpenSwoole\WebSocket\Server;
 
@@ -207,6 +215,8 @@ final class ApplicationFactory
             authService: $this->createAuthService(),
             authCookieService: $this->createAuthCookieService(),
             responseFactory: new ResponseFactory(),
+            inputNormalizer: new LoginInputNormalizer(),
+            clientAddress: new ClientAddress(),
         );
     }
 
@@ -524,6 +534,25 @@ final class ApplicationFactory
         $participantRepository = new MySqlSessionParticipantRepository(
             $this->database,
         );
+        $connectionLimiter = new WebSocketConnectionLimiter(
+            globalLimit: $this->config->getWebSocketConnectionLimit(),
+            pendingLimit:
+                $this->config->getWebSocketPendingConnectionLimit(),
+            perIpLimit:
+                $this->config->getWebSocketConnectionPerIpLimit(),
+        );
+        $abuseLimiter = new WebSocketAbuseLimiter(
+            authenticationAttemptLimit:
+                $this->config->getWebSocketAuthenticationAttemptLimit(),
+            authenticationIpAttemptLimit:
+                $this->config->getWebSocketAuthenticationIpAttemptLimit(),
+            authenticationIpWindowSeconds:
+                $this->config->getWebSocketAuthenticationIpWindowSeconds(),
+            answerAttemptLimit:
+                $this->config->getWebSocketAnswerAttemptLimit(),
+            answerAttemptWindowSeconds:
+                $this->config->getWebSocketAnswerAttemptWindowSeconds(),
+        );
 
         return new WebSocketGatewayRouter(
             participantGateway: new ParticipantWebSocketGateway(
@@ -561,9 +590,24 @@ final class ApplicationFactory
                 connectionRegistry: $this->participantConnectionRegistry,
                 messageEncoder: $this->webSocketMessageEncoder,
                 payloadMapper: $this->sessionWebSocketPayloadMapper,
+                connectionLimiter: $connectionLimiter,
+                abuseLimiter: $abuseLimiter,
             ),
             echoGateway: new EchoGateway(),
             messageEncoder: $this->webSocketMessageEncoder,
+            originPolicy: new WebSocketOriginPolicy(
+                $this->config->getWebSocketAllowedOrigins(),
+                requireHttps: $this->config->getAppEnv() === 'production',
+            ),
+            framePolicy: new WebSocketFramePolicy(
+                $this->config->getWebSocketGameplayMaximumFrameBytes(),
+            ),
+            connectionLimiter: $connectionLimiter,
+            abuseLimiter: $abuseLimiter,
+            clientAddress: new ClientAddress(),
+            routePolicy: new WebSocketRoutePolicy(
+                echoEnabled: $this->config->getAppEnv() === 'development',
+            ),
         );
     }
 
@@ -616,7 +660,15 @@ final class ApplicationFactory
             csrfTokenService: new DefaultCsrfTokenService(),
             loginAttemptService: new LoginAttemptService(
                 loginAttempts: $loginAttemptRepository,
-                config: $this->config,
+                accountAttemptLimit:
+                    $this->config->getLoginAttemptLimit(),
+                lockDurationMinutes:
+                    $this->config->getLoginLockDurationMinutes(),
+                ipRateLimiter: new LoginIpRateLimiter(
+                    attemptLimit: $this->config->getLoginIpAttemptLimit(),
+                    windowSeconds:
+                        $this->config->getLoginLockDurationMinutes() * 60,
+                ),
             ),
             auditLogService: new AuditLogService($auditLogRepository),
             config: $this->config,

@@ -6,15 +6,18 @@ namespace CodeLandQuiz\Controller;
 
 use CodeLandQuiz\Auth\AuthCookieService;
 use CodeLandQuiz\Auth\AuthService;
+use CodeLandQuiz\Auth\Exception\InvalidCredentialsException;
+use CodeLandQuiz\Auth\Exception\LoginRateLimitedException;
+use CodeLandQuiz\Auth\LoginInputNormalizer;
 use CodeLandQuiz\DTO\LoginDTO;
 use CodeLandQuiz\DTO\LoginResult;
 use CodeLandQuiz\Http\JsonRequest;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Support\ClientAddress;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
-use RuntimeException;
 use Throwable;
 
 final class AuthController
@@ -25,6 +28,8 @@ final class AuthController
         private readonly AuthService $authService,
         private readonly AuthCookieService $authCookieService,
         private readonly ResponseFactory $responseFactory,
+        private readonly LoginInputNormalizer $inputNormalizer,
+        private readonly ClientAddress $clientAddress,
     ) {
     }
 
@@ -38,10 +43,17 @@ final class AuthController
 
             $loginResult = $this->authService->login(
                 new LoginDTO(
-                    email: $body->getString('email'),
+                    email: $this->inputNormalizer->email(
+                        $body->getString('email'),
+                    ),
                     password: $body->getString('password'),
                 ),
-                $this->userAgent($request),
+                $this->inputNormalizer->userAgent(
+                    $request->header['user-agent'] ?? null,
+                ),
+                $this->clientAddress->identifier(
+                    $request->server['remote_addr'] ?? null,
+                ),
             );
 
             $this->authCookieService->setAuthenticationCookies(
@@ -67,16 +79,30 @@ final class AuthController
                 $exception->getMessage(),
                 400,
             );
-        } catch (RuntimeException $exception) {
+        } catch (InvalidCredentialsException) {
             $this->responseFactory->error(
                 $response,
-                $exception->getMessage(),
+                'Email ili lozinka nisu ispravni.',
                 401,
             );
-        } catch (Throwable) {
+        } catch (LoginRateLimitedException $exception) {
+            $response->header(
+                'Retry-After',
+                (string) $exception->getRetryAfterSeconds(),
+            );
             $this->responseFactory->error(
                 $response,
-                'Internal server error.',
+                'Previše neuspješnih pokušaja. Pokušajte ponovo kasnije.',
+                429,
+            );
+        } catch (Throwable $throwable) {
+            error_log(sprintf(
+                'Login infrastructure failure on /api/auth/login [%s].',
+                $throwable::class,
+            ));
+            $this->responseFactory->error(
+                $response,
+                'Prijava trenutno nije moguća. Pokušajte ponovo.',
                 500,
             );
         }
@@ -97,16 +123,5 @@ final class AuthController
                 'mustChangePassword' => $loginResult->mustChangePassword,
             ],
         ];
-    }
-
-    private function userAgent(Request $request): ?string
-    {
-        $userAgent = $request->header['user-agent'] ?? null;
-
-        if (!is_string($userAgent) || $userAgent === '') {
-            return null;
-        }
-
-        return $userAgent;
     }
 }

@@ -41,7 +41,7 @@ final readonly class UserService
             $dto,
             $newPasswordHash,
         ): void {
-            $user = $this->users->findById($authenticatedUserId);
+            $user = $this->users->findByIdForUpdate($authenticatedUserId);
 
             if ($user === null) {
                 throw new AuthenticatedUserUnavailableException(
