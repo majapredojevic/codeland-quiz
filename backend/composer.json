@@ -17,6 +17,7 @@
     },
     "scripts": {
         "verify-security": "@php scripts/verify-security-hardening.php",
+        "verify-production": "@php scripts/verify-production-hardening.php",
         "verify-images": "@php scripts/verify-question-image-storage.php"
     }
 }

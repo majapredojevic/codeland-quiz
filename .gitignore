@@ -24,3 +24,7 @@ docker/mysql/data/
 
 # Env files
 .env
+.env.production
+
+# Local production-stack verification material
+.local-production/

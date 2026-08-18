@@ -1,0 +1,159 @@
+name: codeland-quiz-production
+
+services:
+  nginx:
+    image: codeland-quiz-nginx:${CODELAND_IMAGE_TAG:?Set CODELAND_IMAGE_TAG in .env.production}
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      SERVER_NAME: ${SERVER_NAME:?Set SERVER_NAME in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - type: bind
+        source: ${TLS_CERTIFICATE_PATH:?Set TLS_CERTIFICATE_PATH in .env.production}
+        target: /etc/nginx/tls/fullchain.pem
+        read_only: true
+      - type: bind
+        source: ${TLS_PRIVATE_KEY_PATH:?Set TLS_PRIVATE_KEY_PATH in .env.production}
+        target: /etc/nginx/tls/privkey.pem
+        read_only: true
+    networks:
+      edge:
+        ipv4_address: 172.30.0.10
+    read_only: true
+    tmpfs:
+      - /etc/nginx/conf.d:rw,noexec,nosuid,size=1m
+      - /var/cache/nginx:rw,noexec,nosuid,size=32m
+      - /var/run:rw,noexec,nosuid,size=1m
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    image: codeland-quiz-backend:${CODELAND_IMAGE_TAG:?Set CODELAND_IMAGE_TAG in .env.production}
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.production
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-CodeLand Quiz}
+      APP_ENV: production
+      APP_URL: ${APP_URL:?Set APP_URL in .env.production}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:?Set DB_DATABASE in .env.production}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in .env.production}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      ACCESS_TOKEN_COOKIE_NAME: ${ACCESS_TOKEN_COOKIE_NAME:-codeland_access}
+      REFRESH_TOKEN_COOKIE_NAME: ${REFRESH_TOKEN_COOKIE_NAME:-codeland_refresh}
+      COOKIE_PATH: "/"
+      CSRF_TOKEN_COOKIE_NAME: ${CSRF_TOKEN_COOKIE_NAME:-codeland_csrf}
+      REFRESH_TOKEN_HASH_KEY: ${REFRESH_TOKEN_HASH_KEY:?Set REFRESH_TOKEN_HASH_KEY in .env.production}
+      PARTICIPANT_TOKEN_SECRET: ${PARTICIPANT_TOKEN_SECRET:?Set PARTICIPANT_TOKEN_SECRET in .env.production}
+      PARTICIPANT_TOKEN_TTL_SECONDS: ${PARTICIPANT_TOKEN_TTL_SECONDS:-86400}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      REFRESH_TOKEN_EXPIRATION_DAYS: ${REFRESH_TOKEN_EXPIRATION_DAYS:-7}
+      CSRF_TOKEN_EXPIRATION_MINUTES: ${CSRF_TOKEN_EXPIRATION_MINUTES:-120}
+      LOGIN_ATTEMPT_LIMIT: ${LOGIN_ATTEMPT_LIMIT:-5}
+      LOGIN_LOCK_DURATION_MINUTES: ${LOGIN_LOCK_DURATION_MINUTES:-15}
+      LOGIN_IP_ATTEMPT_LIMIT: ${LOGIN_IP_ATTEMPT_LIMIT:-100}
+      QUESTION_IMAGE_STORAGE_PATH: /var/www/backend/storage/question-images
+      TRUSTED_PROXY_CIDRS: 172.30.0.10/32
+      WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:?Set WS_ALLOWED_ORIGINS in .env.production}
+      WS_GAMEPLAY_MAX_FRAME_BYTES: ${WS_GAMEPLAY_MAX_FRAME_BYTES:-16384}
+      WS_AUTH_ATTEMPT_LIMIT: ${WS_AUTH_ATTEMPT_LIMIT:-3}
+      WS_AUTH_IP_ATTEMPT_LIMIT: ${WS_AUTH_IP_ATTEMPT_LIMIT:-1000}
+      WS_AUTH_IP_WINDOW_SECONDS: ${WS_AUTH_IP_WINDOW_SECONDS:-60}
+      WS_ANSWER_ATTEMPT_LIMIT: ${WS_ANSWER_ATTEMPT_LIMIT:-8}
+      WS_ANSWER_ATTEMPT_WINDOW_SECONDS: ${WS_ANSWER_ATTEMPT_WINDOW_SECONDS:-10}
+      WS_CONNECTION_LIMIT: ${WS_CONNECTION_LIMIT:-2000}
+      WS_PENDING_CONNECTION_LIMIT: ${WS_PENDING_CONNECTION_LIMIT:-750}
+      WS_CONNECTION_PER_IP_LIMIT: ${WS_CONNECTION_PER_IP_LIMIT:-750}
+      COOKIE_SECURE: "true"
+      COOKIE_HTTP_ONLY: "true"
+      COOKIE_SAME_SITE: Strict
+      MAX_UPLOAD_SIZE_MB: "5"
+      DEFAULT_QUIZ_QUESTION_TIME_LIMIT_SECONDS: ${DEFAULT_QUIZ_QUESTION_TIME_LIMIT_SECONDS:-30}
+      MAXIMUM_NICKNAME_LENGTH: ${MAXIMUM_NICKNAME_LENGTH:-100}
+      ALLOWED_IMAGE_EXTENSIONS: ${ALLOWED_IMAGE_EXTENSIONS:-jpg,jpeg,png,webp}
+      DEFAULT_PAGE_SIZE: ${DEFAULT_PAGE_SIZE:-10}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-20}
+    expose:
+      - "9501"
+    volumes:
+      - question_images:/var/www/backend/storage/question-images
+    networks:
+      edge:
+        ipv4_address: 172.30.0.20
+      database:
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - php
+        - -r
+        - "exit(@file_get_contents('http://127.0.0.1:9501/health') === false ? 1 : 0);"
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  mysql:
+    image: mysql:8.4.9
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    environment:
+      TZ: UTC
+      MYSQL_DATABASE: ${DB_DATABASE:?Set DB_DATABASE in .env.production}
+      MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME in .env.production}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env.production}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - database
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root --password="$${MYSQL_ROOT_PASSWORD}" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  database:
+    internal: true
+
+volumes:
+  mysql_data:
+  question_images:

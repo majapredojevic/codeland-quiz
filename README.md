@@ -10,7 +10,8 @@ CodeLand Quiz is a real-time classroom platform that demonstrates how asynchrono
 - MySQL
 - Docker
 - Composer
-- phpMyAdmin
+- Nginx (production edge)
+- phpMyAdmin (development only)
 
 ## Current Status
 
@@ -22,6 +23,7 @@ The project currently includes:
 - phpMyAdmin
 - Initial database schema
 - Admin seed data
+- Standalone HTTPS/WSS production deployment
 
 ## Local Development
 
@@ -29,3 +31,15 @@ Start the project:
 
 ```bash
 docker compose up -d
+```
+
+Run Angular development separately:
+
+```bash
+cd frontend
+npm start
+```
+
+Production uses a separate three-service stack and never inherits development
+ports or phpMyAdmin. See [docs/09-deployment.md](docs/09-deployment.md) before
+creating `.env.production` or mounting a real TLS certificate.

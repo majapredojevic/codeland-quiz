@@ -1,0 +1,14 @@
+.git
+.agents
+.codex
+.local-production
+.env
+.env.production
+backend/.env
+backend/vendor
+backend/storage/question-images
+docker/mysql/data
+frontend/.angular
+frontend/dist
+frontend/node_modules
+*.log

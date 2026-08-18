@@ -2,7 +2,32 @@
 
 > Status: Implemented
 
-No automated unit/integration test suite is present in the repository. Backend development validation is therefore documented as manual and tool-assisted smoke/regression testing.
+Angular unit tests and deterministic backend verification scripts are present. Database-integrated and full browser flows remain smoke/regression checks.
+
+Run the repeatable checks with:
+
+```bash
+cd backend
+composer verify-security
+composer verify-production
+composer verify-images
+composer audit --locked
+
+cd ../frontend
+npm test -- --watch=false
+npm run build -- --configuration production
+
+cd ..
+docker compose --env-file .env.production -f compose.production.yaml config
+docker compose --env-file .env.production -f compose.production.yaml build
+```
+
+Production deployment checks cover unsafe cookie/secret/origin rejection,
+trusted-proxy spoof resistance, aligned upload limits, exact/pinned runtime
+configuration, Nginx configuration syntax, HTTPS/WSS behavior, published ports,
+security headers, CSP behavior, and non-root backend execution. A self-signed
+local stack validates wiring only; the real hostname/certificate must be tested
+separately.
 
 ## Test categories
 

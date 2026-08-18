@@ -10,6 +10,7 @@ use CodeLandQuiz\Auth\LoginIpRateLimiter;
 use CodeLandQuiz\Model\LoginAttempt;
 use CodeLandQuiz\Model\ParticipantType;
 use CodeLandQuiz\Repository\LoginAttemptRepository;
+use CodeLandQuiz\Support\ClientAddress;
 use CodeLandQuiz\WebSocket\AuthenticatedParticipantConnection;
 use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use CodeLandQuiz\WebSocket\ParticipantConnectionRegistry;
@@ -114,6 +115,30 @@ assertSecurityThrows(
     InvalidArgumentException::class,
     fn () => $normalizer->email(str_repeat('a', 181) . '@example.com'),
     'Oversized login email was accepted.',
+);
+
+$clientAddress = new ClientAddress(['172.30.0.10/32']);
+$directAddress = bin2hex((string) inet_pton('203.0.113.25'));
+$forwardedAddress = bin2hex((string) inet_pton('198.51.100.42'));
+assertSecurity(
+    $clientAddress->identifier('203.0.113.25', '198.51.100.42')
+        === $directAddress,
+    'A non-trusted peer was able to spoof X-Real-IP.',
+);
+assertSecurity(
+    $clientAddress->identifier('172.30.0.10', '198.51.100.42')
+        === $forwardedAddress,
+    'The configured reverse proxy did not provide the real client address.',
+);
+assertSecurity(
+    $clientAddress->identifier('172.30.0.10', 'not-an-ip')
+        === bin2hex((string) inet_pton('172.30.0.10')),
+    'A malformed proxy-provided address did not safely fall back to the peer.',
+);
+assertSecurityThrows(
+    InvalidArgumentException::class,
+    fn () => new ClientAddress(['172.30.0.10/129']),
+    'An invalid trusted-proxy CIDR was accepted.',
 );
 
 $timestamp = strtotime('2026-08-18T12:00:00+00:00');
