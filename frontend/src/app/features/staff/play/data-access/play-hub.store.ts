@@ -36,7 +36,6 @@ export class PlayHubStore {
   private readonly quizzesErrorState = signal(false);
   private readonly recentQuizzesState = signal<RecentPlayableQuiz[]>([]);
   private readonly recentLoadingState = signal(false);
-  private readonly startingQuizIdState = signal<number | null>(null);
   private quizRequestVersion = 0;
 
   readonly topics = this.topicsState.asReadonly();
@@ -51,7 +50,6 @@ export class PlayHubStore {
   readonly quizzesError = this.quizzesErrorState.asReadonly();
   readonly recentQuizzes = this.recentQuizzesState.asReadonly();
   readonly recentLoading = this.recentLoadingState.asReadonly();
-  readonly startingQuizId = this.startingQuizIdState.asReadonly();
   readonly canToggleTopics = computed(() => this.topics().length > COLLAPSED_TOPIC_LIMIT);
   readonly visibleTopics = computed(() => {
     const topics = this.topics();
@@ -185,18 +183,6 @@ export class PlayHubStore {
       this.recentQuizzesState.set([]);
     } finally {
       this.recentLoadingState.set(false);
-    }
-  }
-
-  async createSession(quizId: number): Promise<number> {
-    if (this.startingQuizId() !== null) {
-      throw new Error('A quiz session is already being created.');
-    }
-    this.startingQuizIdState.set(quizId);
-    try {
-      return (await firstValueFrom(this.sessionsApi.create(quizId))).session.id;
-    } finally {
-      this.startingQuizIdState.set(null);
     }
   }
 

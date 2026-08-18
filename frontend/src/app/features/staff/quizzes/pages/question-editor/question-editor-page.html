@@ -105,15 +105,16 @@
         <div class="field-group">
           <div class="label-row">
             <label for="question-text">Tekst pitanja</label>
-            <span>{{ questionTextLength() }} / 1000</span>
+            <span>{{ questionTextLength() }} / {{ questionTextMaxLength }}</span>
           </div>
           <textarea
             id="question-text"
             rows="4"
+            clqQuestionTextLimit
             [formField]="questionForm.questionText"
             [attr.aria-invalid]="questionTextError() !== null"
             [attr.aria-describedby]="questionTextError() ? 'question-text-error' : null"
-            (input)="clearRequestError()"
+            (input)="limitQuestionText($event); clearRequestError()"
           ></textarea>
           @if (questionTextError(); as error) {
             <p id="question-text-error" class="field-error">{{ error }}</p>

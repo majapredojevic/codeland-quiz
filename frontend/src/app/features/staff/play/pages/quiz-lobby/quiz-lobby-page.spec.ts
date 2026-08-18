@@ -79,6 +79,26 @@ describe('QuizLobbyPage', () => {
     totalCorrectAnswerCount: 12,
     topThree: [
       {
+        rank: 3,
+        participantId: 11,
+        participantType: 'GUEST',
+        nickname: 'Ena',
+        avatarKey: 'koda-orange',
+        totalScore: 140,
+        answerCount: 2,
+        correctAnswerCount: 1,
+      },
+      {
+        rank: 2,
+        participantId: 10,
+        participantType: 'GUEST',
+        nickname: 'Niko',
+        avatarKey: 'koda-blue',
+        totalScore: 165,
+        answerCount: 2,
+        correctAnswerCount: 2,
+      },
+      {
         rank: 1,
         participantId: 9,
         participantType: 'GUEST',
@@ -302,6 +322,16 @@ describe('QuizLobbyPage', () => {
     expect(two.element.querySelector('.answer-grid')?.classList).toContain('has-two-options');
     const image = two.element.querySelector<HTMLImageElement>('.question-image');
     expect(image?.src).toContain('/media/questions/example.webp');
+    const prompt = two.element.querySelector('.presentation-question-prompt')!;
+    const answers = two.element.querySelector('.answer-grid')!;
+    const controls = two.element.querySelector('.game-controls')!;
+    expect(
+      prompt.compareDocumentPosition(image!) & Node.DOCUMENT_POSITION_CONTAINED_BY,
+    ).toBeTruthy();
+    expect(prompt.compareDocumentPosition(answers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      answers.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     image?.dispatchEvent(new Event('error'));
     two.fixture.detectChanges();
     expect(two.element.querySelector('.question-image')).toBeNull();
@@ -361,10 +391,53 @@ describe('QuizLobbyPage', () => {
     fixture.detectChanges();
     expect(finishSession).toHaveBeenCalledOnce();
     expect(element.querySelector('.final-screen')?.textContent).toContain('Kviz završen!');
+    element.querySelector<HTMLButtonElement>('.skip-reveal')?.click();
+    fixture.detectChanges();
     expect(element.querySelector('.podium')?.textContent).toContain('Lana');
     expect(element.querySelector<HTMLAnchorElement>('.final-results')?.getAttribute('href')).toBe(
       '/app/results/sessions/41',
     );
+    fixture.destroy();
+  });
+
+  it('reveals the final podium in the dramatic order 3, then 2, then 1', async () => {
+    vi.useFakeTimers();
+    sessionState.set({
+      ...waitingSession,
+      status: 'FINISHED',
+      endedAt: new Date().toISOString(),
+    });
+    finalResultState.set(finalResult);
+    const { fixture, element } = render();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(element.querySelectorAll('.podium-place')).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(350);
+    fixture.detectChanges();
+    expect(
+      Array.from(element.querySelectorAll('.podium-place')).map((node) =>
+        node.getAttribute('data-rank'),
+      ),
+    ).toEqual(['3']);
+
+    await vi.advanceTimersByTimeAsync(900);
+    fixture.detectChanges();
+    expect(
+      Array.from(element.querySelectorAll('.podium-place')).map((node) =>
+        node.getAttribute('data-rank'),
+      ),
+    ).toEqual(['3', '2']);
+
+    await vi.advanceTimersByTimeAsync(900);
+    fixture.detectChanges();
+    expect(
+      Array.from(element.querySelectorAll('.podium-place')).map((node) =>
+        node.getAttribute('data-rank'),
+      ),
+    ).toEqual(['3', '2', '1']);
+    expect(element.querySelector('.podium-confetti')).not.toBeNull();
     fixture.destroy();
   });
 });

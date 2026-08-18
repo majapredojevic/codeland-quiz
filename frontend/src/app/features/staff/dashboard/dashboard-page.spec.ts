@@ -7,6 +7,7 @@ import { AuthStore } from '../../../core/auth/auth.store';
 import { StaffUser } from '../../../core/auth/auth.models';
 import { NotificationService } from '../../../shared/feedback/notification.service';
 import { PlayHubStore } from '../play/data-access/play-hub.store';
+import { QuizLaunchService } from '../play/data-access/quiz-launch.service';
 import { DashboardPage } from './dashboard-page';
 
 describe('DashboardPage', () => {
@@ -37,7 +38,7 @@ describe('DashboardPage', () => {
   const queryParams = new BehaviorSubject<ParamMap>(convertToParamMap({}));
   const initialize = vi.fn().mockResolvedValue(undefined);
   const selectTopic = vi.fn().mockResolvedValue(undefined);
-  const createSession = vi.fn().mockResolvedValue(77);
+  const launch = vi.fn().mockResolvedValue(true);
   const navigate = vi.fn().mockResolvedValue(true);
   const error = vi.fn();
   const store = {
@@ -54,7 +55,6 @@ describe('DashboardPage', () => {
     quizzesError: signal(false),
     recentQuizzes: signal([{ ...quiz, lastPlayedAt: '2026-08-10T10:10:00+00:00' }]),
     recentLoading: signal(false),
-    startingQuizId: signal<number | null>(null),
     hasMoreQuizzes: signal(false),
     quizPagination: signal({ pageIndex: 0, pageSize: 12, totalItems: 1, totalPages: 1 }),
     initialize,
@@ -63,8 +63,8 @@ describe('DashboardPage', () => {
     loadTopics: vi.fn(),
     loadQuizzes: vi.fn(),
     loadRecentQuizzes: vi.fn(),
-    createSession,
   };
+  const launcher = { startingQuizId: signal<number | null>(null), launch };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -82,7 +82,12 @@ describe('DashboardPage', () => {
       ],
     })
       .overrideComponent(DashboardPage, {
-        set: { providers: [{ provide: PlayHubStore, useValue: store }] },
+        set: {
+          providers: [
+            { provide: PlayHubStore, useValue: store },
+            { provide: QuizLaunchService, useValue: launcher },
+          ],
+        },
       })
       .compileComponents();
   });
@@ -118,7 +123,6 @@ describe('DashboardPage', () => {
     const { fixture, element } = render();
     element.querySelector<HTMLButtonElement>('clq-play-quiz-card button')?.click();
     await fixture.whenStable();
-    expect(createSession).toHaveBeenCalledWith(4);
-    expect(navigate).toHaveBeenCalledWith(['/app/sessions', 77]);
+    expect(launch).toHaveBeenCalledWith(4);
   });
 });

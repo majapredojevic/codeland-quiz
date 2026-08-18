@@ -18,7 +18,11 @@ export class JoinPage implements OnInit {
   ngOnInit(): void {
     const queryPin = this.route.snapshot.queryParamMap.get('pin');
     if (queryPin === null) return;
-    this.gamePin.set(this.normalizedPin(queryPin));
+    const normalizedPin = this.normalizedPin(queryPin);
+    this.gamePin.set(normalizedPin);
+    if (/^\d{6}$/.test(normalizedPin)) {
+      void this.router.navigate(['/join', normalizedPin], { replaceUrl: true });
+    }
   }
 
   protected updateGamePin(event: Event): void {

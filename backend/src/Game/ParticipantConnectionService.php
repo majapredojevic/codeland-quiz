@@ -20,6 +20,7 @@ use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
 use CodeLandQuiz\QuizSession\FinalQuizSessionResultAssembler;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
 use CodeLandQuiz\Repository\QuizSessionRepository;
+use CodeLandQuiz\Repository\ParticipantAnswerRepository;
 use CodeLandQuiz\Repository\SessionQuestionRepository;
 use CodeLandQuiz\Repository\SessionParticipantRepository;
 use CodeLandQuiz\Support\TransactionManager;
@@ -31,6 +32,7 @@ final readonly class ParticipantConnectionService
         private QuizSessionRepository $sessions,
         private SessionParticipantRepository $participants,
         private SessionQuestionRepository $sessionQuestions,
+        private ParticipantAnswerRepository $answers,
         private PublicSessionQuestionMapper $publicQuestionMapper,
         private TransactionManager $transactionManager,
         private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
@@ -77,6 +79,7 @@ final readonly class ParticipantConnectionService
                 $currentQuestion = null;
                 $closedQuestion = null;
                 $finalResult = null;
+                $currentQuestionSelectedOptionIds = [];
 
                 if ($session->status === QuizSessionStatus::FINISHED) {
                     $finalResult = $this->finalResultAssembler->assemble(
@@ -91,6 +94,12 @@ final readonly class ParticipantConnectionService
                             $currentQuestion = $this->publicQuestionMapper->map(
                                 $question,
                             );
+                            $answer = $this->answers->findByParticipantAndQuestion(
+                                participantId: $participant->id,
+                                sessionQuestionId: $question->id,
+                            );
+                            $currentQuestionSelectedOptionIds =
+                                $answer?->selectedOptionIds ?? [];
                         } else {
                             $closedQuestion =
                                 $this->closedQuestionResultAssembler->assemble(
@@ -109,6 +118,8 @@ final readonly class ParticipantConnectionService
                     currentQuestion: $currentQuestion,
                     closedQuestion: $closedQuestion,
                     finalResult: $finalResult,
+                    currentQuestionSelectedOptionIds:
+                        $currentQuestionSelectedOptionIds,
                 );
             },
         );
@@ -166,6 +177,7 @@ final readonly class ParticipantConnectionService
         ?PublicSessionQuestionDTO $currentQuestion,
         ?ClosedSessionQuestionStateDTO $closedQuestion,
         ?FinalQuizSessionResultDTO $finalResult,
+        array $currentQuestionSelectedOptionIds,
     ): ParticipantConnectionResultDTO {
         return new ParticipantConnectionResultDTO(
             participant: new SessionParticipantItemDTO(
@@ -188,6 +200,8 @@ final readonly class ParticipantConnectionService
             currentQuestion: $currentQuestion,
             closedQuestion: $closedQuestion,
             finalResult: $finalResult,
+            currentQuestionSelectedOptionIds:
+                $currentQuestionSelectedOptionIds,
             currentQuestionStartedAt: $session->currentQuestionStartedAt,
             currentQuestionDeadline: $session->currentQuestionDeadline,
             questionCount: $session->questionCount,

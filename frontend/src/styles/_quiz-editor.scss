@@ -80,6 +80,14 @@
     display: grid;
     gap: var(--clq-space-2);
   }
+  .summary-actions,
+  .quiz-play-control {
+    display: inline-flex;
+    align-items: center;
+  }
+  .summary-actions {
+    gap: var(--clq-space-3);
+  }
   .sections {
     gap: var(--clq-space-5);
   }
@@ -311,6 +319,10 @@
     .action-row {
       align-items: stretch;
       flex-direction: column;
+    }
+    .summary-actions {
+      width: 100%;
+      justify-content: space-between;
     }
     .form-actions > *,
     .action-row > button {

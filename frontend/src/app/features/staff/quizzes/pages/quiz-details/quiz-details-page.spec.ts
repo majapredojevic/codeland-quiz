@@ -9,6 +9,7 @@ import { of } from 'rxjs';
 
 import { ConfirmDialog } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { QuizLaunchService } from '../../../play/data-access/quiz-launch.service';
 import { QuizStore } from '../../data-access/quiz.store';
 import { QuestionItem } from '../../data-access/questions.models';
 import { QuestionsStore } from '../../data-access/questions.store';
@@ -88,6 +89,8 @@ describe('QuizDetailsPage', () => {
   let reorderQuestions: ReturnType<typeof vi.fn>;
   let deleteQuestion: ReturnType<typeof vi.fn>;
   let overlayContainer: OverlayContainer;
+  let startingQuizId: WritableSignal<number | null>;
+  let launch: ReturnType<typeof vi.fn>;
 
   async function setup(
     quiz: QuizItem = baseQuiz,
@@ -112,6 +115,8 @@ describe('QuizDetailsPage', () => {
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(false) }));
     success = vi.fn();
     notifyError = vi.fn();
+    startingQuizId = signal<number | null>(null);
+    launch = vi.fn().mockResolvedValue(true);
     questions = signal<QuestionItem[]>(initialQuestions);
     questionCount = signal(initialQuestions.length);
     loadQuestions = vi.fn().mockResolvedValue(undefined);
@@ -167,6 +172,10 @@ describe('QuizDetailsPage', () => {
           },
         },
         { provide: MatDialog, useValue: { open: dialogOpen } },
+        {
+          provide: QuizLaunchService,
+          useValue: { startingQuizId: startingQuizId.asReadonly(), launch },
+        },
         { provide: NotificationService, useValue: { success, error: notifyError, info: vi.fn() } },
       ],
     }).compileComponents();
@@ -233,6 +242,24 @@ describe('QuizDetailsPage', () => {
     ).toEqual(['Bez teme', 'PHP', 'Scratch']);
     expect(element.textContent).not.toContain('Pretraži teme');
     expect(element.textContent).not.toContain('Dodaj pitanje');
+  });
+
+  it('enables Igraj only for an active quiz and delegates the shared launch flow', async () => {
+    const inactiveElement = await setup();
+    const inactivePlay = inactiveElement.querySelector<HTMLButtonElement>('.quiz-play-action')!;
+    expect(inactivePlay.disabled).toBe(true);
+    expect(inactivePlay.getAttribute('aria-describedby')).toBe('quiz-details-play-help');
+    inactivePlay.click();
+    expect(launch).not.toHaveBeenCalled();
+
+    fixture.destroy();
+    TestBed.resetTestingModule();
+    const activeElement = await setup({ ...baseQuiz, isActive: true, questionCount: 2 });
+    const activePlay = activeElement.querySelector<HTMLButtonElement>('.quiz-play-action')!;
+    expect(activePlay.disabled).toBe(false);
+    activePlay.click();
+    await fixture.whenStable();
+    expect(launch).toHaveBeenCalledWith(9);
   });
 
   it('sends only normalized changed fields and updates the canonical header after save', async () => {

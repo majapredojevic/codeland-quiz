@@ -34,7 +34,28 @@
             {{ questionCountLabel(quiz.questionCount) }}
           </p>
         </div>
-        <clq-active-status-badge [isActive]="quiz.isActive" />
+        <span class="summary-actions">
+          <clq-active-status-badge [isActive]="quiz.isActive" />
+          <span
+            class="quiz-play-control"
+            [attr.title]="quiz.isActive ? null : 'Aktivirajte kviz prije igranja.'"
+          >
+            <button
+              class="primary-button quiz-play-action"
+              type="button"
+              [disabled]="!quiz.isActive || launcher.startingQuizId() !== null"
+              [attr.aria-describedby]="quiz.isActive ? null : 'quiz-details-play-help'"
+              (click)="playQuiz(quiz)"
+            >
+              {{ launcher.startingQuizId() === quiz.id ? 'Pokrećem…' : 'Igraj' }}
+            </button>
+            @if (!quiz.isActive) {
+              <span id="quiz-details-play-help" class="visually-hidden">
+                Aktivirajte kviz prije igranja.
+              </span>
+            }
+          </span>
+        </span>
       </div>
     </header>
 

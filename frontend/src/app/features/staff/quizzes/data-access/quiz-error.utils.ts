@@ -37,8 +37,8 @@ export function questionMutationErrorMessage(error: unknown, fallback: string): 
     return 'Odgovori moraju imati različit tekst.';
   }
   if (message.includes('Question text')) {
-    return message.includes('1000')
-      ? 'Tekst pitanja može imati najviše 1000 znakova.'
+    return message.includes('250')
+      ? 'Tekst pitanja može imati najviše 250 znakova.'
       : 'Unesite tekst pitanja.';
   }
   if (message.includes('option text')) {

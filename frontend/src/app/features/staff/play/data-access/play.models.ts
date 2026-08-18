@@ -63,7 +63,7 @@ export interface PublicSessionQuestion {
 export interface SessionLeaderboardEntry {
   rank: number;
   participantId: number;
-  participantType: 'STUDENT' | 'GUEST';
+  participantType: 'REGISTERED' | 'GUEST';
   nickname: string;
   avatarKey: string;
   totalScore: number;
@@ -88,7 +88,7 @@ export interface QuestionResult {
 export interface FinalLeaderboardEntry {
   rank: number;
   participantId: number;
-  participantType: 'STUDENT' | 'GUEST';
+  participantType: 'REGISTERED' | 'GUEST';
   nickname: string;
   avatarKey: string;
   totalScore: number;
@@ -138,7 +138,7 @@ export interface QuizSessionHistoryResponse {
 
 export interface SessionParticipant {
   id: number;
-  participantType: 'STUDENT' | 'GUEST';
+  participantType: 'REGISTERED' | 'GUEST';
   student: {
     id: number;
     firstName: string;

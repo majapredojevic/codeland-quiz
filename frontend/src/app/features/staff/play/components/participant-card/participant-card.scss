@@ -34,52 +34,14 @@
   overflow: hidden;
   border: 3px solid white;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--clq-color-primary) 15%, white);
+  background: color-mix(in srgb, var(--clq-color-primary) 8%, white);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--clq-color-primary) 18%, white);
-  color: var(--clq-color-primary);
   place-items: center;
 }
 
-.avatar svg {
-  width: 3.1rem;
-  fill: color-mix(in srgb, currentColor 13%, white);
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 1.8;
-}
-
-.avatar span {
-  position: absolute;
-  right: 0.15rem;
-  bottom: 0.1rem;
-  display: grid;
-  min-width: 1.25rem;
-  min-height: 1.25rem;
-  padding: 0.1rem;
-  border-radius: 50%;
-  background: white;
-  color: var(--clq-color-text);
-  font-size: 0.55rem;
-  font-weight: 700;
-  place-items: center;
-}
-
-[data-avatar-key='koda-green'] .avatar,
-[data-avatar-key='koda-turquoise'] .avatar {
-  background: color-mix(in srgb, var(--clq-color-accent) 17%, white);
-  color: var(--clq-color-success);
-}
-
-[data-avatar-key='koda-orange'] .avatar,
-[data-avatar-key='koda-yellow'] .avatar {
-  background: color-mix(in srgb, var(--clq-color-highlight) 22%, white);
-  color: var(--clq-color-warning);
-}
-
-[data-avatar-key='koda-pink'] .avatar,
-[data-avatar-key='koda-red'] .avatar {
-  background: color-mix(in srgb, var(--clq-color-pink) 29%, white);
-  color: var(--clq-color-error-text);
+.avatar clq-koda-avatar {
+  width: 100%;
+  height: 100%;
 }
 
 .participant-copy {

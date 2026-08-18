@@ -89,11 +89,13 @@ describe('JoinPage', () => {
   it('prefills a valid PIN from the query parameter', async () => {
     const router = TestBed.inject(Router);
     await router.navigateByUrl('/?pin=004321');
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const { element } = createPage();
     const input = element.querySelector<HTMLInputElement>('#game-pin');
 
     expect(input?.value).toBe('004321');
     expect(getJoinButton(element).disabled).toBe(false);
+    expect(navigate).toHaveBeenCalledWith(['/join', '004321'], { replaceUrl: true });
   });
 
   it('keeps the join action disabled for fewer than six digits', () => {

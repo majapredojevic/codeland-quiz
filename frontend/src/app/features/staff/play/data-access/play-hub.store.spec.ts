@@ -36,7 +36,6 @@ describe('PlayHubStore', () => {
   const get = vi.fn();
   const topicsList = vi.fn();
   const recent = vi.fn();
-  const create = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,7 +62,7 @@ describe('PlayHubStore', () => {
         PlayHubStore,
         { provide: QuizzesApiService, useValue: { list, get } },
         { provide: TopicsApiService, useValue: { list: topicsList } },
-        { provide: QuizSessionsApiService, useValue: { listRecentFinished: recent, create } },
+        { provide: QuizSessionsApiService, useValue: { listRecentFinished: recent } },
       ],
     });
   });
@@ -118,13 +117,5 @@ describe('PlayHubStore', () => {
         lastPlayedAt: '2026-08-10T10:10:00+00:00',
       }),
     ]);
-  });
-
-  it('prevents duplicate session creation and returns the canonical session id', async () => {
-    create.mockReturnValue(of({ session: { id: 77 } }));
-    const store = TestBed.inject(PlayHubStore);
-    await expect(store.createSession(4)).resolves.toBe(77);
-    expect(create).toHaveBeenCalledWith(4);
-    expect(store.startingQuizId()).toBeNull();
   });
 });

@@ -18,11 +18,13 @@ import {
   CreateQuestionRequest,
   QuestionItem,
   QuestionOptionInput,
+  QUESTION_TEXT_MAX_LENGTH,
   QUESTION_TYPE_LABELS,
   QuestionType,
   UpdateQuestionRequest,
 } from '../../data-access/questions.models';
 import { QuestionsStore } from '../../data-access/questions.store';
+import { QuestionTextLimitDirective } from './question-text-limit.directive';
 
 interface QuestionFormModel {
   questionText: string;
@@ -54,7 +56,7 @@ const defaultModel = (): QuestionFormModel => ({
 
 @Component({
   selector: 'clq-question-editor-page',
-  imports: [FormField, RouterLink],
+  imports: [FormField, RouterLink, QuestionTextLimitDirective],
   templateUrl: './question-editor-page.html',
 })
 export class QuestionEditorPage implements OnInit, OnDestroy {
@@ -81,6 +83,9 @@ export class QuestionEditorPage implements OnInit, OnDestroy {
   protected readonly imagePreviewFailed = signal(false);
   protected readonly imageSelectionError = signal<string | null>(null);
   protected readonly imageAccept = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
+  protected readonly questionTextMaxLength = QUESTION_TEXT_MAX_LENGTH;
+  protected readonly legacyQuestionTextOverLimit = signal(false);
+  private readonly legacyQuestionTextLength = signal(0);
   protected readonly formModel = signal<QuestionFormModel>(defaultModel());
   protected readonly questionForm = form(this.formModel, (question) => {
     disabled(question.questionText, { when: () => this.saving() });
@@ -89,10 +94,10 @@ export class QuestionEditorPage implements OnInit, OnDestroy {
     validate(question.questionText, ({ value }) => {
       const questionText = value().trim();
       if (!questionText) return { kind: 'required', message: 'Unesite tekst pitanja.' };
-      if (Array.from(questionText).length > 1000) {
+      if (Array.from(questionText).length > QUESTION_TEXT_MAX_LENGTH) {
         return {
           kind: 'maxLength',
-          message: 'Tekst pitanja može imati najviše 1000 znakova.',
+          message: 'Tekst pitanja može imati najviše 250 znakova.',
         };
       }
       return undefined;
@@ -151,7 +156,10 @@ export class QuestionEditorPage implements OnInit, OnDestroy {
     () => this.formModel().options.filter(({ isCorrect }) => isCorrect).length,
   );
   protected readonly questionTextLength = computed(
-    () => Array.from(this.formModel().questionText).length,
+    () =>
+      this.legacyQuestionTextOverLimit()
+        ? this.legacyQuestionTextLength()
+        : Array.from(this.formModel().questionText).length,
   );
   protected readonly formValid = computed(() => this.questionForm().valid() && this.optionsValid());
   protected readonly previewSource = computed(() => {
@@ -363,9 +371,28 @@ export class QuestionEditorPage implements OnInit, OnDestroy {
     this.requestError.set(null);
   }
 
+  protected limitQuestionText(event: Event): void {
+    if (!(event.target instanceof HTMLTextAreaElement)) return;
+    const characters = Array.from(event.target.value);
+    if (this.legacyQuestionTextOverLimit()) {
+      this.legacyQuestionTextLength.set(characters.length);
+    }
+    if (characters.length <= QUESTION_TEXT_MAX_LENGTH) {
+      this.legacyQuestionTextOverLimit.set(false);
+      return;
+    }
+    if (this.legacyQuestionTextOverLimit()) return;
+
+    const limitedValue = characters.slice(0, QUESTION_TEXT_MAX_LENGTH).join('');
+    event.target.value = limitedValue;
+    this.formModel.update((current) => ({ ...current, questionText: limitedValue }));
+  }
+
   protected restoreCanonical(): void {
     const question = this.questionsStore.detail();
     if (!question) return;
+    const hasLegacyQuestionText =
+      Array.from(question.questionText).length > QUESTION_TEXT_MAX_LENGTH;
     this.resetImageState();
     this.questionForm().reset({
       questionText: question.questionText,
@@ -374,6 +401,9 @@ export class QuestionEditorPage implements OnInit, OnDestroy {
       maxPoints: question.maxPoints,
       options: question.options.map(({ optionText, isCorrect }) => ({ optionText, isCorrect })),
     });
+    this.legacyQuestionTextLength.set(Array.from(question.questionText).length);
+    this.legacyQuestionTextOverLimit.set(hasLegacyQuestionText);
+    if (hasLegacyQuestionText) this.questionForm.questionText().markAsTouched();
     this.submitted.set(false);
     this.requestError.set(null);
   }

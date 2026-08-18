@@ -5,6 +5,8 @@ import { authGuard } from './core/auth/auth.guard';
 import { passwordChangeGuard } from './core/auth/password-change.guard';
 import { StaffShell } from './core/layout/staff-shell/staff-shell';
 import { ChangePasswordPage } from './features/public/change-password/change-password-page';
+import { JoinPage } from './features/public/join/join-page';
+import { PlayerPage } from './features/public/player/player-page';
 import { AccountPasswordPage } from './features/staff/account/password/account-password-page';
 import { QuizLobbyPage } from './features/staff/play/pages/quiz-lobby/quiz-lobby-page';
 import { routes } from './app.routes';
@@ -107,6 +109,20 @@ describe('staff play route structure', () => {
     expect(staffRoute?.canActivate).toEqual([authGuard, passwordChangeGuard]);
     expect(staffRoute?.canActivateChild).toEqual([authGuard, passwordChangeGuard]);
     expect(await lobbyRoute?.loadComponent?.()).toBe(QuizLobbyPage);
+  });
+});
+
+describe('public player route structure', () => {
+  it('keeps PIN entry and player gameplay outside the staff shell', async () => {
+    const joinRoute = routes.find(({ path }) => path === 'join');
+    const playerRoute = routes.find(({ path }) => path === 'join/:gamePin');
+    const staffRoute = routes.find(({ path }) => path === 'app');
+
+    expect(await joinRoute?.loadComponent?.()).toBe(JoinPage);
+    expect(await playerRoute?.loadComponent?.()).toBe(PlayerPage);
+    expect(joinRoute?.canActivate).toBeUndefined();
+    expect(playerRoute?.canActivate).toBeUndefined();
+    expect(staffRoute?.children?.some(({ path }) => path === 'join/:gamePin')).toBe(false);
   });
 });
 
