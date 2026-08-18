@@ -14,6 +14,7 @@ use CodeLandQuiz\DTO\LoginResult;
 use CodeLandQuiz\Http\JsonRequest;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Observability\RuntimeLogger;
 use CodeLandQuiz\Support\ClientAddress;
 use InvalidArgumentException;
 use OpenSwoole\Http\Request;
@@ -30,6 +31,7 @@ final class AuthController
         private readonly ResponseFactory $responseFactory,
         private readonly LoginInputNormalizer $inputNormalizer,
         private readonly ClientAddress $clientAddress,
+        private readonly RuntimeLogger $logger,
     ) {
     }
 
@@ -97,10 +99,11 @@ final class AuthController
                 429,
             );
         } catch (Throwable $throwable) {
-            error_log(sprintf(
-                'Login infrastructure failure on /api/auth/login [%s].',
-                $throwable::class,
-            ));
+            $this->logger->error('auth.login_infrastructure_failed', [
+                'requestId' => $context->getRequestId(),
+                'route' => '/api/auth/login',
+                'exception' => $throwable::class,
+            ]);
             $this->responseFactory->error(
                 $response,
                 'Prijava trenutno nije moguća. Pokušajte ponovo.',

@@ -45,4 +45,11 @@ The single worker allows at most 2,000 WebSocket connections globally, 750 pendi
 
 The standalone production deployment terminates TLS 1.2/1.3 at Nginx, serves Angular same-origin, proxies API/media/health/WebSocket paths without publishing OpenSwoole, and isolates MySQL on an internal network. It adds a constrained CSP, nosniff, referrer, permissions and frame protections. Secure host-only Strict cookies are validated at production startup; the readable CSRF cookie remains intentionally non-HttpOnly. HSTS is staged but deliberately disabled until the real hostname has CA-valid HTTPS verification. See `docs/09-deployment.md` for the exact policy and activation procedure.
 
+Phase 3 heartbeat ACKs are accepted only after participant authentication and
+remain under the 16 KiB frame policy. They bypass answer/database work but do
+not extend pending authentication, bypass Origin checks, or weaken connection
+and authentication ceilings. Private runtime metrics are blocked by an exact
+Nginx 404 route and contain no tokens, credentials, request bodies or answer
+content. Runtime JSON logs use an allowlist of bounded diagnostic fields.
+
 CORS should be introduced only if deployment becomes cross-origin. Login-attempt timestamp indexes keep time-window queries bounded, but old rows still require later operational retention/cleanup. Possible future work includes CAPTCHA where justified, Redis/shared multi-worker registry state, heartbeat/presence reconciliation, a bounded PDO pool if load tests justify it, and a participant-token revocation list.

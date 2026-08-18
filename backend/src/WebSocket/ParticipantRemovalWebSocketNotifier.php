@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\Observability\RuntimeLogger;
 use OpenSwoole\WebSocket\Server;
 use Throwable;
 
@@ -15,6 +16,7 @@ final class ParticipantRemovalWebSocketNotifier
         private readonly Server $server,
         private readonly ParticipantConnectionRegistry $connectionRegistry,
         private readonly ParticipantWebSocketSender $participantSender,
+        private readonly RuntimeLogger $logger,
     ) {
     }
 
@@ -57,7 +59,13 @@ final class ParticipantRemovalWebSocketNotifier
                 );
             }
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.participant_removal_failed', [
+                'fd' => $fileDescriptor,
+                'connectionId' => $connection->connectionId,
+                'sessionId' => $connection->sessionId,
+                'participantId' => $participantId,
+                'exception' => $throwable::class,
+            ]);
         }
     }
 }

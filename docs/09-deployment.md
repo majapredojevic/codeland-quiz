@@ -17,6 +17,7 @@ Browser -- HTTPS/WSS --> Nginx :80/:443
                              |-- /api          OpenSwoole :9501
                              |-- /media        OpenSwoole :9501
                              |-- /health       OpenSwoole :9501
+                             |-- /ready        OpenSwoole :9501
                              `-- /ws           OpenSwoole WebSocket :9501
 
 Nginx -- edge network --> backend -- internal database network --> MySQL :3306
@@ -28,9 +29,11 @@ internal database network. Production contains no phpMyAdmin service. Nginx
 terminates TLS; OpenSwoole intentionally remains internal HTTP/WebSocket.
 
 The backend remains `worker_num=1`. Its participant connection registry is
-process-local, so increasing workers without shared registry and fan-out state
-would break WebSocket correctness. Redis, a PDO pool, TaskWorkers, application
-heartbeat and load testing are later phases.
+process-local, so increasing workers or backend instances without shared
+registry and fan-out state would break WebSocket correctness. Phase 3 adds the
+single-worker heartbeat, lifecycle reconciliation, readiness and private
+metrics needed before controlled load testing; Redis, a PDO pool, TaskWorkers
+and multi-instance coordination remain deliberately absent.
 
 ## Development remains separate
 
@@ -133,8 +136,8 @@ The tested production build inputs are:
 | MySQL | `mysql:8.4.9` |
 
 Compose tags the two locally built application images with
-`CODELAND_IMAGE_TAG`; the example's `2026.08.18-phase2` identifies the locally
-verified Phase 2 build. Use a new immutable release/commit tag for later source
+`CODELAND_IMAGE_TAG`; the example's `2026.08.18-phase3` identifies the Phase 3
+source state. Use a new immutable release/commit tag for later source
 changes rather than reusing an existing tag. No production service references
 `latest`.
 
@@ -147,6 +150,12 @@ Question image volume. Nginx also uses a read-only root with small tmpfs mounts.
 Both services enable `no-new-privileges`; the backend drops all Linux
 capabilities.
 
+The backend receives SIGTERM and has a 20-second Compose stop grace. Its
+`nofile` soft/hard limit is 8192, while OpenSwoole `max_conn` is 4096. The
+application WebSocket ceiling remains 2000. Docker health checks the backend's
+`/ready` route, so Nginx starts only after presence reconciliation, the runtime
+timer and database readiness succeed.
+
 Production PHP has `display_errors=Off`, `display_startup_errors=Off`, and
 `log_errors=On`. Nginx ordinary logs exclude Cookie and Authorization header
 values and log the normalized URI without query arguments. Do not enable debug
@@ -158,11 +167,17 @@ Port 80 returns permanent `308` redirects to the same host, request URI, and
 query string over HTTPS. Port 443 supports only TLS 1.2 and TLS 1.3; SSLv3,
 TLS 1.0, TLS 1.1, session tickets, and TLS 1.3 early data are not enabled.
 
-Nginx preserves `/api`, `/media`, `/health`, and `/ws` paths when proxying to
+Nginx preserves `/api`, `/media`, `/health`, `/ready`, and `/ws` paths when proxying to
 `backend:9501`; the `proxy_pass` target intentionally has no trailing slash.
 WebSockets use upstream HTTP/1.1 and forward Upgrade/Connection correctly.
-Read and send timeouts are both 3600 seconds (60 minutes), a temporary
-conservative value until Phase 3 application heartbeat exists.
+Read and send timeouts are both 150 seconds. The 25-second application
+heartbeat supplies upstream traffic for live clients; the application declares
+a participant stale at 75 seconds, and OpenSwoole transport cleanup is a later
+120-second safety net.
+
+`/internal/metrics` is deliberately not proxied: an exact Nginx location
+returns 404 before the SPA fallback. It remains available only by reaching the
+unpublished backend service from `docker exec` or the internal Docker network.
 
 Angular 22 output is served from `dist/frontend/browser`. Existing static files
 are served directly, while an unknown frontend route falls back to
@@ -277,7 +292,7 @@ Verify at minimum:
 
 - `http://localhost/path?a=1` returns 308 to
   `https://localhost/path?a=1`;
-- `/`, a refreshed frontend route, `/health`, `/api`, and a real `/media` image
+- `/`, a refreshed frontend route, `/health`, `/ready`, `/api`, and a real `/media` image
   travel through HTTPS;
 - `wss://localhost/ws/game` upgrades with Origin `https://localhost`, while a
   missing/untrusted Origin is rejected;
@@ -290,6 +305,12 @@ Verify at minimum:
   9501/3306 fail;
 - Nginx reaches backend and backend reaches MySQL internally;
 - a 5 MiB valid Question image plus multipart metadata succeeds.
+
+Also keep an authenticated Player idle beyond 75 seconds while it acknowledges
+heartbeats, verify a non-acknowledging client is removed using short test-only
+thresholds, and confirm public `/internal/metrics` returns 404 while direct
+backend access returns sanitized metrics. Runtime details and load-test
+collection guidance are in `docs/11-openswoole-runtime.md`.
 
 Remove the self-signed key, certificate, smoke env file, and smoke-only Docker
 volumes afterward. Real-domain certificate validation, HSTS activation, public

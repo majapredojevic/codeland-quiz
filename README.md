@@ -24,6 +24,7 @@ The project currently includes:
 - Initial database schema
 - Admin seed data
 - Standalone HTTPS/WSS production deployment
+- OpenSwoole heartbeat, graceful lifecycle, readiness and private runtime metrics
 
 ## Local Development
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\Repository;
 
 use CodeLandQuiz\Model\LoginAttempt;
+use CodeLandQuiz\Observability\RuntimeLogger;
 use CodeLandQuiz\Support\Database;
 use DateTimeImmutable;
 use PDO;
@@ -44,6 +45,7 @@ SQL;
 
     public function __construct(
         private readonly Database $database,
+        private readonly RuntimeLogger $logger,
     ) {
     }
 
@@ -70,8 +72,11 @@ SQL;
                     self::RELEASE_EMAIL_LOCK_SQL,
                 );
                 $statement->execute(['lock_name' => $lockName]);
-            } catch (\Throwable) {
-                error_log('Login account synchronization release failed.');
+            } catch (\Throwable $throwable) {
+                $this->logger->error(
+                    'auth.login_synchronization_release_failed',
+                    ['exception' => $throwable::class],
+                );
             }
         }
     }

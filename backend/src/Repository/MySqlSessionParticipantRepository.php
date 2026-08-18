@@ -104,6 +104,17 @@ WHERE id = :participant_id
   AND is_removed = FALSE
 SQL;
 
+    private const RECONCILE_LIVE_SESSION_PRESENCE_SQL = <<<SQL
+UPDATE session_participants sp
+INNER JOIN quiz_sessions qs
+    ON qs.id = sp.session_id
+SET sp.is_connected = FALSE,
+    sp.disconnected_at = CURRENT_TIMESTAMP(3)
+WHERE sp.is_connected = TRUE
+  AND sp.is_removed = FALSE
+  AND qs.status IN ('WAITING', 'ACTIVE')
+SQL;
+
     private const MARK_REMOVED_SQL = <<<SQL
 UPDATE session_participants
 SET disconnected_at = CASE
@@ -267,6 +278,16 @@ SQL;
         $statement = $this->connection()->prepare(self::MARK_DISCONNECTED_SQL);
         $statement->bindValue(':participant_id', $participantId, PDO::PARAM_INT);
         $statement->execute();
+    }
+
+    public function reconcileDisconnectedPresenceForLiveSessions(): int
+    {
+        $statement = $this->connection()->prepare(
+            self::RECONCILE_LIVE_SESSION_PRESENCE_SQL,
+        );
+        $statement->execute();
+
+        return $statement->rowCount();
     }
 
     public function markRemoved(int $participantId): void

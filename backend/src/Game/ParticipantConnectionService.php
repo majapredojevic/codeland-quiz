@@ -126,10 +126,17 @@ final readonly class ParticipantConnectionService
         );
     }
 
-    public function disconnect(int $sessionId, int $participantId): void
-    {
+    public function disconnect(
+        int $sessionId,
+        int $participantId,
+        ?callable $shouldMarkDisconnected = null,
+    ): void {
         $this->transactionManager->transactional(
-            function () use ($sessionId, $participantId): void {
+            function () use (
+                $sessionId,
+                $participantId,
+                $shouldMarkDisconnected,
+            ): void {
                 $session = $this->sessions->findOverviewByIdForShare(
                     $sessionId,
                 );
@@ -148,6 +155,13 @@ final readonly class ParticipantConnectionService
                 }
 
                 if ($participant->sessionId !== $sessionId) {
+                    return;
+                }
+
+                if (
+                    $shouldMarkDisconnected !== null
+                    && !$shouldMarkDisconnected()
+                ) {
                     return;
                 }
 

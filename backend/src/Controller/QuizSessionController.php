@@ -206,8 +206,7 @@ final class QuizSessionController
                 );
             }
 
-            $response->status(204);
-            $response->end();
+            $this->responseFactory->noContent($response);
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(
                 $response,

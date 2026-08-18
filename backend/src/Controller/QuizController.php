@@ -209,8 +209,7 @@ final class QuizController
 
             $this->quizService->deleteQuiz($actorUserId, $quizId);
 
-            $response->status(204);
-            $response->end();
+            $this->responseFactory->noContent($response);
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(
                 $response,

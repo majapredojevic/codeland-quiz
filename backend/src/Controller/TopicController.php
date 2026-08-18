@@ -194,8 +194,7 @@ final class TopicController
 
             $this->topicService->deleteTopic($actorUserId, $topicId);
 
-            $response->status(204);
-            $response->end();
+            $this->responseFactory->noContent($response);
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(
                 $response,

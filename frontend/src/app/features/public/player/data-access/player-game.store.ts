@@ -251,6 +251,9 @@ export class PlayerGameStore implements OnDestroy {
     if (message === null) return;
 
     switch (message.type) {
+      case 'HEARTBEAT':
+        this.acknowledgeHeartbeat();
+        break;
       case 'AUTHENTICATION_REQUIRED':
         this.authenticateSocket();
         break;
@@ -298,6 +301,11 @@ export class PlayerGameStore implements OnDestroy {
         payload: { participantToken: this.participantToken },
       }),
     );
+  }
+
+  private acknowledgeHeartbeat(): void {
+    if (this.socket?.readyState !== SOCKET_OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'HEARTBEAT_ACK', payload: {} }));
   }
 
   private applyAuthenticated(payload: AuthenticatedPayload): void {

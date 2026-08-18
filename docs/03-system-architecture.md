@@ -4,9 +4,9 @@
 
 ## Technology and runtime
 
-The backend uses PHP 8.3, OpenSwoole 26, MySQL 8.4, native PDO prepared statements, Composer and Docker. Angular is the planned frontend and is not part of the current implementation.
+The backend uses PHP 8.3, OpenSwoole 26, MySQL 8.4, native PDO prepared statements, Composer and Docker. Angular provides the browser frontend.
 
-`backend/server.php` loads Composer, enables `OpenSwoole\Runtime::HOOK_ALL`, then starts `Application`. The long-running OpenSwoole server registers HTTP and WebSocket callbacks once. It runs with `worker_num = 1` and `enable_coroutine = true`.
+`backend/server.php` loads Composer, enables `OpenSwoole\Runtime::HOOK_ALL`, then starts `Application`. The long-running OpenSwoole server registers HTTP, WebSocket and lifecycle callbacks once. It runs with `worker_num = 1`, `max_request = 0` and coroutine support. One runtime timer measures event-loop lag every second and schedules the shared participant heartbeat sweep.
 
 ## Request paths
 
@@ -75,7 +75,9 @@ If an answer obtains its shared lock before close, close waits and includes it. 
 
 ## Reconnection
 
-One participant has one current socket mapping. A new authenticated socket replaces the mapping before the old socket is disconnected; the old close callback therefore cannot mark the new connection disconnected. Pending authentication uses a connection ID, including the 10-second timeout. Reconnection state is assembled under the session shared lock and supports WAITING, ACTIVE/open, ACTIVE/closed and FINISHED states.
+One participant has one current socket mapping. A new authenticated socket replaces the mapping before the old socket is disconnected; the old close callback therefore cannot mark the new connection disconnected. Pending and authenticated sockets use a cryptographic connection ID. Heartbeat/stale cleanup validates fd plus that identity, and persistence re-checks ownership after locking the participant row. Reconnection state is assembled under the session shared lock and supports WAITING, ACTIVE/open, ACTIVE/closed and FINISHED states.
+
+Startup and graceful worker stop reconcile only transient connected presence for live sessions. See `docs/11-openswoole-runtime.md` for the exact heartbeat, lifecycle, health, resource and measurement model.
 
 ## Future scalability
 

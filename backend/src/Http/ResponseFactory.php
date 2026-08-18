@@ -15,6 +15,7 @@ final class ResponseFactory
      */
     public function json(Response $response, array $payload, int $status = 200): void
     {
+        RequestContext::recordCurrentResponseStatus($status);
         $response->status($status);
         $response->header('Content-Type', 'application/json; charset=utf-8');
         $response->end($this->encode($payload));
@@ -25,6 +26,13 @@ final class ResponseFactory
         $this->json($response, [
             'error' => $message,
         ], $status);
+    }
+
+    public function noContent(Response $response): void
+    {
+        RequestContext::recordCurrentResponseStatus(204);
+        $response->status(204);
+        $response->end();
     }
 
     /**

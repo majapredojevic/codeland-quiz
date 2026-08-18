@@ -6,14 +6,18 @@ namespace CodeLandQuiz;
 
 use CodeLandQuiz\Bootstrap\ApplicationFactory;
 use CodeLandQuiz\Controller\HealthController;
+use CodeLandQuiz\Http\RequestIdGenerator;
 use CodeLandQuiz\Model\UserRole;
+use CodeLandQuiz\Runtime\OpenSwooleRuntimeSupervisor;
 use CodeLandQuiz\Support\Router;
 use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
 use CodeLandQuiz\WebSocket\WebSocketHandshakeHandler;
+use OpenSwoole\Coroutine;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
+use Throwable;
 
 final class Application
 {
@@ -27,18 +31,30 @@ final class Application
 
     private ApplicationFactory $applicationFactory;
 
+    private OpenSwooleRuntimeSupervisor $runtimeSupervisor;
+
+    private bool $workerExitCleanupScheduled = false;
+
     public function __construct(
         private readonly string $host = '0.0.0.0',
         private readonly int $port = 9501,
     ) {
         $this->server = new Server($this->host, $this->port);
-        $this->router = new Router();
         $this->applicationFactory = new ApplicationFactory(
             projectRootPath: dirname(__DIR__),
             server: $this->server,
         );
+        $this->router = new Router(
+            logger: $this->applicationFactory->getRuntimeLogger(),
+            metrics: $this->applicationFactory->getRuntimeMetrics(),
+            requestIdGenerator: new RequestIdGenerator(),
+        );
         $this->webSocketGateway =
             $this->applicationFactory->createWebSocketGatewayRouter();
+        $this->runtimeSupervisor =
+            $this->applicationFactory->createRuntimeSupervisor(
+                $this->webSocketGateway,
+            );
         $this->webSocketHandshakeHandler = new WebSocketHandshakeHandler(
             $this->webSocketGateway,
         );
@@ -57,6 +73,15 @@ final class Application
     {
         $this->server->set([
             'worker_num' => 1,
+            'max_request' => 0,
+            'max_conn' => $this->applicationFactory
+                ->getOpenSwooleMaximumConnections(),
+            'max_coroutine' => $this->applicationFactory
+                ->getOpenSwooleMaximumCoroutines(),
+            'heartbeat_check_interval' => $this->applicationFactory
+                ->getOpenSwooleTransportHeartbeatCheckIntervalSeconds(),
+            'heartbeat_idle_time' => $this->applicationFactory
+                ->getOpenSwooleTransportHeartbeatIdleSeconds(),
             'enable_coroutine' => true,
             'package_max_length' => $this->applicationFactory
                 ->getMaximumUploadPackageLengthBytes(),
@@ -66,6 +91,14 @@ final class Application
     private function registerRoutes(): void
     {
         $this->router->get('/health', new HealthController());
+        $this->router->get(
+            '/ready',
+            $this->applicationFactory->createReadinessController(),
+        );
+        $this->router->get(
+            '/internal/metrics',
+            $this->applicationFactory->createRuntimeMetricsController(),
+        );
 
         $questionImageController =
             $this->applicationFactory->createQuestionImageController();
@@ -664,11 +697,126 @@ final class Application
 
     private function registerEvents(): void
     {
-        $this->server->on('start', function (): void {
-            echo sprintf(
-                "CodeLand Quiz OpenSwoole server started on http://localhost:%d\n",
-                $this->port,
-            );
+        $logger = $this->applicationFactory->getRuntimeLogger();
+
+        $this->server->on('start', function (Server $server) use ($logger): void {
+            $logger->info('runtime.server_started', [
+                'workerPid' => $server->master_pid,
+                'port' => $this->port,
+            ]);
+        });
+
+        $this->server->on(
+            'workerStart',
+            function (Server $server, int $workerId) use ($logger): void {
+                try {
+                    $reconciled = $this->applicationFactory
+                        ->reconcileParticipantPresence();
+                    $logger->info('presence.startup_reconciled', [
+                        'workerId' => $workerId,
+                        'count' => $reconciled,
+                    ]);
+                } catch (Throwable $throwable) {
+                    $logger->error('presence.startup_reconciliation_failed', [
+                        'workerId' => $workerId,
+                        'exception' => $throwable::class,
+                    ]);
+                }
+
+                $this->runtimeSupervisor->start($workerId);
+                $this->applicationFactory->getRuntimeMetrics()
+                    ->markRuntimeInitialized(true);
+                $logger->info('runtime.worker_started', [
+                    'workerId' => $workerId,
+                    'workerPid' => $server->worker_pid,
+                ]);
+            },
+        );
+
+        $this->server->on(
+            'workerExit',
+            function (Server $server, int $workerId) use ($logger): void {
+                if ($this->workerExitCleanupScheduled) {
+                    return;
+                }
+
+                $this->workerExitCleanupScheduled = true;
+                $this->applicationFactory->getRuntimeMetrics()
+                    ->markRuntimeInitialized(false);
+                $this->runtimeSupervisor->stop($workerId);
+
+                $cleanupCoroutineId = Coroutine::create(
+                    function () use ($logger, $workerId): void {
+                        try {
+                            $reconciled = $this->applicationFactory
+                                ->reconcileParticipantPresence();
+                            $logger->info(
+                                'presence.worker_exit_reconciled',
+                                [
+                                    'workerId' => $workerId,
+                                    'count' => $reconciled,
+                                ],
+                            );
+                        } catch (Throwable $throwable) {
+                            $logger->error(
+                                'presence.worker_exit_reconciliation_failed',
+                                [
+                                    'workerId' => $workerId,
+                                    'exception' => $throwable::class,
+                                ],
+                            );
+                        }
+                    },
+                );
+
+                if (!is_int($cleanupCoroutineId)) {
+                    $logger->warning(
+                        'presence.worker_exit_reconciliation_not_scheduled',
+                        ['workerId' => $workerId],
+                    );
+                }
+
+                $logger->info('runtime.worker_exiting', [
+                    'workerId' => $workerId,
+                    'workerPid' => $server->worker_pid,
+                ]);
+            },
+        );
+
+        $this->server->on(
+            'workerStop',
+            function (Server $server, int $workerId) use ($logger): void {
+                $this->applicationFactory->getRuntimeMetrics()
+                    ->markRuntimeInitialized(false);
+                $this->runtimeSupervisor->stop($workerId);
+
+                $logger->info('runtime.worker_stopped', [
+                    'workerId' => $workerId,
+                    'workerPid' => $server->worker_pid,
+                ]);
+            },
+        );
+
+        $this->server->on(
+            'workerError',
+            function (
+                Server $server,
+                int $workerId,
+                int $workerPid,
+                int $exitCode,
+                int $signal,
+            ) use ($logger): void {
+                $logger->error('runtime.worker_error', [
+                    'workerId' => $workerId,
+                    'workerPid' => $workerPid,
+                    'exitCode' => $exitCode,
+                    'signal' => $signal,
+                ]);
+            },
+        );
+
+        $this->server->on('shutdown', function () use ($logger): void {
+            $logger->info('runtime.server_shutdown');
         });
 
         $this->server->on('request', function (Request $request, Response $response): void {

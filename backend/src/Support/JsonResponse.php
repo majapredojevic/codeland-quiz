@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Support;
 
+use CodeLandQuiz\Http\RequestContext;
 use JsonException;
 use OpenSwoole\Http\Response;
 
@@ -16,6 +17,7 @@ final class JsonResponse
      */
     public static function send(Response $response, array $payload, int $status = 200): void
     {
+        RequestContext::recordCurrentResponseStatus($status);
         $response->status($status);
         $response->header('Content-Type', 'application/json; charset=utf-8');
         $response->end(json_encode($payload, JSON_THROW_ON_ERROR));

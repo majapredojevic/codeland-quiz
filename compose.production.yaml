@@ -82,6 +82,12 @@ services:
       WS_CONNECTION_LIMIT: ${WS_CONNECTION_LIMIT:-2000}
       WS_PENDING_CONNECTION_LIMIT: ${WS_PENDING_CONNECTION_LIMIT:-750}
       WS_CONNECTION_PER_IP_LIMIT: ${WS_CONNECTION_PER_IP_LIMIT:-750}
+      WS_HEARTBEAT_INTERVAL_SECONDS: ${WS_HEARTBEAT_INTERVAL_SECONDS:-25}
+      WS_STALE_TIMEOUT_SECONDS: ${WS_STALE_TIMEOUT_SECONDS:-75}
+      OPENSWOOLE_MAX_CONNECTIONS: ${OPENSWOOLE_MAX_CONNECTIONS:-4096}
+      OPENSWOOLE_MAX_COROUTINES: ${OPENSWOOLE_MAX_COROUTINES:-4096}
+      OPENSWOOLE_TRANSPORT_HEARTBEAT_CHECK_INTERVAL_SECONDS: ${OPENSWOOLE_TRANSPORT_HEARTBEAT_CHECK_INTERVAL_SECONDS:-30}
+      OPENSWOOLE_TRANSPORT_HEARTBEAT_IDLE_SECONDS: ${OPENSWOOLE_TRANSPORT_HEARTBEAT_IDLE_SECONDS:-120}
       COOKIE_SECURE: "true"
       COOKIE_HTTP_ONLY: "true"
       COOKIE_SAME_SITE: Strict
@@ -100,6 +106,12 @@ services:
         ipv4_address: 172.30.0.20
       database:
     read_only: true
+    stop_signal: SIGTERM
+    stop_grace_period: 20s
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 8192
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     cap_drop:
@@ -111,7 +123,7 @@ services:
         - CMD
         - php
         - -r
-        - "exit(@file_get_contents('http://127.0.0.1:9501/health') === false ? 1 : 0);"
+        - "exit(@file_get_contents('http://127.0.0.1:9501/ready') === false ? 1 : 0);"
       interval: 10s
       timeout: 3s
       retries: 12

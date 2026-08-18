@@ -52,5 +52,7 @@ interface SessionParticipantRepository
 
     public function markDisconnected(int $participantId): void;
 
+    public function reconcileDisconnectedPresenceForLiveSessions(): int;
+
     public function markRemoved(int $participantId): void;
 }

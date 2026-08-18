@@ -17,6 +17,7 @@ use CodeLandQuiz\Game\Exception\InvalidSelectedOptionsException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Game\ParticipantConnectionService;
 use CodeLandQuiz\Model\QuizSessionStatus;
+use CodeLandQuiz\Observability\RuntimeLogger;
 use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use InvalidArgumentException;
 use JsonException;
@@ -33,6 +34,10 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
     private const POLICY_VIOLATION_CLOSE_CODE = 1008;
     private const AUTHENTICATE_MESSAGE_TYPE = 'PARTICIPANT_AUTHENTICATE';
     private const ANSWER_SUBMIT_MESSAGE_TYPE = 'ANSWER_SUBMIT';
+    private const HEARTBEAT_MESSAGE_TYPE = 'HEARTBEAT';
+    private const HEARTBEAT_ACK_MESSAGE_TYPE = 'HEARTBEAT_ACK';
+    private const STALE_CONNECTION_CLOSE_CODE = 1001;
+    private const NANOSECONDS_PER_SECOND = 1_000_000_000;
 
     /**
      * @var array<int, string>
@@ -47,6 +52,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         private readonly SessionWebSocketPayloadMapper $payloadMapper,
         private readonly WebSocketConnectionLimiter $connectionLimiter,
         private readonly WebSocketAbuseLimiter $abuseLimiter,
+        private readonly RuntimeLogger $logger,
     ) {
     }
 
@@ -72,7 +78,14 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                         connectionId: $connectionId,
                     );
                 } catch (Throwable $throwable) {
-                    error_log($throwable->getMessage());
+                    $this->logger->error(
+                        'websocket.authentication_timeout_failed',
+                        [
+                            'fd' => $fileDescriptor,
+                            'connectionId' => $connectionId,
+                            'exception' => $throwable::class,
+                        ],
+                    );
                 }
             },
         );
@@ -188,7 +201,11 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 message: 'Participant connection was rejected.',
             );
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.authentication_failed', [
+                'fd' => $fileDescriptor,
+                'connectionId' => $connectionId,
+                'exception' => $throwable::class,
+            ]);
             $this->failAuthentication(
                 server: $server,
                 fileDescriptor: $fileDescriptor,
@@ -232,6 +249,26 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         }
 
         try {
+            $message = $this->readAuthenticatedMessage($frame->data);
+        } catch (InvalidArgumentException) {
+            $this->pushInvalidAnswerMessage($server, $fileDescriptor);
+
+            return;
+        }
+
+        $this->connectionRegistry->touchAuthenticated(
+            $fileDescriptor,
+            $connection->connectionId,
+        );
+
+        if (
+            $message['type'] === self::HEARTBEAT_ACK_MESSAGE_TYPE
+            && $message['payload'] === []
+        ) {
+            return;
+        }
+
+        try {
             $this->abuseLimiter->recordAnswerAttempt($fileDescriptor);
         } catch (WebSocketRateLimitExceededException) {
             $this->pushError(
@@ -252,14 +289,6 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 code: 'ANSWER_ALREADY_SUBMITTED',
                 message: 'Odgovor je već poslan.',
             );
-
-            return;
-        }
-
-        try {
-            $message = $this->readAuthenticatedMessage($frame->data);
-        } catch (InvalidArgumentException) {
-            $this->pushInvalidAnswerMessage($server, $fileDescriptor);
 
             return;
         }
@@ -336,7 +365,13 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 message: 'Selected options are invalid for the current question.',
             );
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.answer_submission_failed', [
+                'fd' => $fileDescriptor,
+                'connectionId' => $connection->connectionId,
+                'sessionId' => $connection->sessionId,
+                'participantId' => $connection->participantId,
+                'exception' => $throwable::class,
+            ]);
             $this->pushError(
                 server: $server,
                 fileDescriptor: $fileDescriptor,
@@ -360,10 +395,109 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             $this->participantConnectionService->disconnect(
                 sessionId: $connection->sessionId,
                 participantId: $connection->participantId,
+                shouldMarkDisconnected: fn (): bool =>
+                    $this->connectionRegistry
+                        ->findCurrentFileDescriptorByParticipantId(
+                            $connection->participantId,
+                        ) === null,
             );
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.presence_disconnect_failed', [
+                'fd' => $fileDescriptor,
+                'connectionId' => $connection->connectionId,
+                'sessionId' => $connection->sessionId,
+                'participantId' => $connection->participantId,
+                'exception' => $throwable::class,
+            ]);
         }
+    }
+
+    public function heartbeatSweep(
+        Server $server,
+        int $monotonicNanoseconds,
+        int $staleTimeoutSeconds,
+    ): int {
+        $staleThresholdNanoseconds = $staleTimeoutSeconds
+            * self::NANOSECONDS_PER_SECOND;
+        $staleConnectionsClosed = 0;
+
+        foreach ($this->connectionRegistry->authenticatedConnections() as $connection) {
+            if (!$this->connectionRegistry->isCurrent(
+                $connection->fileDescriptor,
+                $connection->connectionId,
+            )) {
+                continue;
+            }
+
+            $idleNanoseconds = $connection->idleNanoseconds(
+                $monotonicNanoseconds,
+            );
+
+            if ($idleNanoseconds < $staleThresholdNanoseconds) {
+                $this->push(
+                    server: $server,
+                    fileDescriptor: $connection->fileDescriptor,
+                    type: self::HEARTBEAT_MESSAGE_TYPE,
+                    payload: ['acknowledge' => true],
+                );
+
+                continue;
+            }
+
+            $removedConnection = $this->connectionRegistry->removeIfCurrent(
+                $connection->fileDescriptor,
+                $connection->connectionId,
+            );
+
+            if ($removedConnection === null) {
+                continue;
+            }
+
+            $this->connectionLimiter->remove($connection->fileDescriptor);
+            $this->abuseLimiter->removeConnection($connection->fileDescriptor);
+            $staleConnectionsClosed++;
+            $this->logger->warning('websocket.stale_connection_closed', [
+                'fd' => $connection->fileDescriptor,
+                'connectionId' => $connection->connectionId,
+                'sessionId' => $connection->sessionId,
+                'participantId' => $connection->participantId,
+                'idleMs' => round($idleNanoseconds / 1_000_000, 3),
+                'staleAfterSeconds' => $staleTimeoutSeconds,
+            ]);
+
+            if ($this->isEstablished($server, $connection->fileDescriptor)) {
+                $server->disconnect(
+                    $connection->fileDescriptor,
+                    self::STALE_CONNECTION_CLOSE_CODE,
+                    'Heartbeat timeout',
+                );
+            }
+
+            try {
+                $this->participantConnectionService->disconnect(
+                    sessionId: $connection->sessionId,
+                    participantId: $connection->participantId,
+                    shouldMarkDisconnected: fn (): bool =>
+                        $this->connectionRegistry
+                            ->findCurrentFileDescriptorByParticipantId(
+                                $connection->participantId,
+                            ) === null,
+                );
+            } catch (Throwable $throwable) {
+                $this->logger->error(
+                    'websocket.stale_presence_disconnect_failed',
+                    [
+                        'fd' => $connection->fileDescriptor,
+                        'connectionId' => $connection->connectionId,
+                        'sessionId' => $connection->sessionId,
+                        'participantId' => $connection->participantId,
+                        'exception' => $throwable::class,
+                    ],
+                );
+            }
+        }
+
+        return $staleConnectionsClosed;
     }
 
     private function closeTimedOutConnection(

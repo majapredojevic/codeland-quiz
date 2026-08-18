@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\Observability\RuntimeLogger;
 use OpenSwoole\WebSocket\Server;
 use Throwable;
 
@@ -13,6 +14,7 @@ final class ParticipantWebSocketSender
         private readonly Server $server,
         private readonly ParticipantConnectionRegistry $connectionRegistry,
         private readonly WebSocketMessageEncoder $messageEncoder,
+        private readonly RuntimeLogger $logger,
     ) {
     }
 
@@ -53,15 +55,20 @@ final class ParticipantWebSocketSender
                 return true;
             }
 
-            error_log(
-                sprintf(
-                    'WebSocket push failed for participant %d on file descriptor %d.',
-                    $participantId,
-                    $fileDescriptor,
-                ),
-            );
+            $this->logger->warning('websocket.participant_push_failed', [
+                'fd' => $fileDescriptor,
+                'connectionId' => $connection->connectionId,
+                'sessionId' => $connection->sessionId,
+                'participantId' => $participantId,
+            ]);
         } catch (Throwable $throwable) {
-            error_log($throwable->getMessage());
+            $this->logger->error('websocket.participant_send_failed', [
+                'fd' => $fileDescriptor,
+                'connectionId' => $connection->connectionId,
+                'sessionId' => $connection->sessionId,
+                'participantId' => $participantId,
+                'exception' => $throwable::class,
+            ]);
         }
 
         return false;
