@@ -108,6 +108,10 @@ export class LoginPage {
       return 'Email ili lozinka nisu ispravni.';
     }
 
+    if (error instanceof HttpErrorResponse && error.status === 429) {
+      return 'Previše neuspješnih pokušaja. Pokušajte ponovo kasnije.';
+    }
+
     return 'Trenutno nije moguće izvršiti prijavu. Pokušajte ponovo.';
   }
 

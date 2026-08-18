@@ -26,6 +26,7 @@ final readonly class ParticipantConnectionResultDTO
         public ?DateTimeImmutable $currentQuestionStartedAt,
         public ?DateTimeImmutable $currentQuestionDeadline,
         public int $questionCount,
+        public DateTimeImmutable $participantTokenExpiresAt,
     ) {
     }
 }

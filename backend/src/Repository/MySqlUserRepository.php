@@ -40,6 +40,16 @@ WHERE id = :id
 LIMIT 1
 SQL;
 
+    private const FIND_BY_ID_FOR_UPDATE_SQL = <<<SQL
+SELECT id, name, email, password_hash, must_change_password, role, is_active
+FROM users
+WHERE id = :id
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+LIMIT 1
+FOR UPDATE
+SQL;
+
     private const FIND_BY_EMAIL_SQL = <<<SQL
 SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
@@ -67,6 +77,17 @@ WHERE id = :id
   AND is_deleted = FALSE
   AND deleted_at IS NULL
 LIMIT 1
+SQL;
+
+    private const FIND_TEACHER_BY_ID_FOR_UPDATE_SQL = <<<SQL
+SELECT id, name, email, password_hash, must_change_password, role, is_active
+FROM users
+WHERE id = :id
+  AND role = 'TEACHER'
+  AND is_deleted = FALSE
+  AND deleted_at IS NULL
+LIMIT 1
+FOR UPDATE
 SQL;
 
     private const FIND_TEACHERS_PAGE_SQL = <<<SQL
@@ -182,6 +203,19 @@ SQL;
         return $this->mapRowToUser($row);
     }
 
+    public function findByIdForUpdate(int $id): ?User
+    {
+        return $this->findOneById(self::FIND_BY_ID_FOR_UPDATE_SQL, $id);
+    }
+
+    public function findTeacherByIdForUpdate(int $id): ?User
+    {
+        return $this->findOneById(
+            self::FIND_TEACHER_BY_ID_FOR_UPDATE_SQL,
+            $id,
+        );
+    }
+
     public function findByEmail(string $email): ?User
     {
         $statement = $this->connection()->prepare(self::FIND_BY_EMAIL_SQL);
@@ -290,6 +324,15 @@ SQL;
         if ($statement->rowCount() === 0) {
             throw new RuntimeException('Teacher status was not updated.');
         }
+    }
+
+    private function findOneById(string $sql, int $id): ?User
+    {
+        $statement = $this->connection()->prepare($sql);
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->mapRowToUser($row);
     }
 
     /**

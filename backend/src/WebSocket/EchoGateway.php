@@ -21,7 +21,11 @@ final class EchoGateway implements WebSocketGateway
      */
     public function message(Server $server, Frame $frame): void
     {
-        echo "Received message from {$frame->fd}: {$frame->data}\n";
+        echo sprintf(
+            "Received WebSocket echo frame from %d (%d bytes).\n",
+            $frame->fd,
+            strlen($frame->data),
+        );
 
         $server->push($frame->fd, json_encode([
             'event' => 'server.echo',

@@ -21,6 +21,12 @@ final class SessionWebSocketBroadcaster
      */
     public function broadcast(int $sessionId, string $type, array $payload): int
     {
+        if ($type === 'QUESTION_STARTED') {
+            $this->connectionRegistry->clearAcceptedAnswersForSession(
+                $sessionId,
+            );
+        }
+
         try {
             $message = $this->messageEncoder->encode($type, $payload);
         } catch (Throwable $throwable) {

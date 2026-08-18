@@ -205,4 +205,21 @@ describe('LoginPage', () => {
       'Email ili lozinka nisu ispravni.',
     );
   });
+
+  it('shows the safe rate-limit message for HTTP 429', async () => {
+    login.mockRejectedValue(new HttpErrorResponse({ status: 429 }));
+    const { fixture, element } = createPage();
+    enter(inputFor(element, 'Email'), 'ana@example.com');
+    enter(inputFor(element, 'Lozinka'), 'Password1!');
+
+    element
+      .querySelector('form')
+      ?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain(
+      'Previše neuspješnih pokušaja. Pokušajte ponovo kasnije.',
+    );
+  });
 });

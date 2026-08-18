@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\Support\ClientAddress;
+use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\WebSocket\Frame;
 use OpenSwoole\WebSocket\Server;
@@ -11,8 +13,6 @@ use Throwable;
 
 final class WebSocketGatewayRouter
 {
-    private const GAME_PATH = '/ws/game';
-    private const ECHO_PATH = '/ws/echo';
     private const POLICY_VIOLATION_CLOSE_CODE = 1008;
 
     /**
@@ -24,16 +24,61 @@ final class WebSocketGatewayRouter
         private readonly ParticipantWebSocketGateway $participantGateway,
         private readonly EchoGateway $echoGateway,
         private readonly WebSocketMessageEncoder $messageEncoder,
+        private readonly WebSocketOriginPolicy $originPolicy,
+        private readonly WebSocketFramePolicy $framePolicy,
+        private readonly WebSocketConnectionLimiter $connectionLimiter,
+        private readonly WebSocketAbuseLimiter $abuseLimiter,
+        private readonly ClientAddress $clientAddress,
+        private readonly WebSocketRoutePolicy $routePolicy,
     ) {
+    }
+
+    public function allowsHandshake(Request $request): bool
+    {
+        return $this->gatewayForRequest($request) !== null
+            && $this->originPolicy->allows(
+                $request->header['origin'] ?? null,
+            );
     }
 
     public function open(Server $server, Request $request): void
     {
         $fileDescriptor = (int) $request->fd;
+
+        if (!$server->isEstablished($fileDescriptor)) {
+            return;
+        }
+
         $gateway = $this->gatewayForRequest($request);
 
         if ($gateway === null) {
             $this->rejectUnknownPath($server, $fileDescriptor);
+
+            return;
+        }
+
+        $clientIdentifier = $this->clientAddress->identifier(
+            $request->server['remote_addr'] ?? null,
+        );
+
+        try {
+            $this->connectionLimiter->register(
+                fileDescriptor: $fileDescriptor,
+                clientIdentifier: $clientIdentifier,
+                pendingAuthentication: $gateway === $this->participantGateway,
+            );
+            $this->abuseLimiter->registerConnection(
+                $fileDescriptor,
+                $clientIdentifier,
+            );
+        } catch (WebSocketRateLimitExceededException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'CONNECTION_LIMIT_REACHED',
+                message: 'WebSocket connection is temporarily unavailable.',
+            );
+            $this->disconnect($server, $fileDescriptor);
 
             return;
         }
@@ -44,6 +89,8 @@ final class WebSocketGatewayRouter
             $gateway->open($server, $request);
         } catch (Throwable $throwable) {
             unset($this->gatewaysByFileDescriptor[$fileDescriptor]);
+            $this->connectionLimiter->remove($fileDescriptor);
+            $this->abuseLimiter->removeConnection($fileDescriptor);
             error_log($throwable->getMessage());
             $this->rejectWithInternalError($server, $fileDescriptor);
         }
@@ -51,6 +98,18 @@ final class WebSocketGatewayRouter
 
     public function message(Server $server, Frame $frame): void
     {
+        if (!$this->framePolicy->allows($frame->data)) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $frame->fd,
+                code: 'MESSAGE_TOO_LARGE',
+                message: 'WebSocket message is too large.',
+            );
+            $this->disconnect($server, $frame->fd);
+
+            return;
+        }
+
         $gateway = $this->gatewaysByFileDescriptor[$frame->fd] ?? null;
 
         if ($gateway === null) {
@@ -80,19 +139,21 @@ final class WebSocketGatewayRouter
             $gateway->close($server, $fileDescriptor);
         } catch (Throwable $throwable) {
             error_log($throwable->getMessage());
+        } finally {
+            $this->connectionLimiter->remove($fileDescriptor);
+            $this->abuseLimiter->removeConnection($fileDescriptor);
         }
     }
 
     private function gatewayForRequest(Request $request): ?WebSocketGateway
     {
-        $path = parse_url(
+        $route = $this->routePolicy->routeForUri(
             (string) ($request->server['request_uri'] ?? ''),
-            PHP_URL_PATH,
         );
 
-        return match ($path) {
-            self::GAME_PATH => $this->participantGateway,
-            self::ECHO_PATH => $this->echoGateway,
+        return match ($route) {
+            WebSocketRoutePolicy::GAME => $this->participantGateway,
+            WebSocketRoutePolicy::ECHO => $this->echoGateway,
             default => null,
         };
     }

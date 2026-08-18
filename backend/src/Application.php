@@ -9,6 +9,7 @@ use CodeLandQuiz\Controller\HealthController;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Support\Router;
 use CodeLandQuiz\WebSocket\WebSocketGatewayRouter;
+use CodeLandQuiz\WebSocket\WebSocketHandshakeHandler;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Frame;
@@ -21,6 +22,8 @@ final class Application
     private Router $router;
 
     private WebSocketGatewayRouter $webSocketGateway;
+
+    private WebSocketHandshakeHandler $webSocketHandshakeHandler;
 
     private ApplicationFactory $applicationFactory;
 
@@ -36,6 +39,9 @@ final class Application
         );
         $this->webSocketGateway =
             $this->applicationFactory->createWebSocketGatewayRouter();
+        $this->webSocketHandshakeHandler = new WebSocketHandshakeHandler(
+            $this->webSocketGateway,
+        );
     }
 
     public function run(): void
@@ -669,9 +675,23 @@ final class Application
             $this->router->dispatch($request, $response);
         });
 
-        $this->server->on('open', function (Server $server, Request $request): void {
-            $this->webSocketGateway->open($server, $request);
-        });
+        // OpenSwoole 26.2 emits a PHP dynamic-property deprecation while
+        // registering its documented Handshake event. Scope suppression to
+        // registration only; runtime warnings remain fully enabled.
+        $errorReporting = error_reporting();
+
+        try {
+            error_reporting($errorReporting & ~E_DEPRECATED);
+            $this->server->on('handshake', function (Request $request, Response $response): bool {
+                return $this->webSocketHandshakeHandler->handle(
+                    $this->server,
+                    $request,
+                    $response,
+                );
+            });
+        } finally {
+            error_reporting($errorReporting);
+        }
 
         $this->server->on('message', function (Server $server, Frame $frame): void {
             $this->webSocketGateway->message($server, $frame);

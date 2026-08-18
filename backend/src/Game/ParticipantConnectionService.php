@@ -120,6 +120,7 @@ final readonly class ParticipantConnectionService
                     finalResult: $finalResult,
                     currentQuestionSelectedOptionIds:
                         $currentQuestionSelectedOptionIds,
+                    participantTokenExpiresAt: $payload->expiresAt,
                 );
             },
         );
@@ -178,6 +179,7 @@ final readonly class ParticipantConnectionService
         ?ClosedSessionQuestionStateDTO $closedQuestion,
         ?FinalQuizSessionResultDTO $finalResult,
         array $currentQuestionSelectedOptionIds,
+        \DateTimeImmutable $participantTokenExpiresAt,
     ): ParticipantConnectionResultDTO {
         return new ParticipantConnectionResultDTO(
             participant: new SessionParticipantItemDTO(
@@ -205,6 +207,7 @@ final readonly class ParticipantConnectionService
             currentQuestionStartedAt: $session->currentQuestionStartedAt,
             currentQuestionDeadline: $session->currentQuestionDeadline,
             questionCount: $session->questionCount,
+            participantTokenExpiresAt: $participantTokenExpiresAt,
         );
     }
 

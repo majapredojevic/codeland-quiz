@@ -17,6 +17,7 @@ use CodeLandQuiz\Game\Exception\InvalidSelectedOptionsException;
 use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Game\ParticipantConnectionService;
 use CodeLandQuiz\Model\QuizSessionStatus;
+use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use InvalidArgumentException;
 use JsonException;
 use OpenSwoole\Http\Request;
@@ -44,6 +45,8 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         private readonly ParticipantConnectionRegistry $connectionRegistry,
         private readonly WebSocketMessageEncoder $messageEncoder,
         private readonly SessionWebSocketPayloadMapper $payloadMapper,
+        private readonly WebSocketConnectionLimiter $connectionLimiter,
+        private readonly WebSocketAbuseLimiter $abuseLimiter,
     ) {
     }
 
@@ -105,6 +108,9 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         }
 
         try {
+            $this->abuseLimiter->recordAuthenticationAttempt(
+                $fileDescriptor,
+            );
             $participantToken = $this->readParticipantToken($frame->data);
             $result = $this->participantConnectionService->authenticate(
                 $participantToken,
@@ -116,9 +122,25 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 sessionId: $result->sessionId,
                 participantType: $result->participant->participantType,
                 studentId: $result->participant->studentId,
+                participantTokenExpiresAt:
+                    $result->participantTokenExpiresAt,
             );
 
             unset($this->pendingConnectionIds[$fileDescriptor]);
+            $this->connectionLimiter->markAuthenticated($fileDescriptor);
+            $this->abuseLimiter->markAuthenticated($fileDescriptor);
+
+            if ($result->currentQuestionSelectedOptionIds !== []) {
+                $questionOrder = $result->currentQuestion?->questionOrder
+                    ?? $result->currentQuestionOrder;
+
+                if ($questionOrder !== null) {
+                    $this->connectionRegistry->markAnswerAccepted(
+                        $fileDescriptor,
+                        $questionOrder,
+                    );
+                }
+            }
 
             $this->pushAuthenticated(
                 server: $server,
@@ -137,15 +159,22 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                     fileDescriptor: $previousFileDescriptor,
                 );
             }
-        } catch (InvalidArgumentException) {
+        } catch (WebSocketRateLimitExceededException) {
             $this->failAuthentication(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'AUTHENTICATION_RATE_LIMITED',
+                message: 'Previše pokušaja povezivanja.',
+            );
+        } catch (InvalidArgumentException) {
+            $this->rejectAuthenticationAttempt(
                 server: $server,
                 fileDescriptor: $fileDescriptor,
                 code: 'INVALID_AUTHENTICATION_MESSAGE',
                 message: 'A valid participant authentication message is required.',
             );
         } catch (InvalidParticipantTokenException) {
-            $this->failAuthentication(
+            $this->rejectAuthenticationAttempt(
                 server: $server,
                 fileDescriptor: $fileDescriptor,
                 code: 'PARTICIPANT_AUTHENTICATION_FAILED',
@@ -190,6 +219,43 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             return;
         }
 
+        if ($connection->tokenHasExpired(time())) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'PARTICIPANT_SESSION_EXPIRED',
+                message: 'Ova sesija je istekla. Pridruži se igri ponovo.',
+            );
+            $this->disconnect($server, $fileDescriptor);
+
+            return;
+        }
+
+        try {
+            $this->abuseLimiter->recordAnswerAttempt($fileDescriptor);
+        } catch (WebSocketRateLimitExceededException) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'ANSWER_RATE_LIMITED',
+                message: 'Previše pokušaja slanja odgovora.',
+            );
+            $this->disconnect($server, $fileDescriptor);
+
+            return;
+        }
+
+        if ($this->connectionRegistry->hasAcceptedCurrentAnswer($fileDescriptor)) {
+            $this->pushError(
+                server: $server,
+                fileDescriptor: $fileDescriptor,
+                code: 'ANSWER_ALREADY_SUBMITTED',
+                message: 'Odgovor je već poslan.',
+            );
+
+            return;
+        }
+
         try {
             $message = $this->readAuthenticatedMessage($frame->data);
         } catch (InvalidArgumentException) {
@@ -222,6 +288,11 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 sessionId: $connection->sessionId,
                 participantId: $connection->participantId,
                 dto: $dto,
+            );
+
+            $this->connectionRegistry->markAnswerAccepted(
+                $fileDescriptor,
+                $result->questionOrder,
             );
 
             $this->pushAnswerAccepted(
@@ -583,6 +654,20 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             message: $message,
         );
         $this->disconnect($server, $fileDescriptor);
+    }
+
+    private function rejectAuthenticationAttempt(
+        Server $server,
+        int $fileDescriptor,
+        string $code,
+        string $message,
+    ): void {
+        $this->pushError(
+            server: $server,
+            fileDescriptor: $fileDescriptor,
+            code: $code,
+            message: $message,
+        );
     }
 
     private function pushError(

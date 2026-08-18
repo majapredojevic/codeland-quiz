@@ -12,6 +12,9 @@ use RuntimeException;
 
 final class MySqlLoginAttemptRepository implements LoginAttemptRepository
 {
+    private const ACQUIRE_EMAIL_LOCK_SQL = 'SELECT GET_LOCK(:lock_name, 5)';
+    private const RELEASE_EMAIL_LOCK_SQL = 'SELECT RELEASE_LOCK(:lock_name)';
+
     private const INSERT_SQL = <<<SQL
 INSERT INTO login_attempts (
     email,
@@ -42,6 +45,35 @@ SQL;
     public function __construct(
         private readonly Database $database,
     ) {
+    }
+
+    public function synchronizedByEmail(
+        string $email,
+        callable $operation,
+    ): mixed {
+        $connection = $this->connection();
+        $lockName = 'clq_login_' . sha1($email);
+        $statement = $connection->prepare(self::ACQUIRE_EMAIL_LOCK_SQL);
+        $statement->execute(['lock_name' => $lockName]);
+
+        if ((int) $statement->fetchColumn() !== 1) {
+            throw new RuntimeException(
+                'Login account synchronization could not be acquired.',
+            );
+        }
+
+        try {
+            return $operation();
+        } finally {
+            try {
+                $statement = $connection->prepare(
+                    self::RELEASE_EMAIL_LOCK_SQL,
+                );
+                $statement->execute(['lock_name' => $lockName]);
+            } catch (\Throwable) {
+                error_log('Login account synchronization release failed.');
+            }
+        }
     }
 
     public function save(LoginAttempt $attempt): void

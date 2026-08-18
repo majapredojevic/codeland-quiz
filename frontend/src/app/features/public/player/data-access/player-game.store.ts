@@ -450,6 +450,9 @@ export class PlayerGameStore implements OnDestroy {
       case 'AUTHENTICATION_TIMEOUT':
         this.failTerminal('Ova igra više nije dostupna.', true);
         return;
+      case 'PARTICIPANT_SESSION_EXPIRED':
+        this.failTerminal('Ova sesija je istekla. Pridruži se igri ponovo.', true);
+        return;
       case 'INTERNAL_ERROR':
         if (this.submissionPending()) {
           this.resolveSubmissionThroughReconnect();
