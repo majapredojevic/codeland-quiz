@@ -216,7 +216,9 @@ final class ApplicationFactory
             authCookieService: $this->createAuthCookieService(),
             responseFactory: new ResponseFactory(),
             inputNormalizer: new LoginInputNormalizer(),
-            clientAddress: new ClientAddress(),
+            clientAddress: new ClientAddress(
+                $this->config->getTrustedProxyCidrs(),
+            ),
         );
     }
 
@@ -604,7 +606,9 @@ final class ApplicationFactory
             ),
             connectionLimiter: $connectionLimiter,
             abuseLimiter: $abuseLimiter,
-            clientAddress: new ClientAddress(),
+            clientAddress: new ClientAddress(
+                $this->config->getTrustedProxyCidrs(),
+            ),
             routePolicy: new WebSocketRoutePolicy(
                 echoEnabled: $this->config->getAppEnv() === 'development',
             ),

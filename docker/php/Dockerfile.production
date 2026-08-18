@@ -1,0 +1,53 @@
+FROM composer:2.10.2 AS composer-dependencies
+
+WORKDIR /application
+
+COPY backend/composer.json backend/composer.lock ./
+
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --prefer-dist \
+    --no-autoloader
+
+COPY backend/src ./src
+
+RUN composer dump-autoload \
+    --no-dev \
+    --no-interaction \
+    --classmap-authoritative
+
+FROM php:8.3.32-cli-trixie
+
+ARG OPENSWOOLE_VERSION=26.2.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libcurl4-openssl-dev \
+        libssl-dev \
+    && docker-php-ext-install -j"$(nproc)" pdo_mysql sockets \
+    && pecl install "openswoole-${OPENSWOOLE_VERSION}" \
+    && docker-php-ext-enable openswoole \
+    && apt-get purge -y --auto-remove \
+        ${PHPIZE_DEPS} \
+        libcurl4-openssl-dev \
+        libssl-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/pear
+
+WORKDIR /var/www/backend
+
+COPY docker/php/production.ini /usr/local/etc/php/conf.d/zz-codeland-production.ini
+COPY --chown=www-data:www-data backend/ ./
+COPY --from=composer-dependencies --chown=www-data:www-data /application/vendor ./vendor
+
+RUN mkdir -p storage/question-images \
+    && chown -R www-data:www-data storage
+
+USER www-data
+
+EXPOSE 9501
+
+CMD ["php", "server.php"]

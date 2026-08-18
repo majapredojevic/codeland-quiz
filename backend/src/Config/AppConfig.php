@@ -55,6 +55,11 @@ final readonly class AppConfig
     /**
      * @var string[]
      */
+    private array $trustedProxyCidrs;
+
+    /**
+     * @var string[]
+     */
     private array $webSocketAllowedOrigins;
 
     private int $webSocketGameplayMaximumFrameBytes;
@@ -117,6 +122,9 @@ final readonly class AppConfig
         $this->loginAttemptLimit = $this->environment->getInt('LOGIN_ATTEMPT_LIMIT');
         $this->loginLockDurationMinutes = $this->environment->getInt('LOGIN_LOCK_DURATION_MINUTES');
         $this->loginIpAttemptLimit = $this->environment->getInt('LOGIN_IP_ATTEMPT_LIMIT');
+        $this->trustedProxyCidrs = $this->environment->has('TRUSTED_PROXY_CIDRS')
+            ? $this->parseList($this->environment->get('TRUSTED_PROXY_CIDRS'))
+            : [];
         $this->webSocketAllowedOrigins = $this->parseList(
             $this->environment->get('WS_ALLOWED_ORIGINS'),
         );
@@ -230,6 +238,10 @@ final readonly class AppConfig
         if ($this->defaultPageSize > $this->maximumPageSize) {
             throw new InvalidArgumentException('Default page size cannot exceed maximum page size.');
         }
+
+        if ($this->appEnv === 'production') {
+            $this->validateProductionConfiguration();
+        }
     }
 
     public function getLoginAttemptLimit(): int
@@ -245,6 +257,14 @@ final readonly class AppConfig
     public function getLoginIpAttemptLimit(): int
     {
         return $this->loginIpAttemptLimit;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getTrustedProxyCidrs(): array
+    {
+        return $this->trustedProxyCidrs;
     }
 
     /**
@@ -554,6 +574,157 @@ final readonly class AppConfig
         }
 
         return $secret;
+    }
+
+    private function validateProductionConfiguration(): void
+    {
+        if (!$this->cookieSecure) {
+            throw new InvalidArgumentException(
+                'Production authentication cookies must be Secure.',
+            );
+        }
+
+        if (!$this->cookieHttpOnly) {
+            throw new InvalidArgumentException(
+                'Production access and refresh cookies must be HttpOnly.',
+            );
+        }
+
+        if ($this->cookiePath !== '/') {
+            throw new InvalidArgumentException(
+                'Production authentication cookies must use Path=/.',
+            );
+        }
+
+        if ($this->cookieSameSite !== CookieSameSite::STRICT) {
+            throw new InvalidArgumentException(
+                'Production authentication cookies must use SameSite=Strict.',
+            );
+        }
+
+        $applicationOrigin = $this->normalizeHttpsOrigin($this->appUrl);
+
+        if ($applicationOrigin === null) {
+            throw new InvalidArgumentException(
+                'Production application URL must be an HTTPS origin.',
+            );
+        }
+
+        $allowedOrigins = array_map(
+            fn (string $origin): ?string => $this->normalizeHttpsOrigin($origin),
+            $this->webSocketAllowedOrigins,
+        );
+
+        if (
+            in_array(null, $allowedOrigins, true)
+            || !in_array($applicationOrigin, $allowedOrigins, true)
+        ) {
+            throw new InvalidArgumentException(
+                'Production WebSocket origins must be HTTPS and include the application origin.',
+            );
+        }
+
+        if ($this->trustedProxyCidrs === []) {
+            throw new InvalidArgumentException(
+                'Production must configure at least one trusted reverse-proxy CIDR.',
+            );
+        }
+
+        $jwtSecret = $this->environment->get('JWT_SECRET');
+        $databaseUsername = strtolower($this->environment->get('DB_USERNAME'));
+        $databasePassword = $this->environment->get('DB_PASSWORD');
+
+        foreach ([
+            'JWT signing secret' => $jwtSecret,
+            'refresh-token HMAC secret' => $this->refreshTokenHashKey,
+            'participant-token secret' => $this->participantTokenSecret,
+        ] as $label => $secret) {
+            if (strlen($secret) < 32 || $this->looksLikeExampleSecret($secret)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Production %s is missing, too short or uses a known example value.',
+                    $label,
+                ));
+            }
+        }
+
+        if (count(array_unique([
+            $jwtSecret,
+            $this->refreshTokenHashKey,
+            $this->participantTokenSecret,
+        ])) !== 3) {
+            throw new InvalidArgumentException(
+                'Production token secrets must be distinct.',
+            );
+        }
+
+        if (
+            in_array($databaseUsername, ['root', 'codeland'], true)
+            || strlen($databasePassword) < 16
+            || $this->looksLikeExampleSecret($databasePassword)
+        ) {
+            throw new InvalidArgumentException(
+                'Production database credentials must not use development or example values.',
+            );
+        }
+    }
+
+    private function normalizeHttpsOrigin(string $origin): ?string
+    {
+        $parts = parse_url($origin);
+
+        if (
+            $parts === false
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || ($parts['host'] ?? '') === ''
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])
+            || (isset($parts['path']) && !in_array($parts['path'], ['', '/'], true))
+        ) {
+            return null;
+        }
+
+        $host = strtolower((string) $parts['host']);
+
+        if (str_contains($host, ':')) {
+            $host = '[' . trim($host, '[]') . ']';
+        }
+
+        $port = $parts['port'] ?? null;
+
+        return sprintf(
+            'https://%s%s',
+            $host,
+            $port === null || $port === 443 ? '' : ':' . $port,
+        );
+    }
+
+    private function looksLikeExampleSecret(string $secret): bool
+    {
+        $normalizedSecret = strtolower(trim($secret));
+
+        foreach ([
+            'replace-with',
+            'replace_me',
+            'replace-me',
+            'change-me',
+            'changeme',
+            'example-secret',
+            'development-secret',
+        ] as $exampleMarker) {
+            if (str_contains($normalizedSecret, $exampleMarker)) {
+                return true;
+            }
+        }
+
+        return in_array($normalizedSecret, [
+            'secret',
+            'rootsecret',
+            'password',
+            'codeland',
+            'codeland_quiz',
+        ], true);
     }
 
     private function ensurePositive(int $value, string $label): void

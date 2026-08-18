@@ -59,6 +59,7 @@ final class WebSocketGatewayRouter
 
         $clientIdentifier = $this->clientAddress->identifier(
             $request->server['remote_addr'] ?? null,
+            $request->header['x-real-ip'] ?? null,
         );
 
         try {

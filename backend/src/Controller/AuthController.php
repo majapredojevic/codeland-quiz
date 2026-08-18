@@ -53,6 +53,7 @@ final class AuthController
                 ),
                 $this->clientAddress->identifier(
                     $request->server['remote_addr'] ?? null,
+                    $request->header['x-real-ip'] ?? null,
                 ),
             );
 
