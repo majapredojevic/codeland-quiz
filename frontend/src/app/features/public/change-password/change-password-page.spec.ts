@@ -33,7 +33,7 @@ describe('ChangePasswordPage', () => {
     expect(main?.classList).toContain('public-main');
     expect(brandPicture?.classList).toContain('brand-picture');
     expect(desktopSource?.media).toBe('(min-width: 600px)');
-    expect(desktopSource?.getAttribute('srcset')).toBe('/brand/logo.png');
+    expect(desktopSource?.getAttribute('srcset')).toBe('/brand/logo-header.png');
     expect(logo?.getAttribute('src')).toContain('/brand/logo-small.png');
     expect(logo?.alt).toBe('CodeLand');
     expect(logo?.closest('a')).toBeNull();

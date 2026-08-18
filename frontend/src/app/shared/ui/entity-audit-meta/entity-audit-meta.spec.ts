@@ -18,6 +18,7 @@ describe('EntityAuditMeta', () => {
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     expect(element.textContent).toContain('Kreirao: Maja');
+    expect(element.textContent).toMatch(/\d{2}\.\d{2}\.2026\. \d{2}:\d{2}/);
     expect(element.textContent).not.toContain('Posljednja izmjena');
     expect(element.textContent).not.toContain('2026-08-12T16:10:00');
   });
@@ -29,6 +30,7 @@ describe('EntityAuditMeta', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.textContent).toContain('Kreirao: Maja');
     expect(element.textContent).toContain('Posljednja izmjena: Marko');
+    expect(element.textContent).not.toContain(' u ');
   });
 
   it('renders nothing for invalid timestamps instead of exposing raw values', () => {

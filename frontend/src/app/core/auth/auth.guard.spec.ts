@@ -20,6 +20,7 @@ describe('authentication guards', () => {
   const authStore = {
     isAuthenticated: authenticated.asReadonly(),
     mustChangePassword: passwordChangeRequired.asReadonly(),
+    restoreSession: vi.fn().mockResolvedValue(undefined),
   };
 
   let router: Router;
@@ -27,6 +28,7 @@ describe('authentication guards', () => {
   beforeEach(() => {
     authenticated.set(false);
     passwordChangeRequired.set(false);
+    authStore.restoreSession.mockClear();
 
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: AuthStore, useValue: authStore }],
@@ -47,72 +49,74 @@ describe('authentication guards', () => {
   }
 
   describe('authGuard', () => {
-    it('allows authenticated staff', () => {
+    it('restores and allows authenticated staff', async () => {
       authenticated.set(true);
 
-      expect(runGuard(authGuard)).toBe(true);
+      expect(await runGuard(authGuard)).toBe(true);
+      expect(authStore.restoreSession).toHaveBeenCalledOnce();
     });
 
-    it('redirects anonymous visitors to login', () => {
-      expectRedirect(runGuard(authGuard), '/login');
+    it('restores and redirects anonymous visitors to login', async () => {
+      expectRedirect(await runGuard(authGuard), '/login');
+      expect(authStore.restoreSession).toHaveBeenCalledOnce();
     });
   });
 
   describe('guestGuard', () => {
-    it('allows anonymous visitors', () => {
-      expect(runGuard(guestGuard)).toBe(true);
+    it('allows anonymous visitors', async () => {
+      expect(await runGuard(guestGuard)).toBe(true);
     });
 
-    it('redirects authenticated staff who must change their password', () => {
+    it('redirects authenticated staff who must change their password', async () => {
       authenticated.set(true);
       passwordChangeRequired.set(true);
 
-      expectRedirect(runGuard(guestGuard), '/change-password');
+      expectRedirect(await runGuard(guestGuard), '/change-password');
     });
 
-    it('redirects other authenticated staff to the dashboard', () => {
+    it('redirects other authenticated staff to the dashboard', async () => {
       authenticated.set(true);
 
-      expectRedirect(runGuard(guestGuard), '/app/dashboard');
+      expectRedirect(await runGuard(guestGuard), '/app/dashboard');
     });
   });
 
   describe('passwordChangeGuard', () => {
-    it('redirects anonymous visitors to login', () => {
-      expectRedirect(runGuard(passwordChangeGuard), '/login');
+    it('redirects anonymous visitors to login', async () => {
+      expectRedirect(await runGuard(passwordChangeGuard), '/login');
     });
 
-    it('redirects staff who must change their password away from /app', () => {
+    it('redirects staff who must change their password away from /app', async () => {
       authenticated.set(true);
       passwordChangeRequired.set(true);
 
-      expectRedirect(runGuard(passwordChangeGuard), '/change-password');
+      expectRedirect(await runGuard(passwordChangeGuard), '/change-password');
     });
 
-    it('allows authenticated staff without a password-change requirement', () => {
+    it('allows authenticated staff without a password-change requirement', async () => {
       authenticated.set(true);
 
-      expect(runGuard(passwordChangeGuard)).toBe(true);
+      expect(await runGuard(passwordChangeGuard)).toBe(true);
     });
   });
 
   describe('changePasswordPageGuard', () => {
-    it('redirects anonymous visitors to login', () => {
-      expectRedirect(runGuard(changePasswordPageGuard), '/login');
+    it('redirects anonymous visitors to login', async () => {
+      expectRedirect(await runGuard(changePasswordPageGuard), '/login');
     });
 
-    it('allows staff who must change their password', () => {
+    it('allows staff who must change their password', async () => {
       authenticated.set(true);
       passwordChangeRequired.set(true);
 
-      expect(runGuard(changePasswordPageGuard)).toBe(true);
+      expect(await runGuard(changePasswordPageGuard)).toBe(true);
     });
 
-    it('redirects staff without a password-change requirement to the voluntary page', () => {
+    it('redirects staff without a password-change requirement to the voluntary page', async () => {
       authenticated.set(true);
       passwordChangeRequired.set(false);
 
-      expectRedirect(runGuard(changePasswordPageGuard), '/app/account/password');
+      expectRedirect(await runGuard(changePasswordPageGuard), '/app/account/password');
     });
   });
 });

@@ -105,6 +105,9 @@ describe('DashboardPage', () => {
     expect(element.querySelectorAll('.topic-chip:not(.topic-chip--all)')).toHaveLength(8);
     expect(element.textContent).not.toContain('Pretraži teme');
     expect(element.querySelector('clq-play-quiz-card')?.textContent).toContain('Petlje');
+    expect(element.querySelector('clq-play-quiz-card')?.textContent).toMatch(
+      /Igrano \d{2}\.\d{2}\.2026\./,
+    );
     expect(element.querySelector('clq-play-quiz-card button')?.textContent).toContain('Igraj');
   });
 

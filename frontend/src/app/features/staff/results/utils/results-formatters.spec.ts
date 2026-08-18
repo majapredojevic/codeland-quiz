@@ -23,7 +23,8 @@ describe('Results formatters', () => {
   it('never exposes a raw ISO date or an invalid date', () => {
     const value = formatStaffDate('2026-08-12T19:42:00+02:00');
     expect(value).not.toContain('T19:42');
-    expect(value).toContain('2026');
+    expect(value).toMatch(/^\d{2}\.\d{2}\.2026\. \d{2}:\d{2}$/);
+    expect(formatStaffDate('2026-08-12T19:42:00+02:00', false)).toMatch(/^\d{2}\.\d{2}\.2026\.$/);
     expect(formatStaffDate('invalid')).toBe('—');
   });
 });

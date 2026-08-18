@@ -111,6 +111,15 @@ describe('AuthStore', () => {
     expect(authStore.status()).toBe('unauthenticated');
   });
 
+  it('shares one session restoration across simultaneous staff guards', async () => {
+    const first = authStore.restoreSession();
+    const second = authStore.restoreSession();
+
+    expect(first).toBe(second);
+    httpTesting.expectOne('/api/auth/me').flush({ user: normalUser });
+    await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined]);
+  });
+
   it('clears authenticated state only after logout succeeds', async () => {
     const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
     await restoreUser(normalUser);

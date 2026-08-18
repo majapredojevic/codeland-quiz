@@ -10,7 +10,12 @@ import { catchError, switchMap, throwError } from 'rxjs';
 import { AuthStore } from './auth.store';
 
 const AUTH_REQUEST_RETRIED = new HttpContextToken(() => false);
-const REFRESH_EXCLUDED_PATHS = new Set(['/api/auth/login', '/api/auth/refresh']);
+const REFRESH_EXCLUDED_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/refresh',
+]);
+const PUBLIC_PLAYER_API_PREFIX = '/api/game/';
 const XSRF_HEADER_NAME = 'X-CSRF-Token';
 
 export const authRefreshInterceptor: HttpInterceptorFn = (request, next) => {
@@ -18,6 +23,7 @@ export const authRefreshInterceptor: HttpInterceptorFn = (request, next) => {
 
   if (
     !requestPath.startsWith('/api/') ||
+    requestPath.startsWith(PUBLIC_PLAYER_API_PREFIX) ||
     REFRESH_EXCLUDED_PATHS.has(requestPath) ||
     request.context.get(AUTH_REQUEST_RETRIED)
   ) {
@@ -27,7 +33,7 @@ export const authRefreshInterceptor: HttpInterceptorFn = (request, next) => {
   const authStore = inject(AuthStore);
   const http = inject(HttpClient);
 
-  if (authStore.status() === 'unauthenticated' && requestPath !== '/api/auth/me') {
+  if (authStore.status() !== 'authenticated' && requestPath !== '/api/auth/me') {
     return next(request);
   }
 

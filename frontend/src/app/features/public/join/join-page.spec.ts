@@ -60,7 +60,7 @@ describe('JoinPage', () => {
     expect(brandLink?.classList).toContain('brand-slot');
     expect(brandLink?.getAttribute('href')).toBe('/');
     expect(desktopSource?.media).toBe('(min-width: 600px)');
-    expect(desktopSource?.getAttribute('srcset')).toBe('/brand/logo.png');
+    expect(desktopSource?.getAttribute('srcset')).toBe('/brand/logo-header.png');
     expect(logo?.getAttribute('src')).toContain('/brand/logo-small.png');
     expect(logo?.alt).toBe('CodeLand');
   });
