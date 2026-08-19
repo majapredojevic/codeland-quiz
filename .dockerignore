@@ -2,6 +2,8 @@
 .agents
 .codex
 .local-production
+load-testing/.runtime
+load-testing/results
 .env
 .env.production
 backend/.env

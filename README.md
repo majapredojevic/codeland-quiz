@@ -44,3 +44,7 @@ npm start
 Production uses a separate three-service stack and never inherits development
 ports or phpMyAdmin. See [docs/09-deployment.md](docs/09-deployment.md) before
 creating `.env.production` or mounting a real TLS certificate.
+
+The reproducible production-path performance harness is documented in
+[load-testing/README.md](load-testing/README.md). Its 10-Player smoke validates
+the harness; higher-scale capacity is intentionally not claimed.
