@@ -1,0 +1,99 @@
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:${LOAD_TEST_HTTPS_PORT:-8443}:443"
+    networks:
+      edge:
+        aliases:
+          - quiz.load.test
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget --no-check-certificate --quiet --output-document=- https://127.0.0.1/ready >/dev/null"
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+
+  backend:
+    volumes:
+      - type: bind
+        source: ./load-testing
+        target: /load-testing
+        read_only: true
+      - type: bind
+        source: ./load-testing/results
+        target: /load-testing-results
+    environment:
+      WS_HEARTBEAT_INTERVAL_SECONDS: ${LOAD_TEST_WS_HEARTBEAT_INTERVAL_SECONDS:-25}
+      WS_STALE_TIMEOUT_SECONDS: ${LOAD_TEST_WS_STALE_TIMEOUT_SECONDS:-75}
+      OPENSWOOLE_TRANSPORT_HEARTBEAT_CHECK_INTERVAL_SECONDS: ${LOAD_TEST_TRANSPORT_HEARTBEAT_CHECK_INTERVAL_SECONDS:-30}
+      OPENSWOOLE_TRANSPORT_HEARTBEAT_IDLE_SECONDS: ${LOAD_TEST_TRANSPORT_HEARTBEAT_IDLE_SECONDS:-120}
+
+  observer:
+    profiles:
+      - load-test-tools
+    image: codeland-quiz-backend:${CODELAND_IMAGE_TAG:?Set CODELAND_IMAGE_TAG in the load-test environment}
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    command:
+      - php
+      - /load-testing/observer/runtime-mysql-observer.php
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:?Set DB_DATABASE in the load-test environment}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in the load-test environment}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the load-test environment}
+      LOAD_TEST_RUN_ID: ${LOAD_TEST_RUN_ID:-not-set}
+      LOAD_TEST_RESULTS_ROOT: /load-testing-results
+      LOAD_TEST_RUNTIME_METRICS_URL: http://backend:9501/internal/metrics
+      LOAD_TEST_OBSERVER_INTERVAL_MS: ${LOAD_TEST_OBSERVER_INTERVAL_MS:-1000}
+      LOAD_TEST_OBSERVER_MAX_SECONDS: ${LOAD_TEST_OBSERVER_MAX_SECONDS:-900}
+    volumes:
+      - type: bind
+        source: ./load-testing
+        target: /load-testing
+        read_only: true
+      - type: bind
+        source: ./load-testing/results
+        target: /load-testing-results
+    networks:
+      - edge
+      - database
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  k6:
+    profiles:
+      - load-test-tools
+    image: grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669
+    depends_on:
+      nginx:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ./load-testing/k6
+        target: /scripts
+        read_only: true
+      - type: bind
+        source: ./load-testing/results
+        target: /results
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

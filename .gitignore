@@ -28,3 +28,8 @@ docker/mysql/data/
 
 # Local production-stack verification material
 .local-production/
+
+# Reproducible load-test runtime material and generated results
+load-testing/.runtime/
+load-testing/results/*
+!load-testing/results/.gitkeep
