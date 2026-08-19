@@ -42,10 +42,14 @@ final class GameController
             $gamePin = GamePinRoute::fromContext($context);
             $preview = $this->gameService->getSessionPreview($gamePin);
 
-            $this->responseFactory->json($response, [
-                'session' => $this->sessionPreviewResponse($preview),
-                'avatarKeys' => $this->avatarCatalog->all(),
-            ]);
+            $this->responseFactory->json(
+                $response,
+                [
+                    'session' => $this->sessionPreviewResponse($preview),
+                    'avatarKeys' => $this->avatarCatalog->all(),
+                ],
+                serializationProfile: 'preview.http_serialization',
+            );
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(
                 $response,
@@ -80,6 +84,10 @@ final class GameController
                 $response,
                 $this->joinGameResponse($result),
                 201,
+                sprintf(
+                    'join.%s.http_serialization',
+                    strtolower($result->participant->participantType->value),
+                ),
             );
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(

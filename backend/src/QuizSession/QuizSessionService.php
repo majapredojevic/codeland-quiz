@@ -21,6 +21,7 @@ use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionParticipantAdminOverview;
 use CodeLandQuiz\Model\SessionQuestionOverview;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\Question\QuestionContentValidator;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\GamePinAlreadyExistsException;
@@ -68,6 +69,7 @@ final readonly class QuizSessionService
         private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
         private FinalQuizSessionResultAssembler $finalResultAssembler,
         private SessionParticipantRepository $participants,
+        private ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -412,10 +414,36 @@ final readonly class QuizSessionService
         int $actorUserId,
         int $sessionId,
     ): CloseSessionQuestionResultDTO {
-        return $this->transactionManager->transactional(
+        $close = fn (): CloseSessionQuestionResultDTO =>
+            $this->closeQuestionWithinTransaction($actorUserId, $sessionId);
+
+        if ($this->profiler === null) {
+            return $close();
+        }
+
+        return $this->profiler->inContext(
+            'question_close',
+            fn (): CloseSessionQuestionResultDTO => $this->profiler->measure(
+                'question_close.service_total',
+                $close,
+            ),
+        );
+    }
+
+    private function closeQuestionWithinTransaction(
+        int $actorUserId,
+        int $sessionId,
+    ): CloseSessionQuestionResultDTO {
+        return $this->profile(
+            'question_close.transaction',
+            fn (): CloseSessionQuestionResultDTO =>
+                $this->transactionManager->transactional(
             function () use ($actorUserId, $sessionId): CloseSessionQuestionResultDTO {
-                $session = $this->sessions->findOverviewByIdForUpdate(
-                    $sessionId,
+                $session = $this->profile(
+                    'question_close.session_lookup',
+                    fn () => $this->sessions->findOverviewByIdForUpdate(
+                        $sessionId,
+                    ),
                 );
 
                 if ($session === null) {
@@ -440,9 +468,12 @@ final readonly class QuizSessionService
                     );
                 }
 
-                $question = $this->sessionQuestions->findBySessionAndOrder(
-                    sessionId: $sessionId,
-                    questionOrder: $session->currentQuestionOrder,
+                $question = $this->profile(
+                    'question_close.question_lookup',
+                    fn () => $this->sessionQuestions->findBySessionAndOrder(
+                        sessionId: $sessionId,
+                        questionOrder: $session->currentQuestionOrder,
+                    ),
                 );
 
                 if ($question === null) {
@@ -463,13 +494,23 @@ final readonly class QuizSessionService
                     );
                 }
 
-                $this->sessions->markCurrentQuestionClosed($sessionId);
-                $this->sessionResults->recalculateParticipantTotalScores(
-                    $sessionId,
+                $this->profile(
+                    'question_close.mark_closed',
+                    fn () => $this->sessions->markCurrentQuestionClosed(
+                        $sessionId,
+                    ),
+                );
+                $this->profile(
+                    'question_close.score_recalculation',
+                    fn () => $this->sessionResults
+                        ->recalculateParticipantTotalScores($sessionId),
                 );
 
-                $updatedSession = $this->sessions->findOverviewByIdForUpdate(
-                    $sessionId,
+                $updatedSession = $this->profile(
+                    'question_close.session_reload',
+                    fn () => $this->sessions->findOverviewByIdForUpdate(
+                        $sessionId,
+                    ),
                 );
 
                 if (
@@ -487,7 +528,9 @@ final readonly class QuizSessionService
                         closedAt: $updatedSession->currentQuestionClosedAt,
                     );
 
-                $this->auditLogService->log(
+                $this->profile(
+                    'question_close.audit_log',
+                    fn () => $this->auditLogService->log(
                     action: AuditAction::QUIZ_SESSION_QUESTION_CLOSED,
                     userId: $actorUserId,
                     entityType: self::AUDIT_ENTITY_TYPE,
@@ -504,6 +547,7 @@ final readonly class QuizSessionService
                             $updatedSession->currentQuestionClosedAt
                                 < $session->currentQuestionDeadline,
                     ],
+                    ),
                 );
 
                 return new CloseSessionQuestionResultDTO(
@@ -512,6 +556,7 @@ final readonly class QuizSessionService
                     stateChanged: true,
                 );
             },
+            ),
         );
     }
 
@@ -929,5 +974,19 @@ final readonly class QuizSessionService
             questionCount: $session->questionCount,
             participantCount: $session->participantCount,
         );
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    private function profile(string $name, callable $operation): mixed
+    {
+        return $this->profiler === null
+            ? $operation()
+            : $this->profiler->measure($name, $operation);
     }
 }

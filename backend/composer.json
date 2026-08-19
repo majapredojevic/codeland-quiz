@@ -19,6 +19,7 @@
         "verify-security": "@php scripts/verify-security-hardening.php",
         "verify-production": "@php scripts/verify-production-hardening.php",
         "verify-images": "@php scripts/verify-question-image-storage.php",
-        "verify-runtime": "@php scripts/verify-runtime-hardening.php"
+        "verify-runtime": "@php scripts/verify-runtime-hardening.php",
+        "verify-profiling": "@php scripts/verify-performance-profiling.php"
     }
 }

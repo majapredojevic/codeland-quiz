@@ -48,6 +48,7 @@ final class Application
             logger: $this->applicationFactory->getRuntimeLogger(),
             metrics: $this->applicationFactory->getRuntimeMetrics(),
             requestIdGenerator: new RequestIdGenerator(),
+            profiler: $this->applicationFactory->getPerformanceProfiler(),
         );
         $this->webSocketGateway =
             $this->applicationFactory->createWebSocketGatewayRouter();
@@ -56,7 +57,8 @@ final class Application
                 $this->webSocketGateway,
             );
         $this->webSocketHandshakeHandler = new WebSocketHandshakeHandler(
-            $this->webSocketGateway,
+            gatewayRouter: $this->webSocketGateway,
+            profiler: $this->applicationFactory->getPerformanceProfiler(),
         );
     }
 
@@ -98,6 +100,16 @@ final class Application
         $this->router->get(
             '/internal/metrics',
             $this->applicationFactory->createRuntimeMetricsController(),
+        );
+        $performanceProfileController =
+            $this->applicationFactory->createPerformanceProfileController();
+        $this->router->get(
+            '/internal/profile',
+            $performanceProfileController->snapshot(...),
+        );
+        $this->router->post(
+            '/internal/profile/reset',
+            $performanceProfileController->reset(...),
         );
 
         $questionImageController =

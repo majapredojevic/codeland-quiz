@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Support;
 
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use RuntimeException;
 use Throwable;
 
@@ -11,6 +12,7 @@ final readonly class PdoTransactionManager implements TransactionManager
 {
     public function __construct(
         private Database $database,
+        private ?PerformanceProfiler $profiler = null,
     ) {}
 
     /**
@@ -28,16 +30,49 @@ final readonly class PdoTransactionManager implements TransactionManager
             throw new RuntimeException('A database transaction is already active.');
         }
 
-        $connection->beginTransaction();
+        $beginStartedAt = $this->profiler?->start();
+
+        try {
+            $connection->beginTransaction();
+        } finally {
+            if ($beginStartedAt !== null) {
+                $this->profiler?->recordTransactionControl(
+                    'begin',
+                    $beginStartedAt,
+                );
+            }
+        }
 
         try {
             $result = $operation();
-            $connection->commit();
+            $commitStartedAt = $this->profiler?->start();
+
+            try {
+                $connection->commit();
+            } finally {
+                if ($commitStartedAt !== null) {
+                    $this->profiler?->recordTransactionControl(
+                        'commit',
+                        $commitStartedAt,
+                    );
+                }
+            }
 
             return $result;
         } catch (Throwable $throwable) {
             if ($connection->inTransaction()) {
-                $connection->rollBack();
+                $rollbackStartedAt = $this->profiler?->start();
+
+                try {
+                    $connection->rollBack();
+                } finally {
+                    if ($rollbackStartedAt !== null) {
+                        $this->profiler?->recordTransactionControl(
+                            'rollback',
+                            $rollbackStartedAt,
+                        );
+                    }
+                }
             }
 
             throw $throwable;

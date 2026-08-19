@@ -16,6 +16,7 @@ use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionParticipantOverview;
 use CodeLandQuiz\Model\SessionQuestionOverview;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\QuizSession\ClosedQuestionResultAssembler;
 use CodeLandQuiz\QuizSession\FinalQuizSessionResultAssembler;
 use CodeLandQuiz\QuizSession\PublicSessionQuestionMapper;
@@ -37,20 +38,44 @@ final readonly class ParticipantConnectionService
         private TransactionManager $transactionManager,
         private ClosedQuestionResultAssembler $closedQuestionResultAssembler,
         private FinalQuizSessionResultAssembler $finalResultAssembler,
+        private ?PerformanceProfiler $profiler = null,
     ) {
     }
 
     public function authenticate(
         string $participantToken,
     ): ParticipantConnectionResultDTO {
+        if ($this->profiler === null) {
+            return $this->authenticateParticipant($participantToken);
+        }
+
+        return $this->profiler->inContext(
+            'ws_auth',
+            fn (): ParticipantConnectionResultDTO => $this->profiler->measure(
+                'ws_auth.service_total',
+                fn (): ParticipantConnectionResultDTO =>
+                    $this->authenticateParticipant($participantToken),
+            ),
+        );
+    }
+
+    private function authenticateParticipant(
+        string $participantToken,
+    ): ParticipantConnectionResultDTO {
         $payload = $this->participantTokenVerifier->verify(
             $participantToken,
         );
 
-        return $this->transactionManager->transactional(
+        return $this->profile(
+            'ws_auth.transaction',
+            fn (): ParticipantConnectionResultDTO =>
+                $this->transactionManager->transactional(
             function () use ($payload): ParticipantConnectionResultDTO {
-                $session = $this->sessions->findOverviewByIdForShare(
-                    $payload->sessionId,
+                $session = $this->profile(
+                    'ws_auth.session_lookup',
+                    fn () => $this->sessions->findOverviewByIdForShare(
+                        $payload->sessionId,
+                    ),
                 );
 
                 if ($session === null) {
@@ -59,10 +84,12 @@ final readonly class ParticipantConnectionService
                     );
                 }
 
-                $participant =
-                    $this->participants->findOverviewByIdForUpdate(
+                $participant = $this->profile(
+                    'ws_auth.participant_lookup',
+                    fn () => $this->participants->findOverviewByIdForUpdate(
                         $payload->participantId,
-                    );
+                    ),
+                );
 
                 if ($participant === null || $participant->isRemoved) {
                     throw new ParticipantConnectionRejectedException(
@@ -70,12 +97,21 @@ final readonly class ParticipantConnectionService
                     );
                 }
 
-                $this->ensureParticipantMatchesPayload(
-                    participant: $participant,
-                    payload: $payload,
+                $this->profile(
+                    'ws_auth.state_validation',
+                    fn () => $this->ensureParticipantMatchesPayload(
+                        participant: $participant,
+                        payload: $payload,
+                    ),
                 );
 
-                $this->participants->markConnected($participant->id);
+                $this->profile(
+                    'presence.connect_update',
+                    fn () => $this->participants->markConnected(
+                        $participant->id,
+                    ),
+                );
+                $initialStateStartedAt = $this->profiler?->start();
                 $currentQuestion = null;
                 $closedQuestion = null;
                 $finalResult = null;
@@ -111,18 +147,30 @@ final readonly class ParticipantConnectionService
                     }
                 }
 
-                return $this->connectionResult(
-                    session: $session,
-                    participant: $participant,
-                    isConnected: true,
-                    currentQuestion: $currentQuestion,
-                    closedQuestion: $closedQuestion,
-                    finalResult: $finalResult,
-                    currentQuestionSelectedOptionIds:
-                        $currentQuestionSelectedOptionIds,
-                    participantTokenExpiresAt: $payload->expiresAt,
+                if ($initialStateStartedAt !== null) {
+                    $this->profiler?->recordDuration(
+                        'ws_auth.initial_state_load',
+                        $initialStateStartedAt,
+                    );
+                }
+
+                return $this->profile(
+                    'ws_auth.response_assembly',
+                    fn (): ParticipantConnectionResultDTO =>
+                        $this->connectionResult(
+                            session: $session,
+                            participant: $participant,
+                            isConnected: true,
+                            currentQuestion: $currentQuestion,
+                            closedQuestion: $closedQuestion,
+                            finalResult: $finalResult,
+                            currentQuestionSelectedOptionIds:
+                                $currentQuestionSelectedOptionIds,
+                            participantTokenExpiresAt: $payload->expiresAt,
+                        ),
                 );
             },
+            ),
         );
     }
 
@@ -131,24 +179,59 @@ final readonly class ParticipantConnectionService
         int $participantId,
         ?callable $shouldMarkDisconnected = null,
     ): void {
-        $this->transactionManager->transactional(
+        if ($this->profiler === null) {
+            $this->disconnectParticipant(
+                $sessionId,
+                $participantId,
+                $shouldMarkDisconnected,
+            );
+
+            return;
+        }
+
+        $this->profiler->inContext(
+            'presence.disconnect',
+            fn () => $this->profiler->measure(
+                'presence.disconnect.total',
+                fn () => $this->disconnectParticipant(
+                    $sessionId,
+                    $participantId,
+                    $shouldMarkDisconnected,
+                ),
+            ),
+        );
+    }
+
+    private function disconnectParticipant(
+        int $sessionId,
+        int $participantId,
+        ?callable $shouldMarkDisconnected,
+    ): void {
+        $this->profile(
+            'presence.disconnect.transaction',
+            fn () => $this->transactionManager->transactional(
             function () use (
                 $sessionId,
                 $participantId,
                 $shouldMarkDisconnected,
             ): void {
-                $session = $this->sessions->findOverviewByIdForShare(
-                    $sessionId,
+                $session = $this->profile(
+                    'presence.disconnect.session_lookup',
+                    fn () => $this->sessions->findOverviewByIdForShare(
+                        $sessionId,
+                    ),
                 );
 
                 if ($session === null) {
                     return;
                 }
 
-                $participant =
-                    $this->participants->findOverviewByIdForUpdate(
+                $participant = $this->profile(
+                    'presence.disconnect.participant_lookup',
+                    fn () => $this->participants->findOverviewByIdForUpdate(
                         $participantId,
-                    );
+                    ),
+                );
 
                 if ($participant === null || $participant->isRemoved) {
                     return;
@@ -165,8 +248,12 @@ final readonly class ParticipantConnectionService
                     return;
                 }
 
-                $this->participants->markDisconnected($participant->id);
+                $this->profile(
+                    'presence.disconnect.database_update',
+                    fn () => $this->participants->markDisconnected($participant->id),
+                );
             },
+            ),
         );
     }
 
@@ -279,5 +366,19 @@ final readonly class ParticipantConnectionService
             questionCount: $session->questionCount,
             participantCount: $session->participantCount,
         );
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    private function profile(string $name, callable $operation): mixed
+    {
+        return $this->profiler === null
+            ? $operation()
+            : $this->profiler->measure($name, $operation);
     }
 }

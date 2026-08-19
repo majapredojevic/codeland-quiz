@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Support;
 
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use OpenSwoole\Coroutine;
 use PDO;
 use PDOException;
@@ -23,11 +24,14 @@ final class Database
 
     public function __construct(
         private readonly Environment $environment,
+        private readonly ?PerformanceProfiler $profiler = null,
     ) {
     }
 
     public function getConnection(): PDO
     {
+        $this->profiler?->recordDatabaseConnectionRequested();
+
         if (Coroutine::getCid() >= 0) {
             $context = Coroutine::getContext();
             $connection = $context[self::COROUTINE_CONNECTION_KEY] ?? null;
@@ -62,17 +66,45 @@ final class Database
 
     private function connect(): PDO
     {
+        $connectionStartedAt = $this->profiler?->start();
+
         try {
+            $constructorStartedAt = $this->profiler?->start();
             $connection = new PDO(
                 $this->createDsn(),
                 $this->environment->get('DB_USERNAME'),
                 $this->environment->get('DB_PASSWORD'),
                 self::PDO_OPTIONS,
             );
+            if ($constructorStartedAt !== null) {
+                $this->profiler?->recordDuration(
+                    'database.connection.pdo_constructor',
+                    $constructorStartedAt,
+                );
+                $connection->setAttribute(PDO::ATTR_STATEMENT_CLASS, [
+                    ProfiledPdoStatement::class,
+                    [$this->profiler],
+                ]);
+            }
 
-            $connection->exec(
-                "SET SESSION time_zone = '+00:00'",
-            );
+            $initializationStartedAt = $this->profiler?->start();
+
+            try {
+                $connection->exec(
+                    "SET SESSION time_zone = '+00:00'",
+                );
+            } finally {
+                if ($initializationStartedAt !== null) {
+                    $this->profiler?->recordDuration(
+                        'database.connection.session_initialization',
+                        $initializationStartedAt,
+                    );
+                }
+            }
+
+            if ($connectionStartedAt !== null) {
+                $this->profiler?->recordPdoCreation($connectionStartedAt);
+            }
 
             return $connection;
         } catch (PDOException $exception) {

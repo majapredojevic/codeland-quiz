@@ -36,6 +36,8 @@ param(
 
     [switch]$UseExistingStack,
 
+    [switch]$PerformanceProfiling,
+
     [ValidateRange(1024, 65535)]
     [int]$HttpsPort = 8443
 )
@@ -159,6 +161,7 @@ $observerStopPath = Join-Path $runDirectory 'observer.stop'
 $statsStopPath = Join-Path $runDirectory 'docker-stats.stop'
 $dockerStatsPath = Join-Path $runDirectory 'docker-stats.csv'
 $containerLogPath = Join-Path $runDirectory 'containers.log'
+$profilePath = Join-Path $runDirectory 'application-profile.json'
 $gitCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
 $gitDirty = -not [string]::IsNullOrWhiteSpace(((& git -C $repositoryRoot status --porcelain) -join "`n"))
 $gitShort = $gitCommit.Substring(0, 12)
@@ -167,6 +170,14 @@ $imageTag = "phase4a-$gitShort"
 if ($UseExistingStack) {
     if (-not (Test-Path -LiteralPath $stackEnvironmentPath)) {
         throw 'Cannot reuse the load-test stack because load-testing/.runtime/stack.env is absent.'
+    }
+    $expectedProfilingValue = 'false'
+    if ($PerformanceProfiling) { $expectedProfilingValue = 'true' }
+    $profilingSetting = Get-Content -LiteralPath $stackEnvironmentPath |
+        Where-Object { $_ -match '^PERFORMANCE_PROFILING_ENABLED=' } |
+        Select-Object -First 1
+    if ($profilingSetting -ne "PERFORMANCE_PROFILING_ENABLED=$expectedProfilingValue") {
+        throw 'The existing stack profiling mode does not match -PerformanceProfiling. Start a fresh stack for the requested mode.'
     }
 } else {
     if (Test-Path -LiteralPath $stackEnvironmentPath) {
@@ -236,6 +247,7 @@ if ($UseExistingStack) {
         'LOAD_TEST_TRANSPORT_HEARTBEAT_IDLE_SECONDS=120'
         'LOAD_TEST_OBSERVER_INTERVAL_MS=1000'
         'LOAD_TEST_OBSERVER_MAX_SECONDS=900'
+        "PERFORMANCE_PROFILING_ENABLED=$($PerformanceProfiling.IsPresent.ToString().ToLowerInvariant())"
     )
     Write-Utf8NoBom $stackEnvironmentPath (($stackLines -join "`n") + "`n")
 }
@@ -306,6 +318,7 @@ try {
             workerNum = $runtimeSnapshot.configuration.worker_num
             maxConn = $runtimeSnapshot.configuration.max_conn
             maxCoroutine = $runtimeSnapshot.configuration.max_coroutine
+            performanceProfilingEnabled = $PerformanceProfiling.IsPresent
         }
         mysql = [ordered]@{
             maxConnections = [int]$mysqlMaxConnectionsText
@@ -343,6 +356,16 @@ try {
             '-e', "TARGET_URL=$TargetUrl",
             'k6', 'run', '/scripts/warmup.js'
         )
+    }
+
+    Add-RunLog 'Resetting the private bounded application profile immediately before recorded load.'
+    $profileResetText = Invoke-Compose -Arguments @(
+        'exec', '-T', 'backend', 'php', '-r',
+        "`$context = stream_context_create(['http' => ['method' => 'POST', 'content' => '']]); `$result = file_get_contents('http://127.0.0.1:9501/internal/profile/reset', false, `$context); if (`$result === false) { exit(1); } echo `$result;"
+    ) -Capture
+    $profileReset = $profileResetText | ConvertFrom-Json
+    if ([bool]$profileReset.enabled -ne $PerformanceProfiling.IsPresent -or -not [bool]$profileReset.reset) {
+        throw 'Application profile reset returned an unexpected profiling mode or reset state.'
     }
 
     Add-RunLog 'Starting private runtime/MySQL observation and host-side Docker stats.'
@@ -395,6 +418,22 @@ try {
     $failures.Add($_.Exception.Message)
     Add-RunLog "Run-stage failure: $($_.Exception.Message)"
 } finally {
+    if ($stackStarted) {
+        try {
+            $profileSnapshotText = Invoke-Compose -Arguments @(
+                'exec', '-T', 'backend', 'php', '-r',
+                "echo file_get_contents('http://127.0.0.1:9501/internal/profile');"
+            ) -Capture
+            $profileSnapshot = $profileSnapshotText | ConvertFrom-Json
+            if ([bool]$profileSnapshot.enabled -ne $PerformanceProfiling.IsPresent) {
+                throw 'Captured application profile mode did not match the requested run mode.'
+            }
+            Write-Utf8NoBom $profilePath (($profileSnapshot | ConvertTo-Json -Depth 30) + "`n")
+        } catch {
+            $failures.Add("Application profile capture failed: $($_.Exception.Message)")
+        }
+    }
+
     if ($statsJob -ne $null) {
         Write-Utf8NoBom $statsStopPath "stop`n"
         Wait-Job -Job $statsJob -Timeout 20 | Out-Null
@@ -468,6 +507,7 @@ try {
         (Join-Path $runDirectory 'runtime-metrics.csv'),
         (Join-Path $runDirectory 'mysql-metrics.csv'),
         $dockerStatsPath,
+        $profilePath,
         $correctnessPath,
         $cleanupPath
     )) {
@@ -508,6 +548,7 @@ try {
         cleanupPassed = $cleanupPassed
         fixturesKept = $KeepLoadTestFixtures.IsPresent
         warmed = $Warmup.IsPresent
+        performanceProfilingEnabled = $PerformanceProfiling.IsPresent
         failures = @($failures)
     }
     Write-Utf8NoBom $statusPath (($status | ConvertTo-Json -Depth 5) + "`n")
@@ -544,6 +585,7 @@ try {
         cleanupPassed = $cleanupPassed
         fixturesKept = $KeepLoadTestFixtures.IsPresent
         warmed = $Warmup.IsPresent
+        performanceProfilingEnabled = $PerformanceProfiling.IsPresent
         failures = @($failures)
     }
     Write-Utf8NoBom $statusPath (($finalStatus | ConvertTo-Json -Depth 5) + "`n")

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CodeLandQuiz\WebSocket;
 
 use CodeLandQuiz\Observability\RuntimeLogger;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use OpenSwoole\WebSocket\Server;
 use Throwable;
 
@@ -15,6 +16,7 @@ final class SessionWebSocketBroadcaster
         private readonly ParticipantConnectionRegistry $connectionRegistry,
         private readonly WebSocketMessageEncoder $messageEncoder,
         private readonly RuntimeLogger $logger,
+        private readonly ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -30,7 +32,17 @@ final class SessionWebSocketBroadcaster
         }
 
         try {
-            $message = $this->messageEncoder->encode($type, $payload);
+            $encode = fn (): string => $this->messageEncoder->encode(
+                $type,
+                $payload,
+            );
+            $message = $this->profilesEvent($type)
+                && $this->profiler !== null
+                    ? $this->profiler->measure(
+                        sprintf('broadcast.%s.serialization', $type),
+                        $encode,
+                    )
+                    : $encode();
         } catch (Throwable $throwable) {
             $this->logger->error('websocket.broadcast_encoding_failed', [
                 'sessionId' => $sessionId,
@@ -41,11 +53,20 @@ final class SessionWebSocketBroadcaster
         }
 
         $successfulPushes = 0;
+        $pushFailures = 0;
+        $fileDescriptors = $this->connectionRegistry
+            ->findSessionFileDescriptors($sessionId);
+        $profiled = $this->profiler !== null && $this->profilesEvent($type);
+        $broadcastStartedAt = $profiled ? hrtime(true) : null;
 
-        foreach (
-            $this->connectionRegistry->findSessionFileDescriptors($sessionId)
-            as $fileDescriptor
-        ) {
+        if ($profiled) {
+            $this->profiler?->increment(
+                sprintf('broadcast.%s.targets', $type),
+                count($fileDescriptors),
+            );
+        }
+
+        foreach ($fileDescriptors as $fileDescriptor) {
             $connection = $this->connectionRegistry->findAuthenticated(
                 $fileDescriptor,
             );
@@ -71,7 +92,9 @@ final class SessionWebSocketBroadcaster
                     'sessionId' => $sessionId,
                     'participantId' => $connection->participantId,
                 ]);
+                $pushFailures++;
             } catch (Throwable $throwable) {
+                $pushFailures++;
                 $this->logger->error('websocket.broadcast_failed', [
                     'fd' => $fileDescriptor,
                     'connectionId' => $connection->connectionId,
@@ -82,6 +105,31 @@ final class SessionWebSocketBroadcaster
             }
         }
 
+        if ($broadcastStartedAt !== null) {
+            $this->profiler?->recordDuration(
+                sprintf('broadcast.%s.loop', $type),
+                $broadcastStartedAt,
+            );
+            $this->profiler?->increment(
+                sprintf('broadcast.%s.successes', $type),
+                $successfulPushes,
+            );
+            $this->profiler?->increment(
+                sprintf('broadcast.%s.failures', $type),
+                $pushFailures,
+            );
+        }
+
         return $successfulPushes;
+    }
+
+    private function profilesEvent(string $type): bool
+    {
+        return in_array($type, [
+            'QUESTION_STARTED',
+            'QUESTION_CLOSED',
+            'LEADERBOARD_UPDATED',
+            'GAME_FINISHED',
+        ], true);
     }
 }

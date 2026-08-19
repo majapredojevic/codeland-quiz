@@ -6,6 +6,7 @@ namespace CodeLandQuiz\WebSocket;
 
 use CodeLandQuiz\Support\ClientAddress;
 use CodeLandQuiz\Observability\RuntimeLogger;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use OpenSwoole\Http\Request;
 use OpenSwoole\WebSocket\Frame;
@@ -32,18 +33,47 @@ final class WebSocketGatewayRouter
         private readonly ClientAddress $clientAddress,
         private readonly WebSocketRoutePolicy $routePolicy,
         private readonly RuntimeLogger $logger,
+        private readonly ?PerformanceProfiler $profiler = null,
     ) {
     }
 
     public function allowsHandshake(Request $request): bool
     {
-        return $this->gatewayForRequest($request) !== null
-            && $this->originPolicy->allows(
+        if ($this->profiler === null) {
+            return $this->gatewayForRequest($request) !== null
+                && $this->originPolicy->allows(
+                    $request->header['origin'] ?? null,
+                );
+        }
+
+        $routeAllowed = $this->profiler->measure(
+            'ws_handshake.route_validation',
+            fn (): bool => $this->gatewayForRequest($request) !== null,
+        );
+
+        return $routeAllowed && $this->profiler->measure(
+            'ws_handshake.origin_validation',
+            fn (): bool => $this->originPolicy->allows(
                 $request->header['origin'] ?? null,
-            );
+            ),
+        );
     }
 
     public function open(Server $server, Request $request): void
+    {
+        if ($this->profiler === null) {
+            $this->openConnection($server, $request);
+
+            return;
+        }
+
+        $this->profiler->measure(
+            'ws_open.total',
+            fn () => $this->openConnection($server, $request),
+        );
+    }
+
+    private function openConnection(Server $server, Request $request): void
     {
         $fileDescriptor = (int) $request->fd;
 
@@ -65,15 +95,31 @@ final class WebSocketGatewayRouter
         );
 
         try {
-            $this->connectionLimiter->register(
-                fileDescriptor: $fileDescriptor,
-                clientIdentifier: $clientIdentifier,
-                pendingAuthentication: $gateway === $this->participantGateway,
-            );
-            $this->abuseLimiter->registerConnection(
+            $registerConnection = function () use (
                 $fileDescriptor,
                 $clientIdentifier,
-            );
+                $gateway,
+            ): void {
+                $this->connectionLimiter->register(
+                    fileDescriptor: $fileDescriptor,
+                    clientIdentifier: $clientIdentifier,
+                    pendingAuthentication:
+                        $gateway === $this->participantGateway,
+                );
+                $this->abuseLimiter->registerConnection(
+                    $fileDescriptor,
+                    $clientIdentifier,
+                );
+            };
+
+            if ($this->profiler !== null) {
+                $this->profiler->measure(
+                    'ws_open.connection_limit_registration',
+                    $registerConnection,
+                );
+            } else {
+                $registerConnection();
+            }
         } catch (WebSocketRateLimitExceededException) {
             $this->logger->warning('websocket.connection_limit_rejected', [
                 'fd' => $fileDescriptor,
@@ -93,7 +139,14 @@ final class WebSocketGatewayRouter
         $this->gatewaysByFileDescriptor[$fileDescriptor] = $gateway;
 
         try {
-            $gateway->open($server, $request);
+            if ($this->profiler !== null) {
+                $this->profiler->measure(
+                    'ws_open.gateway_bookkeeping',
+                    fn () => $gateway->open($server, $request),
+                );
+            } else {
+                $gateway->open($server, $request);
+            }
         } catch (Throwable $throwable) {
             unset($this->gatewaysByFileDescriptor[$fileDescriptor]);
             $this->connectionLimiter->remove($fileDescriptor);

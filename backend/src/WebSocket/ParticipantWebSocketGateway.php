@@ -18,6 +18,7 @@ use CodeLandQuiz\Game\Exception\ParticipantConnectionRejectedException;
 use CodeLandQuiz\Game\ParticipantConnectionService;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Observability\RuntimeLogger;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\WebSocket\Exception\WebSocketRateLimitExceededException;
 use InvalidArgumentException;
 use JsonException;
@@ -53,6 +54,7 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
         private readonly WebSocketConnectionLimiter $connectionLimiter,
         private readonly WebSocketAbuseLimiter $abuseLimiter,
         private readonly RuntimeLogger $logger,
+        private readonly ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -120,56 +122,85 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             return;
         }
 
+        $authenticationStartedAt = $this->profiler?->start();
+
         try {
             $this->abuseLimiter->recordAuthenticationAttempt(
                 $fileDescriptor,
             );
-            $participantToken = $this->readParticipantToken($frame->data);
+            $participantToken = $this->profile(
+                'ws_auth.message_parse',
+                fn (): string => $this->readParticipantToken($frame->data),
+            );
             $result = $this->participantConnectionService->authenticate(
                 $participantToken,
             );
-            $previousFileDescriptor = $this->connectionRegistry->authenticate(
-                fileDescriptor: $fileDescriptor,
-                connectionId: $connectionId,
-                participantId: $result->participant->id,
-                sessionId: $result->sessionId,
-                participantType: $result->participant->participantType,
-                studentId: $result->participant->studentId,
-                participantTokenExpiresAt:
-                    $result->participantTokenExpiresAt,
-            );
+            $previousFileDescriptor = $this->profile(
+                'ws_auth.registry_update',
+                function () use (
+                    $fileDescriptor,
+                    $connectionId,
+                    $result,
+                ): ?int {
+                    $previousFileDescriptor = $this->connectionRegistry
+                        ->authenticate(
+                            fileDescriptor: $fileDescriptor,
+                            connectionId: $connectionId,
+                            participantId: $result->participant->id,
+                            sessionId: $result->sessionId,
+                            participantType:
+                                $result->participant->participantType,
+                            studentId: $result->participant->studentId,
+                            participantTokenExpiresAt:
+                                $result->participantTokenExpiresAt,
+                        );
 
-            unset($this->pendingConnectionIds[$fileDescriptor]);
-            $this->connectionLimiter->markAuthenticated($fileDescriptor);
-            $this->abuseLimiter->markAuthenticated($fileDescriptor);
-
-            if ($result->currentQuestionSelectedOptionIds !== []) {
-                $questionOrder = $result->currentQuestion?->questionOrder
-                    ?? $result->currentQuestionOrder;
-
-                if ($questionOrder !== null) {
-                    $this->connectionRegistry->markAnswerAccepted(
+                    unset($this->pendingConnectionIds[$fileDescriptor]);
+                    $this->connectionLimiter->markAuthenticated(
                         $fileDescriptor,
-                        $questionOrder,
                     );
-                }
-            }
+                    $this->abuseLimiter->markAuthenticated($fileDescriptor);
 
-            $this->pushAuthenticated(
-                server: $server,
-                fileDescriptor: $fileDescriptor,
-                result: $result,
+                    if ($result->currentQuestionSelectedOptionIds !== []) {
+                        $questionOrder = $result->currentQuestion
+                            ?->questionOrder
+                            ?? $result->currentQuestionOrder;
+
+                        if ($questionOrder !== null) {
+                            $this->connectionRegistry->markAnswerAccepted(
+                                $fileDescriptor,
+                                $questionOrder,
+                            );
+                        }
+                    }
+
+                    return $previousFileDescriptor;
+                },
             );
-            $this->pushReconnectState(
-                server: $server,
-                fileDescriptor: $fileDescriptor,
-                result: $result,
+
+            $this->profile(
+                'ws_auth.authentication_response_send',
+                function () use ($server, $fileDescriptor, $result): void {
+                    $this->pushAuthenticated(
+                        server: $server,
+                        fileDescriptor: $fileDescriptor,
+                        result: $result,
+                    );
+                    $this->pushReconnectState(
+                        server: $server,
+                        fileDescriptor: $fileDescriptor,
+                        result: $result,
+                    );
+                },
             );
 
             if ($previousFileDescriptor !== null) {
-                $this->replacePreviousConnection(
-                    server: $server,
-                    fileDescriptor: $previousFileDescriptor,
+                $this->profile(
+                    'ws_auth.connection_replacement',
+                    fn () => $this->replacePreviousConnection(
+                        server: $server,
+                        fileDescriptor: $previousFileDescriptor,
+                    ),
                 );
             }
         } catch (WebSocketRateLimitExceededException) {
@@ -212,6 +243,13 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 code: 'INTERNAL_ERROR',
                 message: 'An unexpected server error occurred.',
             );
+        } finally {
+            if ($authenticationStartedAt !== null) {
+                $this->profiler?->recordDuration(
+                    'ws_auth.gateway_total',
+                    $authenticationStartedAt,
+                );
+            }
         }
     }
 
@@ -312,6 +350,8 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             return;
         }
 
+        $answerStartedAt = $this->profiler?->start();
+
         try {
             $result = $this->answerSubmissionService->submitAnswer(
                 sessionId: $connection->sessionId,
@@ -319,15 +359,21 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 dto: $dto,
             );
 
-            $this->connectionRegistry->markAnswerAccepted(
-                $fileDescriptor,
-                $result->questionOrder,
+            $this->profile(
+                'answer.registry_update',
+                fn () => $this->connectionRegistry->markAnswerAccepted(
+                    $fileDescriptor,
+                    $result->questionOrder,
+                ),
             );
 
-            $this->pushAnswerAccepted(
-                server: $server,
-                fileDescriptor: $fileDescriptor,
-                result: $result,
+            $this->profile(
+                'answer.accepted_serialization_send',
+                fn () => $this->pushAnswerAccepted(
+                    server: $server,
+                    fileDescriptor: $fileDescriptor,
+                    result: $result,
+                ),
             );
         } catch (AnswerSubmissionNotAllowedException) {
             $this->pushError(
@@ -378,6 +424,13 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
                 code: 'INTERNAL_ERROR',
                 message: 'An unexpected server error occurred.',
             );
+        } finally {
+            if ($answerStartedAt !== null) {
+                $this->profiler?->recordDuration(
+                    'answer.gateway_total',
+                    $answerStartedAt,
+                );
+            }
         }
     }
 
@@ -870,5 +923,19 @@ final class ParticipantWebSocketGateway implements WebSocketGateway
             'isConnected' => $participant->isConnected,
             'joinedAt' => $participant->joinedAt->format(DATE_ATOM),
         ];
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    private function profile(string $name, callable $operation): mixed
+    {
+        return $this->profiler === null
+            ? $operation()
+            : $this->profiler->measure($name, $operation);
     }
 }

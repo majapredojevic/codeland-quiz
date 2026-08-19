@@ -15,6 +15,7 @@ use CodeLandQuiz\Model\QuestionType;
 use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionQuestionOverview;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\Repository\ParticipantAnswerRepository;
 use CodeLandQuiz\Repository\QuizSessionRepository;
 use CodeLandQuiz\Repository\SessionParticipantRepository;
@@ -32,6 +33,7 @@ final readonly class AnswerSubmissionService
         private ParticipantAnswerRepository $answers,
         private AnswerScoreCalculator $scoreCalculator,
         private TransactionManager $transactionManager,
+        private ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -40,13 +42,43 @@ final readonly class AnswerSubmissionService
         int $participantId,
         SubmitAnswerDTO $dto,
     ): AnswerSubmissionResultDTO {
-        return $this->transactionManager->transactional(
+        $submit = fn (): AnswerSubmissionResultDTO =>
+            $this->submitValidatedAnswer($sessionId, $participantId, $dto);
+
+        if ($this->profiler === null) {
+            return $submit();
+        }
+
+        return $this->profiler->inContext(
+            'answer',
+            fn (): AnswerSubmissionResultDTO => $this->profiler->measure(
+                'answer.service_total',
+                $submit,
+            ),
+        );
+    }
+
+    private function submitValidatedAnswer(
+        int $sessionId,
+        int $participantId,
+        SubmitAnswerDTO $dto,
+    ): AnswerSubmissionResultDTO {
+        return $this->profile(
+            'answer.transaction',
+            fn (): AnswerSubmissionResultDTO =>
+                $this->transactionManager->transactional(
             function () use ($sessionId, $participantId, $dto): AnswerSubmissionResultDTO {
-                $session = $this->sessions->findOverviewByIdForShare(
-                    $sessionId,
+                $session = $this->profile(
+                    'answer.session_lookup',
+                    fn () => $this->sessions->findOverviewByIdForShare(
+                        $sessionId,
+                    ),
                 );
 
-                $this->ensureSessionAcceptsAnswers($session);
+                $this->profile(
+                    'answer.session_validation',
+                    fn () => $this->ensureSessionAcceptsAnswers($session),
+                );
 
                 if ($session->currentQuestionClosedAt !== null) {
                     throw new AnswerQuestionClosedException(
@@ -54,10 +86,12 @@ final readonly class AnswerSubmissionService
                     );
                 }
 
-                $participant =
-                    $this->participants->findOverviewByIdForUpdate(
+                $participant = $this->profile(
+                    'answer.participant_lookup',
+                    fn () => $this->participants->findOverviewByIdForUpdate(
                         $participantId,
-                    );
+                    ),
+                );
 
                 if (
                     $participant === null
@@ -69,9 +103,12 @@ final readonly class AnswerSubmissionService
                     );
                 }
 
-                $question = $this->sessionQuestions->findBySessionAndOrder(
-                    sessionId: $sessionId,
-                    questionOrder: $session->currentQuestionOrder,
+                $question = $this->profile(
+                    'answer.question_lookup',
+                    fn () => $this->sessionQuestions->findBySessionAndOrder(
+                        sessionId: $sessionId,
+                        questionOrder: $session->currentQuestionOrder,
+                    ),
                 );
 
                 if ($question === null) {
@@ -98,9 +135,12 @@ final readonly class AnswerSubmissionService
                 }
 
                 if (
-                    $this->answers->findByParticipantAndQuestion(
+                    $this->profile(
+                        'answer.duplicate_lookup',
+                        fn () => $this->answers->findByParticipantAndQuestion(
                         participantId: $participantId,
                         sessionQuestionId: $question->id,
+                        ),
                     ) !== null
                 ) {
                     throw new AnswerAlreadySubmittedException(
@@ -108,36 +148,56 @@ final readonly class AnswerSubmissionService
                     );
                 }
 
-                $selectedOptionIds = $this->validateSelectedOptions(
-                    question: $question,
-                    selectedOptionIds: $dto->selectedOptionIds,
-                );
-                $isCorrect = $this->isCorrect(
-                    question: $question,
-                    selectedOptionIds: $selectedOptionIds,
-                );
-                $responseTimeMs = max(
-                    0,
-                    $this->milliseconds($answeredAt)
-                        - $this->milliseconds(
-                            $session->currentQuestionStartedAt,
-                        ),
-                );
-                $pointsAwarded = $this->scoreCalculator->calculate(
-                    isCorrect: $isCorrect,
-                    maxPoints: $question->maxPoints,
-                    responseTimeMs: $responseTimeMs,
-                    timeLimitSeconds: $question->timeLimitSeconds,
+                [
+                    $selectedOptionIds,
+                    $isCorrect,
+                    $responseTimeMs,
+                    $pointsAwarded,
+                ] = $this->profile(
+                    'answer.validation_and_score',
+                    function () use ($question, $dto, $answeredAt, $session): array {
+                        $selectedOptionIds = $this->validateSelectedOptions(
+                            question: $question,
+                            selectedOptionIds: $dto->selectedOptionIds,
+                        );
+                        $isCorrect = $this->isCorrect(
+                            question: $question,
+                            selectedOptionIds: $selectedOptionIds,
+                        );
+                        $responseTimeMs = max(
+                            0,
+                            $this->milliseconds($answeredAt)
+                                - $this->milliseconds(
+                                    $session->currentQuestionStartedAt,
+                                ),
+                        );
+                        $pointsAwarded = $this->scoreCalculator->calculate(
+                            isCorrect: $isCorrect,
+                            maxPoints: $question->maxPoints,
+                            responseTimeMs: $responseTimeMs,
+                            timeLimitSeconds: $question->timeLimitSeconds,
+                        );
+
+                        return [
+                            $selectedOptionIds,
+                            $isCorrect,
+                            $responseTimeMs,
+                            $pointsAwarded,
+                        ];
+                    },
                 );
 
-                $this->answers->create(
-                    participantId: $participantId,
-                    sessionQuestionId: $question->id,
-                    selectedOptionIds: $selectedOptionIds,
-                    isCorrect: $isCorrect,
-                    responseTimeMs: $responseTimeMs,
-                    pointsAwarded: $pointsAwarded,
-                    answeredAt: $answeredAt,
+                $this->profile(
+                    'answer.persistence',
+                    fn () => $this->answers->create(
+                        participantId: $participantId,
+                        sessionQuestionId: $question->id,
+                        selectedOptionIds: $selectedOptionIds,
+                        isCorrect: $isCorrect,
+                        responseTimeMs: $responseTimeMs,
+                        pointsAwarded: $pointsAwarded,
+                        answeredAt: $answeredAt,
+                    ),
                 );
 
                 return new AnswerSubmissionResultDTO(
@@ -146,6 +206,7 @@ final readonly class AnswerSubmissionService
                     answeredAt: $answeredAt,
                 );
             },
+            ),
         );
     }
 
@@ -264,5 +325,19 @@ final readonly class AnswerSubmissionService
     {
         return ((int) $dateTime->format('U') * 1000)
             + intdiv((int) $dateTime->format('u'), 1000);
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    private function profile(string $name, callable $operation): mixed
+    {
+        return $this->profiler === null
+            ? $operation()
+            : $this->profiler->measure($name, $operation);
     }
 }

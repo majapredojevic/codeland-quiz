@@ -11,6 +11,7 @@ use CodeLandQuiz\DTO\SessionQuestionStatsDTO;
 use CodeLandQuiz\Model\SessionQuestionOptionOverview;
 use CodeLandQuiz\Model\SessionQuestionOverview;
 use CodeLandQuiz\Model\SessionQuestionParticipantResultOverview;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\Repository\QuizSessionResultRepository;
 use DateTimeImmutable;
 
@@ -18,6 +19,7 @@ final readonly class ClosedQuestionResultAssembler
 {
     public function __construct(
         private QuizSessionResultRepository $results,
+        private ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -25,21 +27,33 @@ final readonly class ClosedQuestionResultAssembler
         SessionQuestionOverview $question,
         DateTimeImmutable $closedAt,
     ): ClosedSessionQuestionStateDTO {
-        $participantRows = $this->results->findQuestionParticipantResults(
-            $question->sessionId,
-            $question->id,
+        $profilePrefix = $this->profiler?->currentContext()
+            === 'question_close'
+                ? 'question_close'
+                : 'ws_auth.initial_state';
+        $participantRows = $this->profile(
+            $profilePrefix . '.result_rows_load',
+            fn () => $this->results->findQuestionParticipantResults(
+                $question->sessionId,
+                $question->id,
+            ),
         );
 
-        return new ClosedSessionQuestionStateDTO(
-            question: (new PublicSessionQuestionMapper())->map($question),
-            closedAt: $closedAt,
-            correctOptionIds: $this->correctOptionIds($question),
-            stats: $this->buildStats($participantRows),
-            participantResults: array_map(
-                $this->mapParticipantResult(...),
-                $participantRows,
-            ),
-            leaderboard: $this->buildLeaderboard($participantRows),
+        return $this->profile(
+            $profilePrefix . '.result_calculation',
+            fn (): ClosedSessionQuestionStateDTO =>
+                new ClosedSessionQuestionStateDTO(
+                    question: (new PublicSessionQuestionMapper())
+                        ->map($question),
+                    closedAt: $closedAt,
+                    correctOptionIds: $this->correctOptionIds($question),
+                    stats: $this->buildStats($participantRows),
+                    participantResults: array_map(
+                        $this->mapParticipantResult(...),
+                        $participantRows,
+                    ),
+                    leaderboard: $this->buildLeaderboard($participantRows),
+                ),
         );
     }
 
@@ -195,5 +209,19 @@ final readonly class ClosedQuestionResultAssembler
         }
 
         return $left->participantId <=> $right->participantId;
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    private function profile(string $name, callable $operation): mixed
+    {
+        return $this->profiler === null
+            ? $operation()
+            : $this->profiler->measure($name, $operation);
     }
 }
