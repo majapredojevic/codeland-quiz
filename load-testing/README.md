@@ -22,7 +22,9 @@ installation is not needed.
 
 The primary runner accepts `-Students`, optional `-Sessions`, `-Mode classroom`
 or `burst`, `-RegisteredPercent`, `-ReconnectPercent`, `-CorrectAnswerRatio`,
-`-BurstMajorityRatio`, `-Seed`, and `-Warmup`. When `-Sessions` is omitted, a documented matrix level
+`-BurstMajorityRatio`, `-Seed`, `-Warmup`, and `-PerformanceProfiling`. The
+profiling switch is disabled by default and is accepted only by this isolated
+load-test overlay. When `-Sessions` is omitted, a documented matrix level
 selects its fixed topology. An arbitrary student count requires an explicit
 session count; allocation is balanced and its sum is verified exactly.
 
@@ -115,6 +117,14 @@ connections, coroutines, pending/authenticated WebSockets, heartbeat cleanup,
 memory, event-loop lag, and request counters; plus MySQL threads, connection
 counters, lock waits, and deadlocks. Server-lifetime values are reported as
 start/end deltas. Unavailable values are explicitly `NOT AVAILABLE`.
+
+With `-PerformanceProfiling`, the runner resets bounded application aggregates
+through the backend-only `POST /internal/profile/reset` route after fixture
+provisioning and optional warm-up, then captures `GET /internal/profile` as
+`application-profile.json` immediately after recorded load. Fixed histograms
+retain no individual query, request, participant, or message samples. Nginx
+returns 404 for both profile routes, just as it does for private runtime
+metrics.
 
 The host samples Docker CPU/memory for backend, MySQL, Nginx, and k6 without
 mounting the Docker socket into any container. Environment metadata includes the

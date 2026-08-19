@@ -16,6 +16,7 @@ use CodeLandQuiz\DTO\SessionParticipantListDTO;
 use CodeLandQuiz\DTO\SessionQuestionParticipantResultDTO;
 use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\ResponseFactory;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\Quiz\Exception\QuizNotFoundException;
 use CodeLandQuiz\QuizSession\Exception\GamePinGenerationFailedException;
 use CodeLandQuiz\QuizSession\Exception\QuizInactiveException;
@@ -53,6 +54,7 @@ final class QuizSessionController
         private readonly ClosedQuestionWebSocketNotifier $closedQuestionNotifier,
         private readonly FinishedSessionWebSocketNotifier $finishedSessionNotifier,
         private readonly ParticipantRemovalWebSocketNotifier $participantRemovalNotifier,
+        private readonly ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -322,19 +324,33 @@ final class QuizSessionController
             );
 
             if ($result->stateChanged) {
-                $this->closedQuestionNotifier->notify(
-                    sessionId: $result->session->id,
-                    state: $result->closedQuestion,
-                );
+                $notify = fn () => $this->closedQuestionNotifier->notify(
+                        sessionId: $result->session->id,
+                        state: $result->closedQuestion,
+                    );
+
+                if ($this->profiler !== null) {
+                    $this->profiler->measure(
+                        'question_close.websocket_delivery',
+                        $notify,
+                    );
+                } else {
+                    $notify();
+                }
             }
 
-            $this->responseFactory->json($response, [
-                'session' => $this->sessionResponse($result->session),
-                'questionResult' => $this->closedQuestionResponse(
-                    $result->closedQuestion,
-                ),
-                'stateChanged' => $result->stateChanged,
-            ]);
+            $this->responseFactory->json(
+                $response,
+                [
+                    'session' => $this->sessionResponse($result->session),
+                    'questionResult' => $this->closedQuestionResponse(
+                        $result->closedQuestion,
+                    ),
+                    'stateChanged' => $result->stateChanged,
+                ],
+                serializationProfile:
+                    'question_close.http_serialization',
+            );
         } catch (InvalidArgumentException $exception) {
             $this->responseFactory->error(
                 $response,

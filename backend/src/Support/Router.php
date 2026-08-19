@@ -8,6 +8,7 @@ use CodeLandQuiz\Http\RequestContext;
 use CodeLandQuiz\Http\RequestIdGenerator;
 use CodeLandQuiz\Observability\RuntimeLogger;
 use CodeLandQuiz\Observability\RuntimeMetrics;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use OpenSwoole\Coroutine;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
@@ -44,6 +45,7 @@ final class Router
         private readonly RuntimeLogger $logger,
         private readonly RuntimeMetrics $metrics,
         private readonly RequestIdGenerator $requestIdGenerator,
+        private readonly ?PerformanceProfiler $profiler = null,
     ) {
     }
 
@@ -168,7 +170,19 @@ final class Router
                 $matchedRoute['middleware'],
             );
 
-            $pipeline($request, $response, $context);
+            $profileContext = $this->profileContextForRoute(
+                $method,
+                $matchedRoute['route'],
+            );
+
+            if ($this->profiler !== null && $profileContext !== null) {
+                $this->profiler->inContext(
+                    $profileContext,
+                    fn () => $pipeline($request, $response, $context),
+                );
+            } else {
+                $pipeline($request, $response, $context);
+            }
         } catch (Throwable $throwable) {
             $this->logger->error('http.request_failed', [
                 'requestId' => $context->getRequestId(),
@@ -182,6 +196,16 @@ final class Router
             ], 500);
         } finally {
             $this->metrics->recordHttpRequest();
+            if (
+                $this->profiler !== null
+                && $matchedRoute !== null
+                && !str_starts_with($matchedRoute['route'], '/internal/')
+            ) {
+                $this->profiler->recordDuration(
+                    sprintf('http.%s %s', $method, $matchedRoute['route']),
+                    $startedAt,
+                );
+            }
             $this->logger->info('http.request.completed', [
                 'requestId' => $context->getRequestId(),
                 'route' => $context->getRoute(),
@@ -415,5 +439,17 @@ final class Router
         }
 
         return $allowedMethods;
+    }
+
+    private function profileContextForRoute(
+        string $method,
+        string $route,
+    ): ?string {
+        return match (sprintf('%s %s', $method, $route)) {
+            'GET /api/game/session/{gamePin}' => 'preview',
+            'POST /api/sessions/{id}/questions/current/close' =>
+                'question_close',
+            default => null,
+        };
     }
 }

@@ -102,6 +102,20 @@ server {
         return 404;
     }
 
+    location = /internal/profile {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+
+        return 404;
+    }
+
+    location = /internal/profile/reset {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+
+        return 404;
+    }
+
     location = /ws {
         include /etc/nginx/snippets/security-headers.conf;
 

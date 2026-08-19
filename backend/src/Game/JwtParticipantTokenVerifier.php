@@ -7,6 +7,7 @@ namespace CodeLandQuiz\Game;
 use CodeLandQuiz\DTO\ParticipantTokenPayloadDTO;
 use CodeLandQuiz\Game\Exception\InvalidParticipantTokenException;
 use CodeLandQuiz\Model\ParticipantType;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use DateTimeImmutable;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -24,6 +25,7 @@ final readonly class JwtParticipantTokenVerifier implements ParticipantTokenVeri
 
     public function __construct(
         private string $secret,
+        private ?PerformanceProfiler $profiler = null,
     ) {
         if (strlen($this->secret) < 32) {
             throw new InvalidArgumentException(
@@ -33,6 +35,18 @@ final readonly class JwtParticipantTokenVerifier implements ParticipantTokenVeri
     }
 
     public function verify(string $token): ParticipantTokenPayloadDTO
+    {
+        if ($this->profiler === null) {
+            return $this->verifyToken($token);
+        }
+
+        return $this->profiler->measure(
+            'ws_auth.jwt_verification',
+            fn (): ParticipantTokenPayloadDTO => $this->verifyToken($token),
+        );
+    }
+
+    private function verifyToken(string $token): ParticipantTokenPayloadDTO
     {
         try {
             $claims = JWT::decode(

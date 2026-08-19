@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\WebSocket;
 
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use OpenSwoole\Http\Request;
 use OpenSwoole\Http\Response;
 use OpenSwoole\WebSocket\Server;
@@ -14,10 +15,30 @@ final readonly class WebSocketHandshakeHandler
 
     public function __construct(
         private WebSocketGatewayRouter $gatewayRouter,
+        private ?PerformanceProfiler $profiler = null,
     ) {
     }
 
     public function handle(
+        Server $server,
+        Request $request,
+        Response $response,
+    ): bool {
+        if ($this->profiler === null) {
+            return $this->performHandshake($server, $request, $response);
+        }
+
+        return $this->profiler->measure(
+            'ws_handshake.total',
+            fn (): bool => $this->performHandshake(
+                $server,
+                $request,
+                $response,
+            ),
+        );
+    }
+
+    private function performHandshake(
         Server $server,
         Request $request,
         Response $response,
@@ -37,18 +58,26 @@ final readonly class WebSocketHandshakeHandler
             return false;
         }
 
-        $response->header('Upgrade', 'websocket');
-        $response->header('Connection', 'Upgrade');
-        $response->header(
-            'Sec-WebSocket-Accept',
-            base64_encode(sha1(
-                $webSocketKey . self::HANDSHAKE_GUID,
-                true,
-            )),
-        );
-        $response->header('Sec-WebSocket-Version', '13');
-        $response->status(101);
-        $response->end();
+        $upgrade = function () use ($response, $webSocketKey): void {
+            $response->header('Upgrade', 'websocket');
+            $response->header('Connection', 'Upgrade');
+            $response->header(
+                'Sec-WebSocket-Accept',
+                base64_encode(sha1(
+                    $webSocketKey . self::HANDSHAKE_GUID,
+                    true,
+                )),
+            );
+            $response->header('Sec-WebSocket-Version', '13');
+            $response->status(101);
+            $response->end();
+        };
+
+        if ($this->profiler !== null) {
+            $this->profiler->measure('ws_handshake.upgrade_work', $upgrade);
+        } else {
+            $upgrade();
+        }
 
         $server->defer(function () use ($server, $request): void {
             $this->gatewayRouter->open($server, $request);

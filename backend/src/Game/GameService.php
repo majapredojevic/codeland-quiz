@@ -18,6 +18,7 @@ use CodeLandQuiz\Model\QuizSessionOverview;
 use CodeLandQuiz\Model\QuizSessionStatus;
 use CodeLandQuiz\Model\SessionParticipantOverview;
 use CodeLandQuiz\Model\StudentOverview;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\Repository\QuizSessionRepository;
 use CodeLandQuiz\Repository\SessionParticipantRepository;
 use CodeLandQuiz\Repository\StudentRepository;
@@ -35,13 +36,33 @@ final readonly class GameService
         private AvatarCatalog $avatarCatalog,
         private ParticipantTokenIssuer $participantTokenIssuer,
         private TransactionManager $transactionManager,
+        private ?PerformanceProfiler $profiler = null,
     ) {
     }
 
     public function getSessionPreview(
         string $gamePin,
     ): GameSessionPreviewDTO {
-        $session = $this->sessions->findOverviewByActiveGamePin($gamePin);
+        if ($this->profiler === null) {
+            return $this->buildSessionPreview($gamePin);
+        }
+
+        return $this->profiler->inContext(
+            'preview',
+            fn (): GameSessionPreviewDTO => $this->profiler->measure(
+                'preview.total',
+                fn (): GameSessionPreviewDTO =>
+                    $this->buildSessionPreview($gamePin),
+            ),
+        );
+    }
+
+    private function buildSessionPreview(string $gamePin): GameSessionPreviewDTO
+    {
+        $session = $this->profile(
+            'preview.session_lookup',
+            fn () => $this->sessions->findOverviewByActiveGamePin($gamePin),
+        );
 
         if ($session === null) {
             throw new GameSessionNotFoundException(
@@ -62,52 +83,103 @@ final readonly class GameService
     public function joinGame(
         JoinGameDTO $dto,
     ): JoinGameResultDTO {
-        return $this->transactionManager->transactional(
-            function () use ($dto): JoinGameResultDTO {
-                $session = $this->sessions
-                    ->findOverviewByActiveGamePinForShare($dto->gamePin);
+        $profilePrefix = $dto->participantType === ParticipantType::REGISTERED
+            ? 'join.registered'
+            : 'join.guest';
 
-                if ($session === null) {
-                    throw new GameSessionNotFoundException(
-                        'Game session was not found.',
-                    );
-                }
+        $join = fn (): JoinGameResultDTO => $this->profile(
+            $profilePrefix . '.transaction',
+            fn (): JoinGameResultDTO => $this->transactionManager
+                ->transactional(
+                    fn (): JoinGameResultDTO => $this->joinWithinTransaction(
+                        $dto,
+                        $profilePrefix,
+                    ),
+                ),
+        );
 
+        if ($this->profiler === null) {
+            return $join();
+        }
+
+        return $this->profiler->inContext(
+            $profilePrefix,
+            fn (): JoinGameResultDTO => $this->profiler->measure(
+                $profilePrefix . '.total',
+                $join,
+            ),
+        );
+    }
+
+    private function joinWithinTransaction(
+        JoinGameDTO $dto,
+        string $profilePrefix,
+    ): JoinGameResultDTO {
+        $session = $this->profile(
+            $profilePrefix . '.session_lookup',
+            fn () => $this->sessions
+                ->findOverviewByActiveGamePinForShare($dto->gamePin),
+        );
+
+        if ($session === null) {
+            throw new GameSessionNotFoundException(
+                'Game session was not found.',
+            );
+        }
+
+        $this->profile(
+            $profilePrefix . '.validation',
+            function () use ($session, $dto): void {
                 $this->ensureSessionCanBeJoined($session);
                 $this->ensureAvatarIsValid($dto->avatarKey);
-
-                $studentId = $this->resolveStudentId($dto, $session->id);
-                $this->ensureNicknameIsAvailable($session->id, $dto->nickname);
-
-                $participantId = $this->participants->create(
-                    sessionId: $session->id,
-                    participantType: $dto->participantType,
-                    studentId: $studentId,
-                    nickname: $dto->nickname,
-                    avatarKey: $dto->avatarKey,
-                );
-                $participant = $this->participants->findOverviewById(
-                    $participantId,
-                );
-
-                if ($participant === null) {
-                    throw new RuntimeException(
-                        'Created session participant was not found.',
-                    );
-                }
-
-                return new JoinGameResultDTO(
-                    participant: $this->toParticipantItem($participant),
-                    sessionId: $session->id,
-                    quizTitle: $session->quizTitle,
-                    quizVersion: $session->quizVersion,
-                    gamePin: $session->gamePin,
-                    status: $session->status,
-                    participantToken: $this->participantTokenIssuer->issue(
-                        $participant,
-                    ),
-                );
             },
+        );
+
+        $studentId = $this->resolveStudentId(
+            $dto,
+            $session->id,
+            $profilePrefix,
+        );
+        $this->profile(
+            $profilePrefix . '.nickname_uniqueness',
+            fn () =>
+                $this->ensureNicknameIsAvailable($session->id, $dto->nickname),
+        );
+
+        $participantId = $this->profile(
+            $profilePrefix . '.participant_create',
+            fn (): int => $this->participants->create(
+                sessionId: $session->id,
+                participantType: $dto->participantType,
+                studentId: $studentId,
+                nickname: $dto->nickname,
+                avatarKey: $dto->avatarKey,
+            ),
+        );
+        $participant = $this->profile(
+            $profilePrefix . '.participant_reload',
+            fn () => $this->participants->findOverviewById($participantId),
+        );
+
+        if ($participant === null) {
+            throw new RuntimeException(
+                'Created session participant was not found.',
+            );
+        }
+
+        $participantToken = $this->profile(
+            $profilePrefix . '.token_issue',
+            fn () => $this->participantTokenIssuer->issue($participant),
+        );
+
+        return new JoinGameResultDTO(
+            participant: $this->toParticipantItem($participant),
+            sessionId: $session->id,
+            quizTitle: $session->quizTitle,
+            quizVersion: $session->quizVersion,
+            gamePin: $session->gamePin,
+            status: $session->status,
+            participantToken: $participantToken,
         );
     }
 
@@ -150,6 +222,7 @@ final readonly class GameService
     private function resolveStudentId(
         JoinGameDTO $dto,
         int $sessionId,
+        string $profilePrefix,
     ): ?int {
         if ($dto->participantType === ParticipantType::GUEST) {
             return null;
@@ -161,8 +234,11 @@ final readonly class GameService
             );
         }
 
-        $student = $this->students->findActiveByUsernameForUpdate(
-            $dto->username,
+        $student = $this->profile(
+            $profilePrefix . '.student_lookup',
+            fn () => $this->students->findActiveByUsernameForUpdate(
+                $dto->username,
+            ),
         );
 
         if ($student === null) {
@@ -171,7 +247,10 @@ final readonly class GameService
             );
         }
 
-        $this->ensureStudentHasNotJoined($sessionId, $student);
+        $this->profile(
+            $profilePrefix . '.student_uniqueness',
+            fn () => $this->ensureStudentHasNotJoined($sessionId, $student),
+        );
 
         return $student->id;
     }
@@ -223,5 +302,19 @@ final readonly class GameService
             isRemoved: $participant->isRemoved,
             joinedAt: $participant->joinedAt,
         );
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    private function profile(string $name, callable $operation): mixed
+    {
+        return $this->profiler === null
+            ? $operation()
+            : $this->profiler->measure($name, $operation);
     }
 }

@@ -25,6 +25,7 @@ use CodeLandQuiz\Controller\ChangePasswordController;
 use CodeLandQuiz\Controller\GameController;
 use CodeLandQuiz\Controller\LogoutController;
 use CodeLandQuiz\Controller\MeController;
+use CodeLandQuiz\Controller\PerformanceProfileController;
 use CodeLandQuiz\Controller\QuestionController;
 use CodeLandQuiz\Controller\QuestionImageController;
 use CodeLandQuiz\Controller\ReadinessController;
@@ -53,6 +54,7 @@ use CodeLandQuiz\Middleware\RoleMiddleware;
 use CodeLandQuiz\Model\UserRole;
 use CodeLandQuiz\Observability\RuntimeLogger;
 use CodeLandQuiz\Observability\RuntimeMetrics;
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use CodeLandQuiz\Repository\MySqlAuditLogRepository;
 use CodeLandQuiz\Repository\MySqlLoginAttemptRepository;
 use CodeLandQuiz\Repository\MySqlParticipantAnswerRepository;
@@ -150,6 +152,10 @@ final class ApplicationFactory
 
     private RuntimeMetrics $runtimeMetrics;
 
+    private PerformanceProfiler $performanceProfiler;
+
+    private ?PerformanceProfiler $activePerformanceProfiler;
+
     public function __construct(string $projectRootPath, Server $server)
     {
         $this->server = $server;
@@ -159,7 +165,19 @@ final class ApplicationFactory
             debugEnabled: $this->config->getAppEnv() === 'development',
         );
         $this->runtimeMetrics = new RuntimeMetrics();
-        $this->database = new Database($this->environment);
+        $profilingEnabled = $this->environment->has(
+            'PERFORMANCE_PROFILING_ENABLED',
+        ) && $this->environment->getBool('PERFORMANCE_PROFILING_ENABLED');
+        $this->performanceProfiler = new PerformanceProfiler(
+            $profilingEnabled,
+        );
+        $this->activePerformanceProfiler = $profilingEnabled
+            ? $this->performanceProfiler
+            : null;
+        $this->database = new Database(
+            $this->environment,
+            $this->activePerformanceProfiler,
+        );
         $this->questionImageStorage = new QuestionImageStorage($this->config);
         $this->participantConnectionRegistry =
             new ParticipantConnectionRegistry();
@@ -170,6 +188,7 @@ final class ApplicationFactory
                 connectionRegistry: $this->participantConnectionRegistry,
                 messageEncoder: $this->webSocketMessageEncoder,
                 logger: $this->runtimeLogger,
+                profiler: $this->activePerformanceProfiler,
             );
         $this->sessionWebSocketPayloadMapper =
             new SessionWebSocketPayloadMapper();
@@ -178,6 +197,7 @@ final class ApplicationFactory
         $this->closedQuestionResultAssembler =
             new ClosedQuestionResultAssembler(
                 results: $this->quizSessionResultRepository,
+                profiler: $this->activePerformanceProfiler,
             );
         $this->finalQuizSessionResultAssembler =
             new FinalQuizSessionResultAssembler(
@@ -256,6 +276,11 @@ final class ApplicationFactory
         return $this->runtimeMetrics;
     }
 
+    public function getPerformanceProfiler(): ?PerformanceProfiler
+    {
+        return $this->activePerformanceProfiler;
+    }
+
     public function createReadinessController(): ReadinessController
     {
         return new ReadinessController(
@@ -272,6 +297,15 @@ final class ApplicationFactory
             server: $this->server,
             connectionRegistry: $this->participantConnectionRegistry,
             metrics: $this->runtimeMetrics,
+            responseFactory: new ResponseFactory(),
+        );
+    }
+
+    public function createPerformanceProfileController():
+        PerformanceProfileController
+    {
+        return new PerformanceProfileController(
+            profiler: $this->performanceProfiler,
             responseFactory: new ResponseFactory(),
         );
     }
@@ -511,15 +545,21 @@ final class ApplicationFactory
                 questionContentValidator: new QuestionContentValidator(),
                 gamePinGenerator: new SecureGamePinGenerator(),
                 auditLogService: new AuditLogService($auditLogRepository),
-                transactionManager: new PdoTransactionManager($this->database),
+                transactionManager: new PdoTransactionManager(
+                    $this->database,
+                    $this->activePerformanceProfiler,
+                ),
                 sessionResults: $this->quizSessionResultRepository,
                 closedQuestionResultAssembler:
                     $this->closedQuestionResultAssembler,
                 finalResultAssembler:
                     $this->finalQuizSessionResultAssembler,
                 participants: $participantRepository,
+                profiler: $this->activePerformanceProfiler,
             ),
-            responseFactory: new ResponseFactory(),
+            responseFactory: new ResponseFactory(
+                $this->activePerformanceProfiler,
+            ),
             sessionWebSocketBroadcaster: $this->sessionWebSocketBroadcaster,
             webSocketPayloadMapper: $this->sessionWebSocketPayloadMapper,
             closedQuestionNotifier: $this->closedQuestionWebSocketNotifier,
@@ -527,6 +567,7 @@ final class ApplicationFactory
                 $this->finishedSessionWebSocketNotifier,
             participantRemovalNotifier:
                 $this->participantRemovalWebSocketNotifier,
+            profiler: $this->activePerformanceProfiler,
         );
     }
 
@@ -573,10 +614,16 @@ final class ApplicationFactory
                     secret: $this->config->getParticipantTokenSecret(),
                     ttlSeconds: $this->config->getParticipantTokenTtlSeconds(),
                 ),
-                transactionManager: new PdoTransactionManager($this->database),
+                transactionManager: new PdoTransactionManager(
+                    $this->database,
+                    $this->activePerformanceProfiler,
+                ),
+                profiler: $this->activePerformanceProfiler,
             ),
             avatarCatalog: $avatarCatalog,
-            responseFactory: new ResponseFactory(),
+            responseFactory: new ResponseFactory(
+                $this->activePerformanceProfiler,
+            ),
         );
     }
 
@@ -650,6 +697,7 @@ final class ApplicationFactory
                 participantConnectionService: new ParticipantConnectionService(
                     participantTokenVerifier: new JwtParticipantTokenVerifier(
                         secret: $this->config->getParticipantTokenSecret(),
+                        profiler: $this->activePerformanceProfiler,
                     ),
                     sessions: $sessionRepository,
                     participants: $participantRepository,
@@ -660,11 +708,13 @@ final class ApplicationFactory
                     publicQuestionMapper: new PublicSessionQuestionMapper(),
                     transactionManager: new PdoTransactionManager(
                         $this->database,
+                        $this->activePerformanceProfiler,
                     ),
                     closedQuestionResultAssembler:
                         $this->closedQuestionResultAssembler,
                     finalResultAssembler:
                         $this->finalQuizSessionResultAssembler,
+                    profiler: $this->activePerformanceProfiler,
                 ),
                 answerSubmissionService: new AnswerSubmissionService(
                     sessions: $sessionRepository,
@@ -676,7 +726,9 @@ final class ApplicationFactory
                     scoreCalculator: new AnswerScoreCalculator(),
                     transactionManager: new PdoTransactionManager(
                         $this->database,
+                        $this->activePerformanceProfiler,
                     ),
+                    profiler: $this->activePerformanceProfiler,
                 ),
                 connectionRegistry: $this->participantConnectionRegistry,
                 messageEncoder: $this->webSocketMessageEncoder,
@@ -684,6 +736,7 @@ final class ApplicationFactory
                 connectionLimiter: $connectionLimiter,
                 abuseLimiter: $abuseLimiter,
                 logger: $this->runtimeLogger,
+                profiler: $this->activePerformanceProfiler,
             ),
             echoGateway: new EchoGateway($this->runtimeLogger),
             messageEncoder: $this->webSocketMessageEncoder,
@@ -703,6 +756,7 @@ final class ApplicationFactory
                 echoEnabled: $this->config->getAppEnv() === 'development',
             ),
             logger: $this->runtimeLogger,
+            profiler: $this->activePerformanceProfiler,
         );
     }
 

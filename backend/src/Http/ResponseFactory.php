@@ -4,21 +4,38 @@ declare(strict_types=1);
 
 namespace CodeLandQuiz\Http;
 
+use CodeLandQuiz\Observability\PerformanceProfiler;
 use JsonException;
 use OpenSwoole\Http\Response;
 use RuntimeException;
 
 final class ResponseFactory
 {
+    public function __construct(
+        private readonly ?PerformanceProfiler $profiler = null,
+    ) {
+    }
+
     /**
      * @param array<string, mixed> $payload
      */
-    public function json(Response $response, array $payload, int $status = 200): void
-    {
+    public function json(
+        Response $response,
+        array $payload,
+        int $status = 200,
+        ?string $serializationProfile = null,
+    ): void {
         RequestContext::recordCurrentResponseStatus($status);
         $response->status($status);
         $response->header('Content-Type', 'application/json; charset=utf-8');
-        $response->end($this->encode($payload));
+        $encodedPayload = $serializationProfile !== null
+            && $this->profiler !== null
+                ? $this->profiler->measure(
+                    $serializationProfile,
+                    fn (): string => $this->encode($payload),
+                )
+                : $this->encode($payload);
+        $response->end($encodedPayload);
     }
 
     public function error(Response $response, string $message, int $status): void
