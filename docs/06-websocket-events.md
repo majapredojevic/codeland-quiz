@@ -2,7 +2,7 @@
 
 > Status: Implemented
 
-Gameplay uses `/ws/game`. `/ws/echo` is a diagnostic echo endpoint only. Messages use `{"type":"...","payload":{...}}`.
+Gameplay uses `/ws/game`. `/ws/echo` is a development-only diagnostic endpoint and is unavailable when `APP_ENV=production`. Messages use `{"type":"...","payload":{...}}`.
 
 ## Connection and client messages
 

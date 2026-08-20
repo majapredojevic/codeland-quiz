@@ -1,3 +1,5 @@
+-- DEVELOPMENT CONVENIENCE ONLY. Production mounts only 001_schema.sql and
+-- must use the operator-only initial-administrator bootstrap CLI.
 INSERT INTO users (name, email, password_hash, role, is_active)
 VALUES (
     'CodeLand Administrator',

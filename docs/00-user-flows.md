@@ -2,7 +2,7 @@
 
 > Status: Implemented
 
-Ovaj dokument opisuje implementirani backend. Angular korisničko sučelje je planirano.
+Ovaj dokument opisuje implementirane backend i Angular korisničke tokove.
 
 ## Administrator
 
@@ -34,4 +34,4 @@ Tok je isti, ali je `participantType` vrijednosti `GUEST`, ne šalje se identite
 
 Sve nastavničke operacije su REST: kreiranje sesije, start, zatvaranje trenutnog pitanja, pokretanje sljedećeg pitanja, završetak i uklanjanje učesnika. Sve tranzicije su ručne; nema automatskog timera koji mijenja stanje. Učesničke real-time operacije koriste WebSocket.
 
-Nastavnički live pregled učesnika je `GET /api/sessions/{id}/participants`, ne nastavnički WebSocket. Backend ne generiše QR sliku; frontend je kasnije može napraviti kodiranjem PIN-a ili join URL-a.
+Nastavnički live pregled učesnika je `GET /api/sessions/{id}/participants`, ne nastavnički WebSocket. Backend ne generiše QR sliku; implementirani Angular lobby generiše QR kod iz join URL-a.

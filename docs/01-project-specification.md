@@ -4,7 +4,7 @@
 
 ## Svrha i korisnici
 
-CodeLand Quiz je backend za kreiranje i ručno vođenje kvizova u učionici. Staff korisnici su `ADMIN` i `TEACHER`; imaju e-mail, hash lozinke i JWT autentikaciju. Učenici su poseban registar bez e-maila, lozinke ili staff JWT prijave. U sesiji učestvuju registrovani učenici (`REGISTERED`) ili gosti (`GUEST`).
+CodeLand Quiz je web platforma za kreiranje i ručno vođenje kvizova u učionici. Staff korisnici su `ADMIN` i `TEACHER`; imaju e-mail, hash lozinke i JWT autentikaciju. Učenici su poseban registar bez e-maila, lozinke ili staff JWT prijave. U sesiji učestvuju registrovani učenici (`REGISTERED`) ili gosti (`GUEST`).
 
 Administrator upravlja nastavničkim računima. Administrator i nastavnik upravljaju učenicima, zajedničkim temama, kvizovima, pitanjima i sesijama te pregledaju rezultate i statistike.
 
@@ -19,7 +19,7 @@ Pravila pitanja:
 - `MULTIPLE_CHOICE`: četiri opcije; dvije ili tri su ispravne.
 - Vrijeme odgovora je 30–300 sekundi, a `maxPoints` 1–10000.
 
-Putanja slike je podatak pitanja, ali endpoint za upload/generisanje slike nije implementiran.
+Slika pitanja se učitava kroz zaštićeni staff endpoint, sprema pod generisanim imenom u upravljanu putanju i poslužuje kroz sigurni `/media/question-images/...` endpoint.
 
 ## Sesija i snapshot
 
@@ -45,4 +45,4 @@ Implementirani su historija sesija, završni izvještaj sesije, agregatna statis
 
 ## Granice trenutne verzije
 
-Backend ne generiše QR slike. Frontend kasnije može kodirati join URL ili PIN. Nisu implementirani posebni razvojni režimi, AI mogućnosti, e-mail obavijesti, CAPTCHA ni automatsko vođenje pitanja.
+Backend ne generiše QR slike; Angular lobby generiše QR kod iz join URL-a. Nisu implementirani posebni razvojni režimi, AI mogućnosti, e-mail obavijesti, CAPTCHA ni automatsko vođenje pitanja.

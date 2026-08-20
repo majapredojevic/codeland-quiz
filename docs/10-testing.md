@@ -12,11 +12,14 @@ composer verify-security
 composer verify-production
 composer verify-images
 composer verify-runtime
+composer verify-profiling
+composer verify-bootstrap
 composer audit --locked
+composer validate --strict
 
 cd ../frontend
-npm test -- --watch=false
-npm run build -- --configuration production
+npm test
+npm run build
 
 cd ..
 docker compose --env-file .env.production -f compose.production.yaml config
@@ -66,7 +69,9 @@ Test duplicate registered join, duplicate nickname, duplicate answer, answer aft
 
 Use separate concurrent clients/connections and verify both API/WebSocket outcome and committed database state. Syntax checks and `git diff --check` supplement, but do not replace, runtime testing.
 
-Phase 3 uses configurable short heartbeat thresholds for automated integration
-checks; production defaults remain 25/75 seconds. The 500-player test is not
-part of this verification. Capture its later methodology/results separately
-and do not infer capacity from functional hardening checks.
+Runtime integration uses configurable short heartbeat thresholds where needed;
+production defaults remain 25/75 seconds. Phase 4 separately recorded valid
+500-Player CLASSROOM and BURST runs on one local Docker Desktop environment.
+Those results are environment-specific evidence and must not be presented as a
+universal production-capacity claim; see `docs/12-load-testing-methodology.md`
+and `docs/13-final-validation-and-evidence.md`.

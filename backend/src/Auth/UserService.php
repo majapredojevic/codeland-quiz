@@ -100,35 +100,7 @@ final readonly class UserService
             );
         }
 
-        if (strlen($dto->newPassword) < 8) {
-            throw new InvalidArgumentException(
-                'New password must be at least 8 characters long.',
-            );
-        }
-
-        if (preg_match('/[A-Z]/', $dto->newPassword) !== 1) {
-            throw new InvalidArgumentException(
-                'New password must contain at least one uppercase letter.',
-            );
-        }
-
-        if (preg_match('/[a-z]/', $dto->newPassword) !== 1) {
-            throw new InvalidArgumentException(
-                'New password must contain at least one lowercase letter.',
-            );
-        }
-
-        if (preg_match('/[0-9]/', $dto->newPassword) !== 1) {
-            throw new InvalidArgumentException(
-                'New password must contain at least one number.',
-            );
-        }
-
-        if (preg_match('/[^A-Za-z0-9\s]/', $dto->newPassword) !== 1) {
-            throw new InvalidArgumentException(
-                'New password must contain at least one special character.',
-            );
-        }
+        PasswordPolicy::validate($dto->newPassword, 'New password');
 
         if ($dto->newPassword === $dto->currentPassword) {
             throw new InvalidArgumentException(

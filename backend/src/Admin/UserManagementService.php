@@ -53,8 +53,8 @@ final readonly class UserManagementService
         CreateTeacherDTO $dto,
         int $performedByUserId,
     ): CreateTeacherResult {
-        $name = $this->normalizeName($dto->name);
-        $email = $this->normalizeEmail($dto->email);
+        $name = StaffIdentityNormalizer::name($dto->name, 'Teacher');
+        $email = StaffIdentityNormalizer::email($dto->email, 'Teacher');
         $temporaryPassword = $this->temporaryPasswordGenerator->generate();
         $passwordHash = $this->passwordHasher->hash($temporaryPassword);
         $newUser = new NewUser(
@@ -131,10 +131,10 @@ final readonly class UserManagementService
 
             $name = $dto->name === null
                 ? $teacher->getName()
-                : $this->normalizeName($dto->name);
+                : StaffIdentityNormalizer::name($dto->name, 'Teacher');
             $email = $dto->email === null
                 ? $teacher->getEmail()
-                : $this->normalizeEmail($dto->email);
+                : StaffIdentityNormalizer::email($dto->email, 'Teacher');
 
             if ($email !== $teacher->getEmail()) {
                 $existingUser = $this->users->findByEmailIncludingInactive($email);
@@ -347,25 +347,4 @@ final readonly class UserManagementService
         );
     }
 
-    private function normalizeName(string $name): string
-    {
-        $name = trim($name);
-
-        if ($name === '') {
-            throw new InvalidArgumentException('Teacher name is required.');
-        }
-
-        return $name;
-    }
-
-    private function normalizeEmail(string $email): string
-    {
-        $email = strtolower(trim($email));
-
-        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            throw new InvalidArgumentException('Teacher email is invalid.');
-        }
-
-        return $email;
-    }
 }

@@ -19,6 +19,8 @@ interface UserRepository
 
     public function findTeacherByIdForUpdate(int $id): ?User;
 
+    public function findAdministratorForUpdate(): ?User;
+
     public function findByEmail(string $email): ?User;
 
     public function findByEmailIncludingInactive(string $email): ?User;
