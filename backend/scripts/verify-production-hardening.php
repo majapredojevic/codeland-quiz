@@ -180,6 +180,16 @@ assertProduction(
     'Production Compose source exposes an internal service or omits the edge ports.',
 );
 assertProduction(
+    str_contains($compose, 'source: ./docker/mysql/init/001_schema.sql')
+        && str_contains(
+            $compose,
+            'target: /docker-entrypoint-initdb.d/001_schema.sql',
+        )
+        && !str_contains($compose, 'source: ./docker/mysql/init\n')
+        && !str_contains($compose, '002_seed_admin.sql'),
+    'Production MySQL initialization is not explicitly schema-only.',
+);
+assertProduction(
     is_string($nginx)
         && str_contains($nginx, 'ssl_protocols TLSv1.2 TLSv1.3;')
         && str_contains($nginx, 'proxy_set_header Upgrade $http_upgrade;')

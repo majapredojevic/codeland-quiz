@@ -30,10 +30,11 @@ terminates TLS; OpenSwoole intentionally remains internal HTTP/WebSocket.
 
 The backend remains `worker_num=1`. Its participant connection registry is
 process-local, so increasing workers or backend instances without shared
-registry and fan-out state would break WebSocket correctness. Phase 3 adds the
-single-worker heartbeat, lifecycle reconciliation, readiness and private
-metrics needed before controlled load testing; Redis, a PDO pool, TaskWorkers
-and multi-instance coordination remain deliberately absent.
+registry and fan-out state would break WebSocket correctness. The implemented
+runtime includes single-worker heartbeat, lifecycle reconciliation, readiness
+and private metrics. Redis, a PDO pool, TaskWorkers and multi-instance
+coordination remain deliberately absent because the recorded profile did not
+justify them.
 
 ## Development remains separate
 
@@ -91,6 +92,12 @@ The backend service receives an explicit allowlist of environment variables.
 It does not receive `MYSQL_ROOT_PASSWORD` or the TLS host paths. Compose itself
 needs the root password only to initialize/run MySQL.
 
+Production mounts only `docker/mysql/init/001_schema.sql`. It deliberately
+does not mount the initialization directory or `002_seed_admin.sql`; therefore
+a fresh production database has the schema but no application administrator.
+The fixed development seed remains available only through `docker-compose.yml`
+and its credentials must never be reused outside local development.
+
 ## Production commands
 
 From the repository root:
@@ -100,6 +107,37 @@ docker compose --env-file .env.production -f compose.production.yaml config
 docker compose --env-file .env.production -f compose.production.yaml build
 docker compose --env-file .env.production -f compose.production.yaml up -d
 ```
+
+### One-time initial administrator bootstrap
+
+After the fresh stack reports MySQL and backend healthy, create the first
+administrator from an interactive operator terminal:
+
+```bash
+docker compose --env-file .env.production -f compose.production.yaml exec backend php scripts/bootstrap-initial-admin.php --name="Deployment Administrator" --email="operator-supplied@example.com"
+```
+
+The command prompts for the bootstrap password and confirmation with terminal
+echo disabled; the password is never a command-line argument or environment
+variable. For controlled automation, `exec -T` may instead receive exactly two
+stdin lines containing the password and confirmation from an operator-managed,
+untracked secret source. Do not store that source in this repository.
+
+The CLI:
+
+- is available only with `APP_ENV=production` and requires container/shell
+  access rather than network access;
+- normalizes the supplied name/email using the staff rules;
+- enforces the normal application password policy and bcrypt hashing;
+- transactionally creates one active `ADMIN` with
+  `must_change_password=true`;
+- refuses by default if any administrator already exists, without modifying
+  or creating another account.
+
+Log in through the configured HTTPS hostname immediately afterward and finish
+the existing required-password-change flow. Additional staff accounts are then
+created through the authenticated Admin workflow. There is no default
+production administrator and no recovery/force flag in the bootstrap CLI.
 
 `config` prints resolved environment values, including credentials, so run it
 only in a trusted terminal and do not redirect its output to an unprotected
@@ -136,10 +174,10 @@ The tested production build inputs are:
 | MySQL | `mysql:8.4.9` |
 
 Compose tags the two locally built application images with
-`CODELAND_IMAGE_TAG`; the example's `2026.08.18-phase3` identifies the Phase 3
-source state. Use a new immutable release/commit tag for later source
-changes rather than reusing an existing tag. No production service references
-`latest`.
+`CODELAND_IMAGE_TAG`; the example intentionally requires an operator-supplied
+immutable release identifier. Use a new immutable release/commit tag for each
+source state rather than reusing an existing tag. No production service
+references `latest`.
 
 The Angular build is copied into the Nginx image; Node, `node_modules`, the
 Angular CLI server, and frontend source do not enter the Nginx runtime. The

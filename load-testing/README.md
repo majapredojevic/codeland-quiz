@@ -89,11 +89,12 @@ and Nginx. CLASSROOM delays are deterministically spread from 1.0 to 5.5 seconds
 BURST sends 85% from 0.25 to 1.8 seconds and the remaining tail from 1.8 to 3.2
 seconds. All remain below the production Question deadline.
 
-The future fixed matrix is 10/1, 30/2, 50/2, 100/5, 200/10, 300/20, 400/20,
+The fixed matrix is 10/1, 30/2, 50/2, 100/5, 200/10, 300/20, 400/20,
 and 500/20 (Students/Sessions). `run-matrix.ps1` runs levels sequentially,
 checks correctness, cleans exact fixtures, cools down without restarting the
 stack, and stops immediately on failure. Optional BURST presets are 100, 300,
-and 500 and remain configurable. **Do not run the matrix during Phase 4A.**
+and 500 and remain configurable. The recorded Phase 4B matrix is preserved as
+ignored local evidence; routine validation must not rerun the 500-Player matrix.
 
 ## Metrics and validity
 
@@ -146,5 +147,5 @@ marks sparse p99 values as descriptive.
 - `fixtures/verify-correctness.php`: independent post-run DB invariants
 - `observer/runtime-mysql-observer.php`: private runtime/MySQL sampler
 - `scripts/run-load-test.ps1`: one-run orchestrator
-- `scripts/run-matrix.ps1`: future sequential Phase 4B runner
+- `scripts/run-matrix.ps1`: sequential CLASSROOM/BURST matrix runner
 - `report/generate-report.php`: aggregate and broadcast report generator

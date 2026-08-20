@@ -90,6 +90,15 @@ LIMIT 1
 FOR UPDATE
 SQL;
 
+    private const FIND_ADMINISTRATOR_FOR_UPDATE_SQL = <<<SQL
+SELECT id, name, email, password_hash, must_change_password, role, is_active
+FROM users
+WHERE role = 'ADMIN'
+ORDER BY id ASC
+LIMIT 1
+FOR UPDATE
+SQL;
+
     private const FIND_TEACHERS_PAGE_SQL = <<<SQL
 SELECT id, name, email, password_hash, must_change_password, role, is_active
 FROM users
@@ -214,6 +223,17 @@ SQL;
             self::FIND_TEACHER_BY_ID_FOR_UPDATE_SQL,
             $id,
         );
+    }
+
+    public function findAdministratorForUpdate(): ?User
+    {
+        $statement = $this->connection()->prepare(
+            self::FIND_ADMINISTRATOR_FOR_UPDATE_SQL,
+        );
+        $statement->execute();
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->mapRowToUser($row);
     }
 
     public function findByEmail(string $email): ?User

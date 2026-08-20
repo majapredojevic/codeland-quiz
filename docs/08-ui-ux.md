@@ -1,21 +1,40 @@
-# UI/UX requirements
+# UI/UX implementation
 
-> Status: Planned
+> Status: Implemented
 
-The Angular frontend is not implemented. This document defines requirements, not completed screens.
+The Angular frontend is a responsive same-origin client for the staff and
+Player workflows. Production builds are served as static files by Nginx; local
+development uses the Angular proxy for `/api`, `/media`, and `/ws`.
 
 ## Staff experience
 
-Desktop-first, responsive areas should cover login, required-password change, dashboard, ADMIN teacher management, students, topics, quizzes, question editor/reordering, session creation, waiting room, live REST-based participant monitor and manual session controls, history/report, quiz statistics and student statistics.
+The desktop-first staff shell includes login, required and voluntary password
+change, dashboard, ADMIN-only Teacher management, Students, Topics, Quizzes,
+Question creation/editing/reordering, image upload, Session creation, QR/PIN
+lobby, live participant monitoring, manual game controls, history, reports,
+Quiz statistics, and registered-Student statistics.
 
-Mutations must send the CSRF header, show pending/disabled states, and present validation, authorization, conflict and network errors without exposing internal details. Lists need zero-based API pagination mapped to understandable UI controls and clear loading/empty/error states.
+Mutations use the CSRF interceptor and pending/disabled controls. Lists map the
+zero-based API pagination to visible controls and expose loading, empty, error,
+authorization, and conflict states. Creating a Quiz navigates directly to its
+Questions tab; Question input enforces the shared 250-character product limit.
 
 ## Participant experience
 
-The mobile-first flow should cover Game PIN preview, registered/guest choice where product design exposes it, username for registered participants, per-session nickname/avatar, waiting room, current question/options/timer display, answer acknowledgement, closed-question feedback, leaderboard, final result and reconnection.
+The mobile-first Player flow covers PIN preview, registered/guest selection,
+registered username, per-Session nickname and Koda avatar, lobby, current
+Question/options/countdown, answer acknowledgement, closed-Question feedback,
+leaderboard, final result, removal/replacement handling, and reconnection.
 
-The UI must not present `ANSWER_ACCEPTED` as correctness. It should tolerate reconnect event sequences for WAITING, ACTIVE/open, ACTIVE/closed and FINISHED, and clearly handle replacement/removal messages.
+`ANSWER_ACCEPTED` is presented only as receipt, never correctness. The Player
+restores its participant credential from memory plus `sessionStorage`, uses
+same-host WSS on HTTPS, acknowledges server heartbeats without a client timer,
+and handles WAITING, ACTIVE/open, ACTIVE/closed, and FINISHED reconnect states.
 
-## Accessibility
+## Accessibility and presentation
 
-Use keyboard-operable controls, visible focus, semantic labels, adequate contrast, status text beyond color alone, responsive layouts and reduced-motion-friendly transitions. Provide basic loading, empty and recoverable error states throughout.
+The UI uses semantic controls and labels, visible focus, keyboard-operable
+actions, status text beyond color, responsive breakpoints, reduced-motion
+styles, and explicit loading/empty/recoverable-error states. Shared date
+formatters render `dd.MM.yyyy.` and, where time matters,
+`dd.MM.yyyy. HH:mm` while backend timestamps remain canonical ISO values.

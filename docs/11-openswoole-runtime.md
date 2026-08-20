@@ -1,8 +1,8 @@
 # OpenSwoole runtime hardening and measurement notes
 
-> Status: Implemented and locally verified for controlled load-test preparation.
-> No concurrent-user capacity is claimed here; capacity requires the later load
-> test and analysis.
+> Status: Implemented and locally verified, including controlled Phase 4 load
+> and profiling runs. Those results are environment-specific and are not a
+> universal production-capacity claim.
 
 ## Process and resource model
 
@@ -19,7 +19,7 @@ implemented in this phase.
 | `max_request` | 0 | Async long-running worker is not recycled to hide unknown leaks |
 | `max_conn` | 4096 | Above the 2000 application WebSocket budget plus HTTP/internal headroom |
 | Production `nofile` soft/hard | 8192 / 8192 | Keeps the server ceiling below the descriptor ceiling |
-| `max_coroutine` | 4096 | Bounds concurrently executable work with headroom for the later controlled test |
+| `max_coroutine` | 4096 | Bounds concurrently executable work with measured test headroom |
 | `reactor_num` | not explicitly changed | OpenSwoole selects/clamps its runtime default; local stats report one reactor thread with one worker |
 | `package_max_length` | 6 MiB | Existing upload-compatible transport limit retained |
 | Gameplay frame policy | 16 KiB | Existing application frame limit retained |
@@ -28,9 +28,9 @@ An idle persistent WebSocket is not one permanently executing coroutine.
 `max_coroutine` therefore bounds simultaneous request/message/database work,
 not the count of connected idle browsers. `backlog`, socket buffers,
 `max_request_execution_time`, TCP keepalive and WebSocket compression retain
-their OpenSwoole defaults because Phase 3 produced no measurement showing a
-need to change them. Small gameplay messages do not justify compression
-overhead.
+their OpenSwoole defaults because the recorded profile produced no measurement
+showing a need to change them. Small gameplay messages do not justify
+compression overhead.
 
 ## Application and transport heartbeat
 
@@ -125,12 +125,11 @@ them:
 - the selected non-secret runtime ceilings.
 
 The application timer stores only current/max lag and counters, never an
-unbounded sample array. For later load tests, scrape the endpoint at a modest
-fixed cadence through `docker exec` or the internal Docker network and record
-container CPU/RSS alongside it. Observe MySQL connection pressure from the
-load-test harness (`Threads_connected`, `Threads_running`, connection errors)
-rather than querying those counters per application request. Do not expose the
-metrics path through the public edge.
+unbounded sample array. The load harness scrapes the endpoint at a modest fixed
+cadence through the internal Docker network and records container CPU/RSS
+alongside it. It observes MySQL connection pressure (`Threads_connected`,
+`Threads_running`, connection errors) outside application requests. Do not
+expose the metrics path through the public edge.
 
 ## Verified thesis facts to preserve
 
@@ -144,7 +143,8 @@ metrics path through the public edge.
   non-blocking; a lag increase during those operations would be evidence to
   investigate before choosing offloading or more workers.
 
-Phase 3 intentionally does not add Redis, shared tables, a PDO pool,
-TaskWorkers, caching, replicas, horizontal scaling or benchmark results. The
-system is prepared for controlled measurement, not proven for 500 concurrent
-users.
+The runtime intentionally does not add Redis, shared tables, a PDO pool,
+TaskWorkers, caching, replicas, or horizontal scaling. Subsequent Phase 4
+measurement found no evidence-backed reason to add them. Valid 500-Player
+CLASSROOM and BURST runs are recorded only as evidence for the tested local
+Docker Desktop environment; see `docs/13-final-validation-and-evidence.md`.

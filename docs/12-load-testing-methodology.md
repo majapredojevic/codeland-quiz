@@ -25,8 +25,8 @@ The existing private OpenSwoole metrics describe connection/coroutine pressure,
 WebSocket authentication state, memory, request volume, heartbeat cleanup, and
 event-loop lag. Event-loop lag is especially important with one worker: rising
 lag indicates that the worker is not returning promptly to its event loop. The
-baseline does not change `worker_num`, introduce a PDO pool, or add TaskWorkers;
-those decisions require later evidence.
+baseline does not change `worker_num`, introduce a PDO pool, or add TaskWorkers.
+The completed profile found no evidence-backed reason to make those changes.
 
 MySQL observations include connected/running threads, connection totals and
 errors, row-lock waits/time, and deadlocks. Lifetime counters are compared at
@@ -44,9 +44,11 @@ and any functional/correctness failure stops escalation.
 
 All results are environment-specific. Docker Desktop allocation, host hardware,
 background work, component versions, and application limits are recorded so a
-later thesis result can accurately begin with “On the tested environment...” A
-10-Player Phase 4A smoke validates the harness only; it is not evidence of
-higher-scale capacity.
+thesis result can accurately begin with “On the tested environment...” A
+10-Player Phase 4A smoke validates the harness only. Separate valid Phase 4B
+CLASSROOM and BURST runs reached 500 Players across 20 Sessions on the recorded
+local Docker Desktop environment; they are not a universal production-capacity
+claim.
 
 See [the harness runbook](../load-testing/README.md) for commands, safety rules,
 metric definitions, and artifact names.
