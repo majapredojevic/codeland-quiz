@@ -8,7 +8,7 @@ import {
   MatDialogTitle,
 } from '@angular/material/dialog';
 
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 
 export interface TemporaryPasswordDialogData {
   title: string;

@@ -13,7 +13,7 @@ import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import {
   ConfirmDialog,
   ConfirmDialogData,

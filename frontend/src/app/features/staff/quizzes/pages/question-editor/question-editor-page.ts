@@ -4,7 +4,7 @@ import { disabled, FormField, form, validate } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import { QuestionImagesApiService } from '../../data-access/question-images-api.service';
 import { QuestionImageItem } from '../../data-access/question-images.models';
 import {

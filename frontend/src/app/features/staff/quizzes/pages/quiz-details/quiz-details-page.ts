@@ -19,7 +19,7 @@ import {
   ConfirmDialog,
   ConfirmDialogData,
 } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
 import { EntityAuditMeta } from '../../../../../shared/ui/entity-audit-meta/entity-audit-meta';
 import { QuizLaunchService } from '../../../play/data-access/quiz-launch.service';
@@ -384,10 +384,10 @@ export class QuizDetailsPage implements OnInit, OnDestroy {
     const data: ConfirmDialogData = {
       title: 'Obrisati pitanje?',
       message: `Pitanje "${preview}" biće uklonjeno iz kviza.${
-        removesLastActiveQuestion
+        sremovesLastActiveQuestion
           ? '\nBrisanjem posljednjeg pitanja kviz će biti automatski deaktiviran.'
           : ''
-      }`,
+        }`,
       confirmLabel: 'Obriši pitanje',
       tone: 'destructive',
     };

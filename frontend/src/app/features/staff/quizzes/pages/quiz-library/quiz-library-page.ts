@@ -9,7 +9,7 @@ import {
   ConfirmDialog,
   ConfirmDialogData,
 } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
 import { QuizLaunchService } from '../../../play/data-access/quiz-launch.service';
 import { TopicCard } from '../../components/topic-card/topic-card';

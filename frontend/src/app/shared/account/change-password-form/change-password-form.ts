@@ -85,6 +85,7 @@ export class ChangePasswordForm {
 
     return null;
   });
+  
   protected readonly confirmationError = computed(() => {
     if (!this.confirmationTouched() && !this.submitted()) {
       return null;

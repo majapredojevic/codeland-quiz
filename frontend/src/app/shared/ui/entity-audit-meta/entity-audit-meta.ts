@@ -20,6 +20,7 @@ export class EntityAuditMeta {
 
   protected readonly createdLabel = computed(() => this.auditLabel(this.createdAt()));
   protected readonly updatedLabel = computed(() => this.auditLabel(this.updatedAt()));
+  
   protected readonly hasMeaningfulUpdate = computed(() => {
     const created = Date.parse(this.createdAt());
     const updated = Date.parse(this.updatedAt());

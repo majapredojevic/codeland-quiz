@@ -18,7 +18,7 @@ import {
   ConfirmDialog,
   ConfirmDialogData,
 } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import { ActiveStatusBadge } from '../../../../../shared/ui/active-status-badge/active-status-badge';
 import type { Student, UpdateStudentRequest } from '../../data-access/students.models';
 import { StudentsStore } from '../../data-access/students.store';

@@ -2,7 +2,7 @@ import { Service, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { NotificationService } from '../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../shared/servieces/notification.service';
 import { QuizSessionsApiService } from './quiz-sessions-api.service';
 
 @Service()

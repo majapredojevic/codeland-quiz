@@ -9,7 +9,7 @@ import {
   ConfirmDialog,
   ConfirmDialogData,
 } from '../../../../../shared/feedback/confirm-dialog/confirm-dialog';
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import { KodaAvatar } from '../../../../../shared/game/koda-avatar/koda-avatar';
 import { ParticipantCard } from '../../components/participant-card/participant-card';
 import { LobbyStore } from '../../data-access/lobby.store';

@@ -3,7 +3,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormField, form, validate } from '@angular/forms/signals';
 import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 
-import { NotificationService } from '../../../../../shared/feedback/notification.service';
+import { NotificationService } from '../../../../../shared/servieces/notification.service';
 import { isMissingTopicError } from '../../data-access/quiz-error.utils';
 import { QuizStore } from '../../data-access/quiz.store';
 import { TopicReferenceStore } from '../../data-access/topic-reference.store';
