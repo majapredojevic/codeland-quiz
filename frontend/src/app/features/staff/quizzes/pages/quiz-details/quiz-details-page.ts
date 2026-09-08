@@ -384,7 +384,7 @@ export class QuizDetailsPage implements OnInit, OnDestroy {
     const data: ConfirmDialogData = {
       title: 'Obrisati pitanje?',
       message: `Pitanje "${preview}" biće uklonjeno iz kviza.${
-        sremovesLastActiveQuestion
+        removesLastActiveQuestion
           ? '\nBrisanjem posljednjeg pitanja kviz će biti automatski deaktiviran.'
           : ''
         }`,
